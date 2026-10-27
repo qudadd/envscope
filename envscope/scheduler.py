@@ -97,7 +97,13 @@ def mac_plist(command, cwd, interval):
 
 class UserScheduler:
     def __init__(self, home, root, system=None, runner=None, command=None, cwd=None, sid=None, uid=None):
-        self.home, self.root = Path(home).resolve(), Path(root)
+        home_path = Path(os.path.abspath(home))
+        self.home = home_path.resolve()
+        root_path = Path(os.path.abspath(root))
+        # Canonicalize only the trusted home alias (macOS /var -> /private/var,
+        # or a relocated user home). Never resolve a link below the home root:
+        # _safe must still reject linked/reparse maintenance children.
+        self.root = self.home / root_path.relative_to(home_path) if root_path.is_relative_to(home_path) else root_path
         self.system = system or platform.system()
         self.runner = runner or subprocess.run
         actual_command, actual_cwd = runtime()
