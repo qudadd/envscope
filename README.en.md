@@ -22,8 +22,10 @@ Python 3.10+ and system curl for online CLI probes. No Python runtime packages.
 The desktop UI has no third-party scripts. Windows and macOS are the target
 platforms; mobile adaptation is deferred. Double-click the desktop app, then
 click the single test button. Native and browser observations merge automatically.
-Windows has been built and locally checked. macOS inventory parsing has fixture
-tests and an app-build workflow; real macOS and Safari validation is pending.
+Windows has been built and locally checked. Automated rules and packaging checks
+pass on Windows, Linux and macOS; browser interaction checks also pass.
+macOS apps are built for Apple Silicon and Intel. Real installation, account
+sessions, maintenance permissions and Safari validation remain pending.
 
 The five minimal pages cover diagnostics, accounts, tools, history and settings.
 One-click auditing includes 14 baseline categories and 18 additional checks, with

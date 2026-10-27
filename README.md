@@ -22,7 +22,7 @@ Windows 桌面包解压后双击 `EnvScope.exe`。macOS 桌面包的入口为 `E
 
 检测不需要终端、管理员权限或手动导入。桌面包自带 Python 运行时。页面中的“结束本地服务”可退出；闲置 15 分钟也会退出。首次安装维护核心与系统修复可能请求管理员授权。
 
-Windows 独立程序已在本机构建并验证 worker 与资源。macOS 采集器和 `.app` 构建流程已加入，尚待 macOS 真机及 Safari 验收；没有把模拟测试称为真机通过。手机端暂不适配。
+Windows 独立程序已在本机构建并验证 worker 与资源。Windows、Linux、macOS 的自动回归及浏览器交互 CI 已通过；macOS `.app` 按两种架构构建，实际安装及 Safari 仍待独立验收。手机端暂不适配。
 
 ## 功能范围
 
@@ -183,7 +183,7 @@ python -m pip wheel . --no-deps --wheel-dir dist
 python -m scripts.verify_package dist
 ```
 
-回归测试只使用合成数据及 loopback 假服务，不断开真实网络、不使用真实账号、不发送实际 UDP 到外部 STUN 端点。规则 CI 在 Windows/Linux/macOS 运行；产品适配范围为 Windows/macOS。配置 CI 不等于这些系统已经通过真实设备验证。
+回归测试只使用合成数据及 loopback 假服务，不断开真实网络、不使用真实账号、不发送实际 UDP 到外部 STUN 端点。规则 CI 在 Windows/Linux/macOS 运行；产品适配范围为 Windows/macOS。自动化通过不等于真实账号、维护权限和浏览器场景均已验收。运行记录见 [Actions](https://github.com/qudadd/envscope/actions)。
 
 桌面包构建：安装开发依赖 `pyinstaller>=6.10,<7`，在目标 Windows/macOS 系统运行 `python -m scripts.build_desktop`。也可在 GitHub Actions 手动运行 `desktop packages`。桌面产物目前未签名，首次启动体验需要纳入平台验收。
 

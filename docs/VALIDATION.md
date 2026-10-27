@@ -13,6 +13,7 @@
 | Windows 独立桌面包 | 构建通过 | 自带运行时；随附源码逐文件 SHA256 校验，界面资源完整 |
 | 冻结程序 worker | 通过 | 无窗口程序的文件输出、合成 STUN 报文与本机 UDP 回环；未联系公共 STUN |
 | 发布排除检查 | 通过 | Git 跟踪文件不含私有报告 / 构建产物；已识别凭据格式扫描；固定原版源码校验 |
+| GitHub 代码 CI | 三系统及浏览器通过 | Windows / Linux / macOS 的回归、JavaScript、凭据排除、wheel 与固定源码校验；独立 Chromium 离线交互，[运行记录](https://github.com/qudadd/envscope/actions/runs/40482537626) |
 
 账号测试包含部分复制、内容损坏、提交失败、标记写入失败、回滚失败、清理失败、并发、保留清单、原版标记兼容以及长复制后的重新检测。1 项真实符号链接测试因本机权限不足跳过；模拟 Windows reparse-point 拒绝测试通过。不能将跳过解释为已验证。
 
@@ -20,7 +21,7 @@
 
 所有行为测试使用合成数据、临时目录、注入运行器和 loopback 服务。未执行原版安装 / 修复 / 更新、真实账号切换、系统断网、后台服务安装或真实公共探测。
 
-以下仍待隔离设备验证：macOS Intel / Apple Silicon 与 Safari、Windows Store / 传统 Claude 安装位置、管理员取消、原版维护的权限与恢复、真实登录会话、睡眠 / 网络切换、macOS 真实安装与签名体验。GitHub CI 和双架构 macOS 构建流程已经配置；远端运行结果以 Actions 记录为准，配置文件本身不构成通过证据。
+以下仍待隔离设备验证：macOS Intel / Apple Silicon 的实际安装与 Safari、Windows Store / 传统 Claude 安装位置、管理员取消、原版维护的权限与恢复、真实登录会话、睡眠 / 网络切换、macOS 签名体验。双架构 macOS 与 Windows 的独立包构建、冻结 worker 检查按发布标签执行；每个版本的结果以 [Actions 记录](https://github.com/qudadd/envscope/actions/workflows/desktop.yml) 为准。自动化通过不等于这些实际用户场景已验收。
 
 尚未实现权威 DNS 观测、目标进程全流量关联或原生防火墙保护。保留未知 / 不完整结论，不提供零泄漏、住宅 IP 或账号安全保证。具体平台能力见 [功能对照](FEATURE_PARITY.md)。
 
