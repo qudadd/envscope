@@ -60,6 +60,24 @@ class DesktopAPITests(unittest.TestCase):
         self.assertIn("browser.http_v4", [f["id"] for f in report["findings"]])
         self.assertNotIn("8.8.8.8", json.dumps(report))
 
+    def test_quit_refuses_to_interrupt_a_running_operation(self):
+        self.server.audit_lock.acquire()
+        try:
+            with self.assertRaises(HTTPError) as caught:
+                self.post({}, path="/api/quit")
+            self.assertEqual(caught.exception.code, 409)
+        finally:
+            self.server.audit_lock.release()
+
+    def test_selected_item_resolution_requires_current_evidence(self):
+        for verified in (False, True):
+            with self.subTest(verified=verified):
+                self.server.solution_before = {"problems": [], "check": {"id":"guard","title":"进程守护","status":"unknown"}}
+                self.server.auditor = lambda *a, **k: fixture_audit() + ([Finding("baseline.guard", "进程守护", Status.PASS, "fixture running task", "test-fixture")] if verified else [])
+                value = json.loads(self.post({"snapshot": snapshot()}).read())
+                self.assertEqual(value["resolution"]["item"]["state"], "verified" if verified else "unverified")
+                self.assertNotEqual(value["decision"]["verdict"], "clear_in_scope")
+
     def test_forged_origin_and_missing_token_rejected(self):
         for options in ({"origin": "http://example.org"}, {"token": ""}):
             with self.assertRaises(HTTPError) as caught:

@@ -95,7 +95,7 @@ async function runAudit(){
   nodes.start.disabled=true;nodes.share.disabled=true;lastSnapshot=null;lastReport=null;
   nodes.start.textContent="检测中…";byId("audit-results").setAttribute("aria-busy","true");
   byId("workspace").dataset.state="running";
-  nodes.checks.replaceChildren();byId("problems").replaceChildren();byId("normal-observations").replaceChildren();
+  nodes.checks.replaceChildren();byId("problems").replaceChildren();byId("normal-observations").replaceChildren();byId("claude-checklist").hidden=true;
   byId("checks-title").hidden=true;byId("solution-tools").hidden=true;byId("resolution").hidden=true;
   byId("coverage-count").textContent="正在检测";byId("verdict-note").textContent="正在采集本次观测并分析问题。请保持本地页面打开。";
   byId("session-state").textContent="正在收集证据";byId("verdict").textContent="观测中…";
@@ -114,7 +114,7 @@ async function runAudit(){
     if(session){
       byId("session-state").textContent="正在检测系统网络";
       byId("verdict-note").textContent="浏览器观测已完成，正在合并系统检查。";
-      try {lastReport=await nativeAudit(session,lastSnapshot);renderDesktop(lastReport);document.dispatchEvent(new Event("envscope-audit-complete"));}
+      try {lastReport=await nativeAudit(session,lastSnapshot);renderDesktop(lastReport);document.dispatchEvent(new CustomEvent("envscope-audit-complete",{detail:{report_id:lastReport.report_id}}));}
       catch {byId("verdict-note").textContent="系统检测未完成，已保留浏览器观测；可重新检测。";byId("session-state").textContent="系统检测未完成";}
     }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
     nodes.share.disabled=false;
@@ -127,11 +127,12 @@ function download(value,suffix) {
   const blob=new Blob([JSON.stringify(value,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);
   const link=document.createElement("a");link.href=url;link.download=`envscope-${suffix}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-void initDesktopControls({sessionPromise,download,onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
+void initDesktopControls({sessionPromise,download,retest:()=>runAudit(),onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
 nodes.share.addEventListener("click",()=>{if(lastReport)download(lastReport,"report");else if(lastSnapshot)download(sharingSnapshot(lastSnapshot),"share");});
 nodes.quit.addEventListener("click",async()=>{
   const session=await sessionPromise;if(!session)return;
   try{const response=await fetch("/api/quit",{method:"POST",headers:{"X-EnvScope-Token":session.token}});
-    if(response.ok){nodes.start.disabled=true;nodes.quit.hidden=true;byId("session-state").textContent="本地检测已结束";}}
+    if(response.ok){nodes.start.disabled=true;nodes.quit.hidden=true;byId("session-state").textContent="本地检测已结束";}
+    else if(response.status===409)byId("session-state").textContent="等待当前检测或操作结束后再退出";}
   catch{byId("session-state").textContent="本地进程已停止";}
 });

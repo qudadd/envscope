@@ -38,6 +38,7 @@ def parser():
         command.add_argument("--html", help="另存无外部资源的 HTML 报告")
         command.add_argument("--include-sensitive", action="store_true", help="在本地报告保留原始地址，不适合直接公开")
     sub.add_parser("desktop", help="自动打开本地一键检测窗口")
+    sub.add_parser("maintenance-run", help="运行已明确启用的维护方案；未启用时不探测或改写")
     serve = sub.add_parser("serve", help="在 loopback 提供一键检测页；数据仅传到本机进程")
     serve.add_argument("--port", type=int, default=8765)
     imported = sub.add_parser("import-switcher", help="只解析已保存的 checkdetail 文本，不执行上游脚本")
@@ -80,6 +81,9 @@ def save(report, output, html_path=None, sensitive=False):
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
+        if args.command == "maintenance-run":
+            from .maintenance import main as maintenance_main
+            return maintenance_main([])
         if args.command == "desktop":
             from .desktop import main as desktop_main
             return desktop_main()

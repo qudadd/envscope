@@ -15,11 +15,31 @@ import stat
 import tempfile
 import time
 
-from .config_files import inspect_text, remove_trailing_commas
+from .config_files import inspect_text, load_object, remove_trailing_commas
 from .discovery import safe_local_proxy
 
 MAX_CONFIG = 1048576
 LABELS = {"desktop": "Claude 桌面配置", "cli": "Claude Code 用户配置"}
+GUARDED_KEYS = ("HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy", "NODE_TLS_REJECT_UNAUTHORIZED")
+
+
+def validate_guard(values):
+    if not isinstance(values, dict) or set(values) != set(GUARDED_KEYS):
+        raise ValueError("维护基线只能包含已列出的 Code 环境设置")
+    for key, value in values.items():
+        if value is not None and (not isinstance(value, str) or len(value) > 2048 or any(ord(c) < 32 for c in value)):
+            raise ValueError("维护基线值无效")
+        if key in ("HTTPS_PROXY", "https_proxy") and value is not None:
+            if not safe_local_proxy(value) or not value.startswith(("http://", "https://")):
+                raise ValueError("自动保持只支持不含凭据的本机 HTTP / HTTPS 代理")
+        if key in ("NO_PROXY", "no_proxy") and value is not None and _without_targets(value) != ",".join(p for p in re.split(r"[,;\s]+", value) if p):
+            raise ValueError("先修正匹配 Claude 的 NO_PROXY 条目，再建立维护基线")
+        if key == "NODE_TLS_REJECT_UNAUTHORIZED" and value not in (None, "1"):
+            raise ValueError("不能长期保持关闭证书校验的配置")
+    proxies = {values[k] for k in ("HTTPS_PROXY", "https_proxy") if values[k] is not None}
+    if len(proxies) > 1 or not proxies and values["NODE_TLS_REJECT_UNAUTHORIZED"] != "1":
+        raise ValueError("请先配置一致的本机 HTTPS 代理或显式开启 TLS 校验，再建立维护基线")
+    return dict(values)
 
 
 def digest(data):
@@ -195,6 +215,44 @@ class ConfigRemedies:
         with self._lock():
             return self._apply(changes)
 
+    def capture_guard(self):
+        original = _read(self.paths["cli"])
+        if original is None:
+            raise ValueError("请先完成 Code 配置，再启用配置自动保持")
+        text = original.decode("utf-8-sig")
+        if inspect_text(text).get("valid") is not True:
+            raise ValueError("请先修正 Code 配置格式，再建立维护基线")
+        data = load_object(text)
+        if not isinstance(data, dict) or not isinstance(data.get("env", {}), dict):
+            raise ValueError("Code 配置结构无法识别")
+        values = validate_guard({key: data.get("env", {}).get(key) for key in GUARDED_KEYS})
+        return values, digest(original)
+
+    def preview_guard(self, values):
+        """Restore only approved env keys, preserving all unrelated current values."""
+        values = validate_guard(values)
+        original = _read(self.paths["cli"])
+        if original is None:
+            raise ValueError("Code 配置已删除；不会在后台重新创建，需人工复核")
+        data = load_object(original.decode("utf-8-sig"))
+        if not isinstance(data, dict) or not isinstance(data.get("env", {}), dict):
+            raise ValueError("Code 配置格式有误；不会用基线覆盖整份文件")
+        env = data.setdefault("env", {})
+        changed = [key for key, value in values.items() if env.get(key) != value or value is None and key in env]
+        if not changed:
+            return None
+        for key in changed:
+            if values[key] is None:
+                env.pop(key, None)
+            else:
+                env[key] = values[key]
+        after = (b"\xef\xbb\xbf" if original.startswith(b"\xef\xbb\xbf") else b"") + (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        if len(after) > MAX_CONFIG:
+            raise ValueError("配置过大，未恢复维护基线")
+        return {"target": "cli", "label": LABELS["cli"], "before": original, "after": after,
+                "before_hash": digest(original), "after_hash": digest(after),
+                "effects": ["恢复已批准的 Code 字段：" + ", ".join(changed)], "keys": changed}
+
     def _apply(self, changes):
         # Validate every target before writing the first one.
         for change in changes:
@@ -239,9 +297,66 @@ class ConfigRemedies:
         with self._lock():
             return self._undo(token)
 
+    def backup_status(self, token):
+        try:
+            if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{24}", token):
+                return "unavailable"
+            metadata = _read(self.backups / (token + ".recovery.json"))
+            meta = load_object(metadata.decode("utf-8")) if metadata else {}
+            if meta.get("undone_at"):
+                return "undone"
+            if meta.get("target") not in self.paths or not isinstance(meta.get("after_hash"), str):
+                return "unavailable"
+            current = _read(self.paths[meta["target"]])
+            return "available" if current is not None and digest(current) == meta["after_hash"] else "changed"
+        except (OSError, ValueError, UnicodeError, AttributeError):
+            return "unavailable"
+
+    def list_backups(self):
+        """Expose recovery metadata only; never expose original config contents."""
+        try:
+            root = _safe(self.backups)
+            files = sorted(root.glob("*.recovery.json"), key=lambda path: path.stat().st_mtime, reverse=True)[:100]
+        except (OSError, ValueError):
+            return []
+        records = []
+        for file in files:
+            token = file.name.removesuffix(".recovery.json")
+            if not re.fullmatch(r"[A-Za-z0-9_-]{24}", token):
+                continue
+            try:
+                body = _read(file)
+                metadata = load_object(body.decode("utf-8")) if body else {}
+                if metadata.get("target") not in LABELS or not isinstance(metadata.get("after_hash"), str):
+                    continue
+                records.append({"id": token, "label": LABELS[metadata["target"]],
+                                "created_at": metadata.get("created_at"), "availability": self.backup_status(token)})
+            except (OSError, ValueError, UnicodeError, AttributeError):
+                continue
+            if len(records) >= 20:
+                break
+        return records
+
     def _undo(self, token):
-        if not isinstance(token, str) or token not in self.undo_records:
-            raise ValueError("该备份不属于本次服务会话")
+        if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{24}", token):
+            raise ValueError("备份编号无效")
+        if self.backup_status(token) != "available":
+            raise ValueError("备份记录已撤销、无法核实或当前文件又被修改，未执行恢复")
+        if token not in self.undo_records:
+            metadata = _read(self.backups / (token + ".recovery.json"))
+            if metadata is None:
+                raise ValueError("恢复记录不存在")
+            meta = load_object(metadata.decode("utf-8"))
+            if (not isinstance(meta, dict) or meta.get("target") not in self.paths or meta.get("undone_at")
+                    or type(meta.get("original_existed")) is not bool or not re.fullmatch(r"[0-9a-f]{64}", str(meta.get("after_hash", "")))):
+                raise ValueError("恢复记录无效或已撤销")
+            before = _read(self.backups / (token + ".private.json")) if meta["original_existed"] else None
+            after = _read(self.paths[meta["target"]])
+            if (meta["original_existed"] and (before is None or digest(before) != meta.get("before_hash"))
+                    or after is None or digest(after) != meta["after_hash"]):
+                raise ValueError("备份或当前配置已变化，未执行恢复")
+            self.undo_records[token] = {"target": meta["target"], "label": LABELS[meta["target"]],
+                                        "before": before, "after": after, "backup": self.backups / (token + ".private.json")}
         record = self.undo_records[token]
         path = self.paths[record["target"]]
         if _read(path) != record["after"]:
@@ -252,6 +367,12 @@ class ConfigRemedies:
             _replace(path, record["before"], record["after"])
         else:
             _safe(path).unlink()
+        recovery = self.backups / (token + ".recovery.json")
+        metadata = _read(recovery)
+        if metadata is not None:
+            meta = load_object(metadata.decode("utf-8"))
+            meta["undone_at"] = datetime.now(timezone.utc).isoformat()
+            _replace(recovery, json.dumps(meta).encode("utf-8"), metadata)
         del self.undo_records[token]
         return {"state": "completed", "label": record["label"], "reason": "已恢复原配置；请重开客户端并复检。"}
 
@@ -269,10 +390,15 @@ class SolutionPlans:
         except (ValueError, KeyError, TypeError):
             return False
 
-    def prepare(self, report):
+    def prepare(self, report, check_id=None):
         if not self._current(report):
             return {"state": "retest_required", "reason": "请先完成一次新的本机一键检测，再生成处理方案。"}
         problems = report["diagnosis"]["problems"]
+        if check_id is not None:
+            from .claude_checks import CHECK_PROBLEMS
+            if check_id not in CHECK_PROBLEMS:
+                raise ValueError("未知逐项检查")
+            problems = [p for p in problems if any(p["id"].startswith(prefix) for prefix in CHECK_PROBLEMS[check_id])]
         tasks, effects, manual, kinds = [], [], [], {}
         for problem in problems:
             repair = problem.get("repair")
@@ -308,13 +434,19 @@ class SolutionPlans:
         if changes:
             effects.insert(0, "为将修改的配置创建私有原文件备份与恢复记录，随后仅写入下列字段")
             tasks.append("config")
-        if any(p.get("repair") == "legacy" for p in problems):
+        selected = next((row for row in report.get("claude_checks", {}).get("items", []) if row["id"] == check_id), None)
+        needs_backend = (selected and selected["id"] in ("proxy", "tun", "guard", "rules")
+                         and selected["status"] in ("warn", "fail", "unknown") and report.get("usage") != "cli"
+                         and not (selected["id"] == "proxy" and kinds.get("cli")))
+        if any(p.get("repair") == "legacy" for p in problems) or needs_backend:
             caps = self.legacy.capabilities()
             fix = next((a for a in caps["actions"] if a["id"] == "fix"), {})
             install = next((a for a in caps["actions"] if a["id"] == "install"), {})
             if fix.get("available"):
                 tasks.append("fix")
                 effects.extend(fix["effects"])
+                if selected:
+                    effects.insert(0, "为处理“" + selected["title"] + "”调用原版统一修复；该核心可能同时修改下列其他设置，请逐条审核")
             elif install.get("available"):
                 tasks.append("install")
                 effects.extend(install["effects"])
@@ -324,9 +456,12 @@ class SolutionPlans:
         if not tasks:
             return {"state": "guided", "effects": [], "manual": manual, "reason": "本次没有可安全自动执行的修改。请按已定位问题的具体步骤处理，再复检。"}
         token = secrets.token_urlsafe(20)
+        before = {"problems": [{"id": p["id"], "title": p["title"]} for p in problems]}
+        if selected:
+            before["check"] = {"id": selected["id"], "title": selected["title"], "status": selected["status"]}
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"], "changes": changes,
                               "tasks": tasks, "problems": [p["id"] for p in problems],
-                              "before": {"problems": [{"id": p["id"], "title": p["title"]} for p in problems]}}}
+                              "before": before}}
         return {"state": "planned", "plan_id": token, "effects": effects, "manual": manual,
                 "steps": ["备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
                 "reason": "确认后执行；配置写入不等于故障已解决，随后自动复检。"}

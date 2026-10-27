@@ -19,6 +19,7 @@ p{margin:0 0 16px}
 button{font:inherit;font-size:13px;line-height:1.5;cursor:pointer;color:var(--ink);background:var(--paper);border:1px solid #b8b8b8;border-radius:5px;padding:8px 14px;flex-shrink:0;white-space:nowrap}
 button:hover:not(:disabled){background:#f4f4f4;border-color:#858585}
 button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+a.link,a.link:visited{color:var(--ink);text-underline-offset:3px}
 button:disabled{opacity:.45;cursor:default}
 .actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:24px 0 16px}
 .actions span{font-size:12px;color:var(--muted)}
@@ -134,3 +135,26 @@ td .link{margin-left:15px}
 #checks table{margin:0 0 20px}
 #checks-title{font-size:14px}
 #workspace[data-state=complete] .result-toolbar{margin-top:30px;padding-top:24px;border-top:1px solid var(--line)}
+.claude-checklist{margin-top:32px;border-top:1px solid var(--line);padding-top:24px}
+.claude-checklist table{table-layout:fixed;margin-top:16px}
+.claude-checklist th:first-child{width:40%}
+.claude-checklist th:nth-child(2){width:31%}
+.claude-checklist td,.claude-checklist td:last-child{text-align:left;vertical-align:top;padding:20px 18px 20px 0;overflow-wrap:anywhere;font-size:12px;line-height:1.9}
+.claude-checklist td:last-child{padding-right:0}
+.claude-checklist h3{font-size:14px;font-weight:600;margin:0 0 7px}
+.claude-checklist p{margin:0 0 10px}
+.claude-checklist .check-state{font-weight:600}
+.claude-checklist button{font-size:11px;text-align:left;padding:6px 9px}
+.claude-checklist .note{font-size:11px}
+.upkeep-state{border-top:1px solid var(--line);padding-top:22px}
+#upkeep-plan{margin-top:20px;max-width:80ch}
+#upkeep-plan h3{font-size:15px;margin-bottom:12px}
+#upkeep-plan ul{padding-left:19px;font-size:12px;line-height:1.9}
+#upkeep-plan li{margin-bottom:8px;overflow-wrap:anywhere}
+#upkeep-plan button{margin-top:16px}
+#upkeep-interval{max-width:260px}
+#upkeep-events td{vertical-align:top;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+#upkeep-events td:nth-child(2){width:54%;text-align:left}
+#upkeep-events td:first-child{width:22%}
+#upkeep-events .link{margin-left:0;white-space:normal;text-align:left;font-size:11px}
+#config-backups td{font-size:12px;vertical-align:top}

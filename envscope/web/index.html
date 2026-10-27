@@ -10,14 +10,14 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.3.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.4.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
-    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
+    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
   <main id="workspace" data-state="ready">
     <div id="page-audit" class="page">
     <section class="introduction">
-      <div class="intro-heading"><h1>环境检测</h1><div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div></div>
+      <div class="intro-heading"><h1>Claude 使用检测</h1><div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div></div>
       <p id="mode-note">检查当前浏览器的 HTTP 出口和 WebRTC 候选地址。</p>
       <details class="network-note"><summary>只读检测，探测会联系外部服务</summary><p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p></details>
     </section>
@@ -32,6 +32,9 @@
         <div id="solution-plan"></div><div id="solution-output" class="solution-output" aria-live="polite"></div><div id="solution-backups" class="actions"></div>
       </section>
       <div id="problems"></div><div id="normal-observations" class="normal-observations"></div>
+      <section id="claude-checklist" class="claude-checklist" hidden aria-label="Claude 逐项核对">
+        <h2>逐项核对与保持</h2><p class="note">对应 claude-switcher 的 14 项检查。每项列出实际观测、解决方式和长期保持办法；未核实的项目不会计为通过。</p><div id="claude-check-rows"></div>
+      </section>
       <div class="result-toolbar"><h2 id="checks-title" hidden>本次检查记录</h2><button id="share" class="link" disabled>导出结果</button></div>
       <div id="checks"></div>
       <p class="note export-note">导出结果隐藏地址。环境信息仍可能识别设备，分享前请检查。</p>
@@ -39,6 +42,21 @@
 
     <section class="environment"><h2>环境</h2><dl id="environment"><div><dt>时区</dt><dd>—</dd></div><div><dt>语言</dt><dd>—</dd></div><div><dt>运行环境</dt><dd>—</dd></div></dl></section>
     <section class="limits"><h2>检测范围</h2><p id="coverage-note">本次会检查网络、代理、客户端与账号资料。系统 UDP 和浏览器 WebRTC 分开测量，不申请麦克风权限。</p></section>
+    </div>
+
+    <div id="page-upkeep" class="page" hidden>
+      <h1>持续维护</h1><p class="subtle">定期复检，记录变化。可选保持已经验证的 Code 配置，关闭页面后仍由系统调度。</p>
+      <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p>
+        <div class="actions"><button id="upkeep-run" disabled>立即复检</button><button id="upkeep-report" disabled>查看最近一次巡检</button><button id="upkeep-refresh" class="link">刷新状态</button><button id="upkeep-stop" class="link" disabled>停用并移除任务</button></div>
+      </section>
+      <section class="tool-section"><h2>维护方案</h2><p class="note">先完成一键检测，再以当前设置生成方案。Windows 使用当前用户计划任务，macOS 使用用户 LaunchAgent，无需管理员常驻服务。移动应用目录后需重新启用。</p>
+        <label>复检间隔<select id="upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label>
+        <label class="checkbox"><input id="upkeep-restore" type="checkbox">保持已批准的 Code 代理和 TLS 配置</label>
+        <p class="note">配置保持默认关闭。启用后只恢复预览中列出的 5 个字段，保留其他设置；每次先备份，24 小时最多恢复 3 次。更换代理前先停用，再生成新方案。</p>
+        <button id="upkeep-prepare">生成维护方案</button><div id="upkeep-plan"></div><div id="upkeep-output" class="solution-output" aria-live="polite"></div>
+      </section>
+      <section class="tool-section"><h2>最近事件</h2><p class="note">本机保留最近 100 条事件，此处展示最近 20 条。备份可能含认证信息，仅存本机；撤销会先停用维护，当前文件又被修改时拒绝覆盖。</p><div id="upkeep-events"><p class="note">尚无维护事件。</p></div></section>
+      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、实际账号登录与权限需在使用时确认。后台不复用旧浏览器观测，不自动安装代理、切换账号、修改时区或停止 Claude；进程守护由随附开源维护核心另行安装。</p></section>
     </div>
 
     <div id="page-accounts" class="page" hidden>
@@ -60,6 +78,7 @@
         <p class="note">仅经指定代理检测 Claude 网页与 API，区分连接失败、需认证、拒绝访问、限流及服务错误。代理失败不回退直连。</p>
       </section>
       <section class="tool-section"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">指纹信息用于排障，不推断账号风险。诊断包隐藏地址、密钥和用户目录名，分享前仍请复核。</p></section>
+      <section class="tool-section"><h2>配置备份</h2><p class="note">最近 20 份可识别恢复记录，关闭后仍保留。撤销会先停用持续维护，并校验备份和当前文件；后续已有修改时拒绝覆盖。原文位于 ~/.envscope/config-backups，可能含密钥，不可分享。</p><div id="config-backups"></div></section>
       <section class="tool-section"><h2>维护</h2><p id="backend-note" class="note">正在读取已安装的维护核心。</p>
         <label>操作<select id="maintenance-action"></select></label>
         <div id="maintenance-effects" class="note"></div>

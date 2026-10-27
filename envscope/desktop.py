@@ -8,6 +8,9 @@ from .service import expire_idle, make_server
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--maintenance-worker":
+        from .maintenance import main as maintenance_main
+        return maintenance_main(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "--stun-worker":
         worker_main(sys.argv[2:])
         return 0

@@ -2,14 +2,23 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS desktop environment toolkit. Alpha v0.3.0.
+A minimal Windows/macOS desktop environment toolkit. Alpha v0.4.0.
+
+Each of the 14 upstream Claude checks now has an observation, measurement scope,
+remedy and upkeep plan. Reviewed user-scoped Windows tasks / macOS LaunchAgents
+can run native checks every 5, 15 or 60 minutes. Optional Code config recovery
+preserves unrelated current settings, makes private backups and pauses repeated
+rewrites. Undo verifies hashes across restarts. Browser ICE and account login are
+never inferred from scheduled native checks. Real OS task lifecycle, permissions
+and sleep/resume acceptance remain pending; tests use injected schedulers.
+See [the source-mapped checklist and upkeep implementation](docs/CLAUDE_CHECKS.md).
 
 The page explains specific problems, observations, causes and ordered next steps
 without requiring raw JSON. A reviewed solution plan can repair deterministic
 trailing commas, verify and set a local HTTP(S) proxy for Claude Code, remove
 matching Code bypass entries and restore Code TLS verification. Original files
 are backed up before atomic replacement. Fresh audits distinguish confirmed
-resolution from missing evidence; session-scoped undo preserves later edits.
+resolution from missing evidence; hash-verified undo across restarts preserves later edits.
 
 Backups in `~/.envscope/config-backups` are unencrypted and can contain secrets.
 They remain local, are excluded from diagnostic exports and survive exit. Plans

@@ -18,8 +18,8 @@ cross-process lock, link/reparse checks, content comparisons and atomic per-file
 replacement. Multi-step operations can partially complete; backups are retained.
 
 Plans expire, are single-use and bind to the current server-owned report. History
-cannot authorize a repair. Undo is session-scoped and refuses to overwrite later
-edits. Backups remain after exit for manual recovery; automatic crash recovery is
+cannot authorize a repair. Undo verifies persisted recovery metadata and refuses to overwrite later
+edits. Backups remain after exit for verified undo or manual recovery; automatic crash recovery is
 not implemented. Execution is separate from fresh verification: missing evidence
 cannot become a resolved problem.
 
@@ -29,6 +29,30 @@ the original helpers, update its core and change networking or locale. Merely
 opening EnvScope or clicking native detection does not perform those actions.
 No native firewall enforcement is implemented. Process monitoring is not a
 network kill switch.
+
+## Opt-in scheduled maintenance
+
+The per-user Windows task / macOS LaunchAgent is off by default and requires a
+fresh report, reviewed effects and strict boolean confirmation. No arbitrary
+command, task name, executable or principal is accepted through the API. Only
+the fixed packaged/module worker is registered; conflicting definitions are
+preserved. Registering a task is not proof of a successful run: missing, waiting,
+stale, failed and completed heartbeats are distinct states.
+
+The worker may perform disclosed public probes and optionally restore five
+approved Code env keys. It preserves unrelated current settings and never runs
+upstream installers/repairs, switches accounts, stops Claude or changes OS
+networking/locale. Restoration verifies the credential-free loopback proxy,
+makes private backups, refuses malformed/deleted configs and concurrent edits,
+and pauses after three recoveries in 24 hours or changed/unverifiable settings.
+Browser ICE and login are not measured in this context. Shell, project and
+organization settings are outside the user-file restoration scope.
+
+Closing the UI does not stop an approved task. Disable saves the worker's off
+flag before attempting to remove its owned schedule. Failure to remove the OS
+entry does not re-enable repairs. Records remain under `~/.envscope/maintenance`;
+raw config backups remain private. Do not move the executable while scheduled.
+Tests use fake schedulers; real OS lifecycle acceptance is still pending.
 
 ## Measurement limits
 
@@ -49,7 +73,8 @@ network kill switch.
 
 ## Requests and secrets
 
-Desktop network probes require the user's test-button click. Online CLI probes
+Desktop network probes require the user's test-button click or an explicitly
+enabled recurring maintenance plan. Online CLI probes
 require `--online`; raw UDP additionally requires `--stun`.
 Public probes contact Cloudflare, ipify, ipinfo, Claude/Anthropic and Google STUN.
 Those services see the request's source. HTTP requests are unauthenticated GETs

@@ -35,8 +35,13 @@ class DesktopHandler(SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.end_headers()
+            self.wfile.write(data)
+        except (ConnectionError, TimeoutError):
+            # Closing/reloading a page cancels pending catalog responses. That
+            # is not an operation failure and must not send a second response.
+            self.close_connection = True
 
     def expected_origin(self):
         return "http://127.0.0.1:" + str(self.server.server_port)
@@ -75,6 +80,9 @@ class DesktopHandler(SimpleHTTPRequestHandler):
             return
         self.server.last_activity = time.monotonic()
         if self.path == "/api/quit":
+            if not self.server.audit_lock.acquire(blocking=False):
+                self.json_response(409, {"error": "audit_running"})
+                return
             self.json_response(200, {"stopped": True})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
@@ -169,6 +177,12 @@ def collect_report(server, snapshot):
     raw = make_report(findings, policy, "one-click-desktop", server.store.settings())
     if getattr(server, "solution_before", None) is not None:
         raw["resolution"] = compare_diagnoses(server.solution_before, raw["diagnosis"])
+        selected = server.solution_before.get("check")
+        if selected:
+            current = next((item for item in raw["claude_checks"]["items"] if item["id"] == selected["id"]), None)
+            state = "verified" if current and current["status"] == "pass" else "unverified" if not current or current["status"] in ("unknown", "skipped", "not_configured") else "review"
+            raw["resolution"]["item"] = {"id": selected["id"], "title": selected["title"], "state": state,
+                                           "before": selected["status"], "after": current["status"] if current else "unknown"}
         server.solution_before = None
     server.last_raw_report, server.last_browser = raw, snapshot
     report = redact(raw)

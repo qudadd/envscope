@@ -14,6 +14,7 @@ from .legacy import LegacyBridge
 from .report import redact
 from .transport import CurlTransport, application_state
 from .remedies import ConfigRemedies, SolutionPlans
+from .maintenance import Maintenance
 
 
 def _process(command, timeout=8):
@@ -70,7 +71,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None):
         self.store = store
         self.home = Path(home) if home else Path.home()
         self.legacy = legacy or LegacyBridge(home=self.home)
@@ -83,6 +84,7 @@ class Operations:
         self.accounts = account_manager or AccountManager(state, data, stop_app=stop_claude, launch_app=launch_claude)
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
+        self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}))
 
@@ -121,7 +123,8 @@ class Operations:
             if entry["id"] in ("cli-info", "fingerprint") and platform.system() == "Windows":
                 entry.update(supported=True, available=True, requires_confirmation=False, reason="native_read_only")
         return {"legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
-                "settings": self.store.settings(), "history": self.store.history(),
+                "settings": self.store.settings(), "history": self.store.history(), "maintenance": self.maintenance.status(),
+                "config_backups": self.config_remedies.list_backups(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
@@ -131,14 +134,34 @@ class Operations:
                              "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(),
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
                              "history-report": {"id"}, "settings-restore": set()}
-        native_parameters.update({"solution-plan": {"report_id"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"}})
+        native_parameters.update({"solution-plan": {"report_id", "check_id"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"},
+                                  "maintenance-plan": {"report_id", "interval", "auto_restore"}, "maintenance-enable": {"plan_id"},
+                                  "maintenance-disable": set(), "maintenance-status": set(), "maintenance-run": set(),
+                                  "maintenance-report": set(), "maintenance-undo": {"backup_id"}})
         if action in native_parameters and set(params) - native_parameters[action]:
             raise ValueError("unexpected action parameters")
         gate = preflight or (lambda: launch_gate(report, self.store.settings())[0])
-        if action in ("solution-plan", "solution-open") and (not report or params.get("report_id") != report.get("report_id")):
+        if action in ("solution-plan", "solution-open", "maintenance-plan") and (not report or params.get("report_id") != report.get("report_id")):
             return {"state": "retest_required", "reason": "当前显示的不是本机最新检测，请重新检测后处理，不使用历史报告执行修复。"}
         if action == "solution-plan":
-            return self.solutions.prepare(report)
+            return self.solutions.prepare(report, params.get("check_id"))
+        if action == "maintenance-plan":
+            return self.maintenance.prepare(report, params.get("interval", 15), params.get("auto_restore", False))
+        if action == "maintenance-enable":
+            return self.maintenance.enable(params.get("plan_id"), report, confirmed)
+        if action == "maintenance-disable":
+            return self.maintenance.disable(confirmed)
+        if action == "maintenance-status":
+            return {"state": "completed", "maintenance": self.maintenance.status()}
+        if action == "maintenance-report":
+            return self.maintenance.latest_report()
+        if action == "maintenance-run":
+            return self.maintenance.run_once()
+        if action == "maintenance-undo":
+            if confirmed is not True:
+                return {"state": "confirmation_required"}
+            self.maintenance.disable(True)
+            return self.config_remedies.undo(params.get("backup_id"), True)
         if action == "solution-apply":
             return self.solutions.apply(params.get("plan_id"), report, confirmed)
         if action == "solution-undo":

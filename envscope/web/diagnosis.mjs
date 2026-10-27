@@ -16,7 +16,7 @@ export function describeProxy(item){
 }
 
 export function initDiagnosis({sessionPromise,retest}) {
-  let report=null,busy=false,proxies=[],executionFailed=false;
+  let report=null,busy=false,proxies=[],executionFailed=false,activeCheck=null;
   const output=$('solution-output');
   function button(text,fn){const b=el('button',text);b.type='button';b.addEventListener('click',fn);return b;}
   function link(text,url){const a=el('a',text,'link');a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
@@ -81,9 +81,11 @@ export function initDiagnosis({sessionPromise,retest}) {
       $('solution-plan').append(button('安装完成，继续复检',()=>action(async()=>{await retest();})));
     }else if(result.needs_retest){await retest();}
   }
-  async function prepare(){
+  async function prepare(checkId=null){
+    activeCheck=checkId;$('solution-tools').hidden=false;
     output.textContent='正在核对可自动处理的配置和代理，生成具体方案…';
-    const value=await run('solution-plan',{report_id:report?.report_id});$('solution-plan').replaceChildren();
+    const params={report_id:report?.report_id};if(checkId)params.check_id=checkId;
+    const value=await run('solution-plan',params);$('solution-plan').replaceChildren();
     output.textContent=[value.reason,...value.manual||[]].filter(Boolean).join('\n');
     if(value.state==='planned'){
       const h=el('h3','本次处理方案'),list=el('ul');for(const effect of value.effects)list.append(el('li',effect));
@@ -107,6 +109,26 @@ export function initDiagnosis({sessionPromise,retest}) {
     else if(links[problem.action])controls.append(link(...links[problem.action]));
     controls.append(button('重新检测',()=>{if(!busy)void retest();}));row.append(controls);return row;
   }
+  function renderChecklist(value){
+    const items=value.claude_checks?.items||[];
+    $('claude-checklist').hidden=!items.length;
+    const labels={pass:'所列范围已核实',warn:'需要核对',fail:'发现不符合项',unknown:'待核实',skipped:'本次未测',info:'仅记录资料',not_configured:'未设比较目标'};
+    const table=el('table'),head=el('thead'),header=el('tr'),body=el('tbody');
+    header.append(el('th','检查及本次结果'),el('th','如何处理'),el('th','长期保持'));head.append(header);table.append(head,body);
+    for(const item of items){
+      const row=el('tr');row.dataset.claudeCheck=item.id;
+      const observation=el('td'),remedy=el('td'),upkeep=el('td');
+      observation.append(el('h3',`${item.number}. ${item.title}`),el('p',labels[item.status]||'待核实','check-state'),el('p',item.summary),el('p',item.measurement,'note'));
+      for(const part of item.observations.filter(p=>p.id!==`baseline.${item.id}`).slice(0,2))observation.append(el('p',part.title+'：'+part.summary,'note'));
+      remedy.append(el('p',item.remedy));upkeep.append(el('p',item.upkeep));
+      if(item.action==='solution'&&['warn','fail','unknown'].includes(item.status))remedy.append(button('审核本项处理方案',()=>action(()=>prepare(item.id))));
+      else if(item.action==='proxy-test')remedy.append(button('测试已发现代理',()=>action(proxyTest)));
+      else if(item.action==='settings')remedy.append(button('核对比较与启动设置',()=>document.querySelector('.tab[data-page="settings"]')?.click()));
+      upkeep.append(button('设置持续维护',()=>document.querySelector('.tab[data-page="upkeep"]')?.click()));
+      row.append(observation,remedy,upkeep);body.append(row);
+    }
+    $('claude-check-rows').replaceChildren(table,link('核对 claude-switcher 的固定版本源码',items[0]?.source||'https://github.com/YOURSJEYO/claude-switcher'));
+  }
   function render(reportValue){
     report=reportValue;const diagnosis=report.diagnosis;
     if(!diagnosis){$('verdict').textContent='历史结果需要重新分析';$('verdict-note').textContent='这份旧报告没有问题归因，请重新检测以生成处理方案。';return;}
@@ -116,15 +138,17 @@ export function initDiagnosis({sessionPromise,retest}) {
     $('normal-observations').replaceChildren(...diagnosis.normal.map(text=>el('p',text)));
     if(diagnosis.state==='responding')$('normal-observations').append(link('打开 Claude 网页','https://claude.ai/'));
     $('coverage-note').textContent=diagnosis.coverage;
+    renderChecklist(report);
     $('solution-plan').replaceChildren();$('prepare-solution').hidden=!diagnosis.repairable_count;
     $('quick-proxy').hidden=diagnosis.state==='responding'&&!diagnosis.problems.some(p=>p.action==='proxy-test');
-    $('solution-tools').hidden=diagnosis.state==='responding'&&!diagnosis.problems.length&&!$('solution-backups').children.length&&!executionFailed;
+    $('solution-tools').hidden=diagnosis.state==='responding'&&!diagnosis.problems.length&&!$('solution-backups').children.length&&!executionFailed&&!activeCheck;
     const table=el('table'),head=el('thead'),hr=el('tr'),body=el('tbody');hr.append(el('th','检查项目'),el('th','本次说明'));head.append(hr);table.append(head,body);
     for(const check of diagnosis.checks){const tr=el('tr');tr.dataset.check=check.id;tr.append(el('td',check.title),el('td',check.text));body.append(tr);}
     $('checks').replaceChildren(table);
     if(report.resolution){
       const value=report.resolution;
-      $('resolution').textContent=`复检：${value.resolved.length} 项已确认消除，${value.remaining.length} 项仍存在，${value.unverified.length} 项本次无法核实，${value.new.length} 项新问题。`;
+      const selected=value.item?`${value.item.title}：${({verified:'所列测量范围已核实',unverified:'本次仍未核实',review:'仍需核对'})[value.item.state]}。`:'';
+      $('resolution').textContent=selected+`复检：${value.resolved.length} 项已确认消除，${value.remaining.length} 项仍存在，${value.unverified.length} 项本次无法核实，${value.new.length} 项新问题。`;
       $('resolution').hidden=false;
       $('resolution').scrollIntoView({block:'center',behavior:'auto'});
       if(!executionFailed&&value.resolved.length&& !value.remaining.length && !value.unverified.length && !value.new.length)$('solution-output').textContent='本次处理涉及的问题已在所列项目的复检中确认消除。'+($('solution-backups').children.length?'配置变更仍需重开受影响的 Claude 客户端后生效。':'');

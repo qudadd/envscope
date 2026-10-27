@@ -37,6 +37,9 @@ def main():
                                 timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         assert result.returncode == 0, "frozen network worker failed"
         assert json.loads(network_output.read_text())["mode"] == "offline"
+        result = subprocess.run([str(executable), "--maintenance-worker", "--check-runtime"], capture_output=True,
+                                timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        assert result.returncode == 0, "frozen maintenance worker imports failed"
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 

@@ -55,6 +55,7 @@ def make_report(findings, policy, mode="audit", preferences=None):
         "report_id": str(uuid.uuid4()),
         "created_at": utc_now(),
         "mode": mode,
+        "usage": (preferences or {}).get("usage", "auto"),
         "policy": {
             "profile": policy.profile,
             "required_checks": list(policy.required_checks),
@@ -67,4 +68,6 @@ def make_report(findings, policy, mode="audit", preferences=None):
     }
     from .diagnosis import diagnose
     report["diagnosis"] = diagnose(report, preferences)
+    from .claude_checks import checklist
+    report["claude_checks"] = checklist(report, preferences)
     return report

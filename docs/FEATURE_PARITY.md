@@ -1,5 +1,14 @@
 # Feature parity and integration audit
 
+v0.4 exposes all 14 upstream identities as an evidence/remedy/upkeep checklist,
+adds reviewed per-item entry points, cross-restart verified config undo, and
+native user-scoped scheduled checks on Windows/macOS. Optional drift recovery
+only restores five approved Code env keys; it does not replace the upstream
+process guard, timezone watchdog, account manager or system repair. See
+[checklist and maintenance boundaries](CLAUDE_CHECKS.md). Real OS task lifecycle
+acceptance is pending; registration is tested with injected runners and Windows
+definitions are checked against the official XSD.
+
 v0.3 adds evidence-based problem interpretation and an integrated solution flow:
 explicit observations, causes, ordered steps, fixed settings/file entries,
 reviewed configuration edits, private backups, session-scoped undo and fresh

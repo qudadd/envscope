@@ -9,10 +9,10 @@ const cell=(row,text)=>{const n=el("td",text);row.append(n);return n;};
 const table=headers=>{const t=el("table"),head=el("thead"),r=el("tr");for(const h of headers)r.append(el("th",h));head.append(r);const body=el("tbody");t.append(head,body);return [t,body];};
 const button=(text,fn)=>{const b=el("button",text,"link");b.type="button";b.addEventListener("click",fn);return b;};
 
-export async function initDesktopControls({sessionPromise,onReport,download}) {
+export async function initDesktopControls({sessionPromise,onReport,download,retest}) {
   const session=await sessionPromise;if(!session)return;
   $("desktop-nav").hidden=false;
-  let catalog=null,busy=false;
+  let catalog=null,busy=false,lastReportId=null;
   function page(name){
     for(const n of document.querySelectorAll(".page"))n.hidden=n.id!=="page-"+name;
     for(const n of document.querySelectorAll(".tab")){if(n.dataset.page===name)n.setAttribute("aria-current","page");else n.removeAttribute("aria-current");}
@@ -22,7 +22,7 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
   async function refresh(){
     const response=await fetch("/api/catalog",{headers:{"X-EnvScope-Token":session.token},cache:"no-store"});
     if(!response.ok)throw new Error("无法读取本机功能列表");
-    catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();
+    catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderBackups();
     const options=[el("option","手动填写")];options[0].value="";
     for(const proxy of catalog.proxies||[]){const option=el("option",proxy.url+" · "+proxy.sources.join(" / "));option.value=proxy.url;options.push(option);}
     $("proxy-found").replaceChildren(...options);
@@ -35,7 +35,7 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
     const descriptor=catalog?.legacy.actions.find(a=>a.id===id);
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
-    if(needsConfirmation&&!window.confirm(effects+"\n\n继续执行？"))return null;
+    if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
     busy=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),240000);
     try {
@@ -44,7 +44,8 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
       const result=await response.json();
       if(!response.ok)throw new Error(result.error||"操作无法完成");
       if(result.latest_report)onReport(result.latest_report);
-      if(result.state==="completed"&&["settings-save","settings-restore"].includes(id))$(output).textContent=id==="settings-save"?"已保存，后续检测使用新偏好。":"已恢复上次偏好。";
+      if(id.startsWith('maintenance-'))$(output).textContent=result.reason||({planned:'方案已生成，请核对下方影响。',enabled:'持续维护已启用。',disabled:'持续维护已停用。',completed:'已刷新维护结果。',confirmation_required:'请先审核方案并确认。'})[result.state]||'本次操作尚未确认完成。';
+      else if(result.state==="completed"&&["settings-save","settings-restore"].includes(id))$(output).textContent=id==="settings-save"?"已保存，后续检测使用新偏好。":"已恢复上次偏好。";
       else if(result.state==="completed"&&id==="account-label")$(output).textContent="账号名称已保存。";
       else if(result.state==="completed"&&id==="account-switch")$(output).textContent="已准备槽位 "+result.result.slot+(result.result.launched?"，已提交应用启动请求。":"，应用未启动，请查看安装状态。")+(result.result.warnings?.length?"\n"+result.result.warnings.join("\n"):"");
       else if(result.state==="completed"&&id==="support-bundle")$(output).textContent="诊断包已导出，分享前请复核。";
@@ -102,6 +103,55 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
     $("param-url").hidden=id!=="open-safe";
     $("param-snapshot").hidden=!["snapshot-export","snapshot-import"].includes(id);
   }
+  function renderUpkeep(value){
+    if(!value)return;
+    const states={disabled:'尚未启用持续维护',active:'最近一轮巡检已完成',attention:'巡检已完成，配置保持需要处理',waiting:'已注册，等待首次巡检',stale:'巡检已超期',failed:'最近一轮没有完成',schedule_unverified:'系统任务状态未确认',invalid:'维护记录无法核实'};
+    $('upkeep-state').textContent=states[value.state]||'维护状态待核实';
+    $('upkeep-status').textContent=[value.completed_at?'最近完成：'+new Date(value.completed_at).toLocaleString():'还没有完成记录。',value.enabled?`每 ${value.interval} 分钟复检。`:'',value.has_report?`${value.problem_count} 个待处理问题。`:'',value.auto_restore?(value.restore_note||'配置保持已选择，等待首次执行。'):'配置保持未开启。',value.reason].filter(Boolean).join(' ');
+    const e=value.egress_48h||{};$('upkeep-egress').textContent=`48 小时有效出口观测 ${e.observations||0} 次，集合变化 ${e.changes||0} 次；变化本身不判定为账号风险。`;
+    $('upkeep-run').disabled=!value.enabled;$('upkeep-stop').disabled=!value.enabled&&!value.scheduler?.present;$('upkeep-report').disabled=!value.has_report;
+    $('quit').textContent=value.enabled?'结束界面，维护继续':'结束本地服务';
+    const [t,body]=table(['时间','发生了什么','操作']);
+    for(const event of [...value.events||[]].reverse()){
+      const row=el('tr');cell(row,new Date(event.at).toLocaleString());cell(row,event.text);const controls=cell(row,'');
+      for(const backup of event.backups||[]){const undo=button((backup.availability==='undone'?'已撤销 ':backup.availability==='changed'?'文件已变化，保留备份 ':'停用并撤销 ')+backup.label,async()=>{
+        const result=await action('maintenance-undo',{backup_id:backup.id},'upkeep-output',true);
+        if(result?.state==='completed')$('upkeep-output').textContent=result.reason;
+      });undo.disabled=backup.availability!=='available';controls.append(undo);}body.append(row);
+    }
+    $('upkeep-events').replaceChildren(value.events?.length?t:el('p','尚无维护事件。','note'));
+  }
+  function renderBackups(){
+    const records=catalog.config_backups||[],[t,body]=table(['备份时间','配置','恢复状态']);
+    for(const record of records){
+      const row=el('tr');cell(row,new Date(record.created_at).toLocaleString());cell(row,record.label);const control=cell(row,'');
+      if(record.availability==='available')control.append(button('停用维护并撤销',async()=>{
+        const result=await action('maintenance-undo',{backup_id:record.id},'tool-output',true);
+        if(result?.state==='completed'){page('audit');if(retest)await retest();}
+      }));
+      else control.textContent=({undone:'已撤销',changed:'文件有后续修改，需手动合并',unavailable:'恢复证据不足，保留备份'})[record.availability]||'待核实';
+      body.append(row);
+    }
+    $('config-backups').replaceChildren(records.length?t:el('p','尚无配置恢复记录。','note'));
+  }
+  $('upkeep-prepare').addEventListener('click',async()=>{
+    $('upkeep-plan').replaceChildren();
+    const value=await action('maintenance-plan',{report_id:lastReportId,interval:Number($('upkeep-interval').value),auto_restore:$('upkeep-restore').checked},'upkeep-output');
+    if(value?.state!=='planned')return;
+    const list=el('ul');for(const effect of value.effects)list.append(el('li',effect));
+    const apply=button('确认启用持续维护',async()=>{
+      apply.disabled=true;const result=await action('maintenance-enable',{plan_id:value.plan_id},'upkeep-output',true);
+      $('upkeep-plan').replaceChildren();if(result?.state==='enabled')$('upkeep-output').textContent=result.reason;
+    });
+    $('upkeep-plan').append(el('h3','本次维护方案'),list,apply);
+  });
+  $('upkeep-run').addEventListener('click',async()=>{await action('maintenance-run',{},'upkeep-output');});
+  $('upkeep-refresh').addEventListener('click',async()=>{await action('maintenance-status',{},'upkeep-output');});
+  $('upkeep-stop').addEventListener('click',async()=>{await action('maintenance-disable',{},'upkeep-output',true);$('upkeep-plan').replaceChildren();});
+  $('upkeep-report').addEventListener('click',async()=>{
+    const value=await action('maintenance-report',{},'upkeep-output');
+    if(value?.report){onReport(value.report);page('audit');$('session-state').textContent='正在查看后台原生巡检；浏览器与登录未测，处理前请重新检测。';}
+  });
   $("account-add").addEventListener("click",()=>action("account-label",{slot:$("new-slot").value.trim(),label:$("new-label").value.trim()||$("new-slot").value.trim()},"account-output"));
   for(const id of ["account-export","account-import"])$(id).addEventListener("click",()=>action(id,{slot:$("archive-slot").value.trim(),file:$("archive-path").value.trim()},"account-output",
     id==="account-export"?"将创建未加密的账号目录备份。文件含登录资料，请保存在受保护的本机目录。":"将读取指定目录并导入空的非活动槽位。不会覆盖现有槽位。"));
@@ -137,6 +187,13 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
     void action("settings-save",params,"settings-output");
   });
   $("settings-restore").addEventListener("click",()=>action("settings-restore",{},"settings-output"));
-  document.addEventListener("envscope-audit-complete",()=>{void refresh().catch(()=>{});});
+  document.addEventListener("envscope-audit-complete",event=>{lastReportId=event.detail?.report_id||null;void refresh().catch(()=>{});});
+  setInterval(async()=>{
+    if(document.hidden||$('page-upkeep').hidden||busy||document.documentElement.dataset.operationBusy==='true')return;
+    try{
+      const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'maintenance-status',params:{},confirmed:false})});
+      if(response.ok){const value=await response.json();renderUpkeep(value.maintenance);}
+    }catch{/* Keep the explicit last completion time; never fabricate a new heartbeat. */}
+  },15000);
   try{await refresh();}catch(error){$("backend-note").textContent=error.message;}
 }
