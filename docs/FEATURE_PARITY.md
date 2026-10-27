@@ -1,5 +1,12 @@
 # Feature parity and integration audit
 
+v0.3 adds evidence-based problem interpretation and an integrated solution flow:
+explicit observations, causes, ordered steps, fixed settings/file entries,
+reviewed configuration edits, private backups, session-scoped undo and fresh
+verification. Ambiguous configuration syntax and remote account/service issues
+are not guessed or reported as automatically repaired. See [diagnosis rules and
+acceptance](DIAGNOSIS.md).
+
 Audited source: `YOURSJEYO/claude-switcher`, commit
 `870c4ca0754234965878ef58144d7a755d965037` (2026-10-27 audit).
 The pinned source is retained in `envscope/vendor/claude_switcher/`; its MIT

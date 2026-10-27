@@ -12,6 +12,7 @@ from envscope.extended import extended_checks
 from envscope.operations import Operations
 from envscope.state import StateStore
 from envscope.legacy import LegacyBridge
+from envscope.local_facts import config_shape
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts"
@@ -26,8 +27,11 @@ def main():
         names = [("proxy", "代理客户端"), ("tun", "TUN 网卡"), ("country", "出口国家"), ("ip_stability", "出口变化"),
                  ("timezone", "时区"), ("locale", "地区格式"), ("ipv6", "IPv6 配置"), ("dns", "DNS 配置"),
                  ("webrtc", "UDP / WebRTC"), ("guard", "守护进程"), ("rules", "代理路由规则"), ("language", "客户端语言"), ("asn", "ASN 信息"), ("reachability", "服务连接")]
-        return (findings + [Finding("baseline." + key, title, Status.UNKNOWN, "离线夹具：尚无有效证据", "test-fixture") for key, title in names]
-                + extended_checks({}, {"dns": [], "routes": []}, {}, {}))
+        baseline = [Finding("baseline." + key, title, Status.UNKNOWN, "离线夹具：尚无有效证据", "test-fixture") for key, title in names]
+        baseline[-1] = Finding("baseline.reachability", "服务连接", Status.PASS, "离线响应夹具", "test-fixture",
+                               [{"endpoint":"https://api.anthropic.com/v1/models","http_status":401,"error":"","tls_verified":True}])
+        return (findings + baseline + extended_checks({}, {"dns": [], "routes": []},
+                {"desktop_config":config_shape(config_file),"cli":{"config":{"exists":False}}}, {}))
     directory = tempfile.TemporaryDirectory()
     store = StateStore(memory=True)
     class FixtureOperations(Operations):
@@ -39,6 +43,9 @@ def main():
         raise AssertionError("Smoke test must never execute the original backend")
     operations = FixtureOperations(store, directory.name, legacy=LegacyBridge(home=directory.name, runner=never_run),
                                    discoverer=lambda: [{"url": "http://127.0.0.1:7897", "sources": ["离线夹具"], "connection_verified": False}])
+    config_file=operations.config_remedies.paths['desktop']
+    config_file.parent.mkdir(parents=True,exist_ok=True)
+    original=b'{"mcpServers":{},"fixture":"PRIVATE_FIXTURE",}'
     server = make_server(auditor=fixture_audit, store=store, operations=operations)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -47,6 +54,7 @@ def main():
         with sync_playwright() as runtime:
             browser = runtime.chromium.launch(headless=True)
             for label, width, height in (("desktop-small", 1024, 800), ("desktop", 1280, 1000), ("desktop-wide", 1440, 1000)):
+                config_file.write_bytes(original)
                 context = browser.new_context(viewport={"width": width, "height": height}, accept_downloads=True,
                                               locale="zh-CN", timezone_id="UTC")
                 page = context.new_page()
@@ -59,31 +67,39 @@ def main():
                 page.screenshot(path=str(ARTIFACTS / f"{label}-initial.png"), full_page=True)
                 page.get_by_role("button", name="一键检测").click()
                 expect(page.locator("#share")).to_be_enabled()
-                assert page.locator("#verdict").inner_text() == "检测尚不完整"
-                assert page.locator("#checks .result").count() == 14
-                assert page.locator("#extended-checks .result").count() == 18
-                assert page.locator("#technical-checks .status.unknown").count() == 4
+                expect(page.locator("#verdict")).to_contain_text("1 个需要处理的问题")
+                assert page.locator('#checks tr[data-check^="baseline."]').count()==14
+                assert page.locator('#checks tr[data-check^="extra."]').count()==18
+                expect(page.locator('#problems')).to_contain_text('配置结尾存在多余逗号')
+                assert '查看详情' not in page.locator('#audit-results').inner_text()
+                assert 'PRIVATE_FIXTURE' not in page.locator('body').inner_text()
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "horizontal overflow"
                 with page.expect_download() as downloaded:
                     page.get_by_role("button", name="导出结果").click()
                 download = downloaded.value
                 file = ARTIFACTS / f"{label}-share.json"
                 download.save_as(str(file))
-                value = json.loads(file.read_text())
+                value = json.loads(file.read_text(encoding='utf-8'))
                 assert value["contains_sensitive"] is False
                 assert value["mode"] == "one-click-desktop"
-                page.screenshot(path=str(ARTIFACTS / f"{label}-unavailable.png"), full_page=True)
-                page.locator("#extended-results h2").evaluate("el => el.scrollIntoView({block:'start'})")
-                page.screenshot(path=str(ARTIFACTS / f"{label}-extended.png"))
-                page.locator("#finding-filter").select_option("unknown")
-                assert page.locator("#checks .status.pass").count() == 0
-                page.locator("#finding-filter").select_option("needs")
-                expect(page.locator("#filter-empty")).to_be_visible()
-                page.locator("#finding-filter").select_option("pass")
-                expect(page.locator("#measurement-details")).to_be_visible()
-                assert page.locator("#technical-checks .status.pass").count() == 1
-                assert page.locator("#baseline-heading").is_hidden()
-                page.locator("#finding-filter").select_option("all")
+                assert 'PRIVATE_FIXTURE' not in json.dumps(value)
+                page.screenshot(path=str(ARTIFACTS/f'{label}-diagnosis.png'))
+                page.get_by_role('button',name='一站式处理',exact=True).click()
+                expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
+                assert config_file.read_bytes()==original, 'preview must not edit'
+                page.screenshot(path=str(ARTIFACTS/f'{label}-plan.png'))
+                page.get_by_role('button',name='确认执行此方案',exact=True).click()
+                expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
+                expect(page.locator('#verdict')).to_have_text('Claude 服务已返回响应')
+                assert config_shape(config_file)['valid']
+                page.screenshot(path=str(ARTIFACTS/f'{label}-resolved.png'))
+                page.get_by_role('button',name='撤销 Claude 桌面配置',exact=True).click()
+                expect(page.locator('#verdict')).to_contain_text('1 个需要处理的问题')
+                assert config_file.read_bytes()==original
+                page.get_by_role('button',name='一站式处理',exact=True).click()
+                expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
+                page.get_by_role('button',name='确认执行此方案',exact=True).click()
+                expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
                 page.get_by_role("button", name="账号", exact=True).click()
                 expect(page.locator("#account-list")).to_contain_text("A")
                 assert page.locator("#account-list tr").count() >= 5
@@ -96,7 +112,7 @@ def main():
                 page.get_by_role("button", name="工具", exact=True).click()
                 page.locator("#proxy-url").fill("http://127.0.0.1:7897")
                 page.get_by_role("button", name="测试连接", exact=True).click()
-                expect(page.locator("#tool-output")).to_contain_text("拒绝访问")
+                expect(page.locator("#tool-output")).to_contain_text("自动探测被拒绝")
                 page.locator("#maintenance-action").select_option("snapshot-export")
                 expect(page.locator("#maintenance-run")).to_be_disabled()
                 page.screenshot(path=str(ARTIFACTS / f"{label}-tools.png"), full_page=True)
@@ -117,7 +133,7 @@ def main():
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), name + " overflow"
                 assert not errors, errors
                 summary[label] = {"page_errors": 0, "horizontal_overflow": False,
-                                  "baseline_categories": 14, "extended_checks": 18, "filters": "passed", "share_download": "passed", "account_labels": "passed",
+                                  "baseline_categories": 14, "extended_checks": 18, "one_stop_repair": "passed", "recheck":"passed", "undo":"passed", "no_raw_details":True, "share_download": "passed", "account_labels": "passed",
                                   "proxy_diagnostics": "passed", "preferences": "passed", "history_compare": "passed"}
                 context.close()
             browser.close()

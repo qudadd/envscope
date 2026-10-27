@@ -5,6 +5,7 @@ from email.utils import parsedate_to_datetime
 import json
 import math
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -49,6 +50,7 @@ class Response:
     tls_verified: object = None
     clock_offset_seconds: object = None
     http_version: str = ""
+    retry_after_seconds: object = None
 
 
 class CurlTransport:
@@ -107,7 +109,10 @@ class CurlTransport:
         except OSError:
             return Response(error="transport_unavailable")
         if process.returncode:
-            return Response(error="curl_exit_" + str(process.returncode), tls_verified=False if process.returncode in (51, 60, 83) else None)
+            # CONNECT proxy authentication can fail before an origin response;
+            # retain its explicit 407 instead of reducing it to curl error 56.
+            proxy_407 = bool(re.search(r"(?mi)^HTTP/[\d.]+\s+407(?:\s|$)", headers))
+            return Response(status=407 if proxy_407 else None, error="curl_exit_" + str(process.returncode), tls_verified=False if process.returncode in (51, 60, 83) else None)
         if len(process.stdout) > MAX_BODY + 1024 or MARKER not in process.stdout:
             return Response(error="invalid_or_oversized_response")
         body, metadata = process.stdout.rsplit(MARKER, 1)
@@ -139,7 +144,7 @@ class CurlTransport:
         # Retain no raw headers/cookies. Account for cache Age before comparing.
         blocks = headers.replace("\r\n", "\n").split("\n\n")
         block = next((b for b in reversed(blocks) if b.startswith("HTTP/")), "")
-        selected = {k.lower().strip(): v.strip() for line in block.splitlines()[1:] if ":" in line for k, v in [line.split(":", 1)] if k.lower().strip() in ("date", "age")}
+        selected = {k.lower().strip(): v.strip() for line in block.splitlines()[1:] if ":" in line for k, v in [line.split(":", 1)] if k.lower().strip() in ("date", "age", "retry-after")}
         try:
             date = parsedate_to_datetime(selected["date"])
             age = int(selected.get("age", "0"))
@@ -148,8 +153,15 @@ class CurlTransport:
                 offset = round(date.timestamp() + age - midpoint.timestamp(), 1)
         except (KeyError, ValueError, TypeError, OverflowError):
             pass
+        retry = None
+        try:
+            candidate = int(selected["retry-after"])
+            if 0 <= candidate <= 86400:
+                retry = candidate
+        except (KeyError, ValueError):
+            pass
         return Response(status, body, mime[:120], timings=timings, tls_verified=verified,
-                        clock_offset_seconds=offset, http_version=fields[8][:12] if len(fields) == 9 else "")
+                        clock_offset_seconds=offset, http_version=fields[8][:12] if len(fields) == 9 else "", retry_after_seconds=retry)
 
 
 def parse_ip_response(response, parser, family):
@@ -176,6 +188,8 @@ def parse_ip_response(response, parser, family):
 
 
 def application_state(response):
+    if response.status == 407:
+        return "proxy_authentication_required"
     if response.error:
         return "transport_unverified"
     if response.status == 401:
@@ -198,4 +212,5 @@ def application_state(response):
 def response_evidence(url, response):
     return {"endpoint": display_url(url), "http_status": response.status, "access": application_state(response),
             "error": response.error, "timings": response.timings, "tls_verified": response.tls_verified,
-            "clock_offset_seconds": response.clock_offset_seconds, "http_version": response.http_version}
+            "clock_offset_seconds": response.clock_offset_seconds, "http_version": response.http_version,
+            "retry_after_seconds": response.retry_after_seconds}

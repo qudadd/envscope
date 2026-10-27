@@ -87,28 +87,29 @@ def write_json(report, path):
 
 
 def html_report(report):
+    from .diagnosis import diagnose
     escape = lambda v: html.escape(str(v), quote=True)
-    rows = []
-    for f in report["findings"]:
-        details = json.dumps(f["evidence"], ensure_ascii=False, indent=2)
-        limits = "".join("<li>" + escape(v) + "</li>" for v in f["limitations"])
-        suggestion = '<p>建议：' + escape(f["suggestion"]) + '</p>' if f.get("suggestion") and f["status"] in ("warn", "fail", "unknown") else ""
-        rows.append('<section><div class="row"><h2>' + escape(f["title"]) + '</h2><span class="status ' + escape(f["status"]) + '">'
-                     + escape(STATUSES[f["status"]]) + '</span></div><p>' + escape(f["summary"]) + '</p><small>'
-                     + escape(f["id"] + " · " + f["scope"]) + '</small><details><summary>查看证据与边界</summary><pre>'
-                     + escape(details) + '</pre><ul>' + limits + '</ul></details>' + suggestion + '</section>')
-    style = '''body{font:13px/1.8 system-ui,sans-serif;background:#fff;color:#171717;max-width:850px;margin:36px auto;padding:0 24px}
-header{margin-bottom:25px}h1{font-size:23px;font-weight:500;margin:0 0 18px}h2{font-size:13px;font-weight:500;margin:0}
-.verdict{font-size:16px}.row{display:flex;align-items:baseline;gap:20px;justify-content:space-between}
-section{border-top:1px solid #e4e4e4;padding:18px 0}p{margin:7px 0;color:#666}small{font-size:10px;color:#777}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.8 ui-monospace,monospace;padding:12px 0}
-.status{font-size:11px;color:#666;white-space:nowrap}.fail{color:#171717;font-weight:650;text-decoration:underline}
-summary{cursor:pointer;margin-top:10px;font-size:11px;color:#777}li{overflow-wrap:anywhere;font-size:11px;color:#777}
-'''
-    return '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-<title>EnvScope — 诊断报告</title><style>''' + style + '</style><header><h1>EnvScope</h1><p class="verdict">' + escape(VERDICTS[report["decision"]["verdict"]]) + '</p><p>' + escape(report.get("boundary", "")) + '</p><small>' + escape(report["created_at"]) + " / " + escape(report["policy"]["profile"]) + '</small></header><main>' + "".join(rows) + '</main></html>'
-
+    diagnosis = report.get("diagnosis") or diagnose(report)
+    problems = []
+    for problem in diagnosis["problems"]:
+        steps = "".join("<li>" + escape(step) + "</li>" for step in problem["steps"])
+        problems.append("<section><h2>" + escape(problem["title"]) + "</h2><p>" + escape(problem["observed"])
+                        + "</p><p>" + escape(problem["cause"]) + "</p><ol>" + steps + "</ol></section>")
+    normal = "".join("<p>" + escape(s) + "</p>" for s in diagnosis["normal"])
+    rows = "".join("<tr><td>" + escape(c["title"]) + "</td><td>" + escape(c["text"]) + "</td></tr>" for c in diagnosis["checks"])
+    style = """body{font:14px/1.8 system-ui,sans-serif;background:#fff;color:#202020;max-width:940px;margin:36px auto;padding:0 28px}
+h1{font-size:23px;font-weight:600}h2{font-size:17px;margin:0 0 10px}section{border-top:1px solid #e6e6e6;padding:24px 0}
+p{margin:8px 0;color:#646464}li{margin:5px 0}small{color:#646464}table{border-collapse:collapse;width:100%;font-size:12px}
+td{border-bottom:1px solid #e6e6e6;padding:12px 12px 12px 0;vertical-align:top}td:first-child{width:25%}
+"""
+    return ('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            + '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
+            + '<title>EnvScope — 问题与处理方案</title><style>' + style + '</style><header><h1>EnvScope</h1><h2>'
+            + escape(diagnosis["headline"]) + '</h2><p>' + escape(diagnosis["summary"]) + '</p><small>'
+            + escape(report["created_at"]) + '</small></header><main>' + "".join(problems) + normal
+            + '<section><h2>检测范围</h2><p>' + escape(diagnosis["coverage"])
+            + '</p><p>此静态报告不执行修复。请回到桌面程序审核方案、执行和复检。</p></section>'
+            + '<section><h2>本次检查记录</h2><table>' + rows + '</table></section></main></html>')
 
 def diff_reports(before, after):
     old = {f["id"]: f for f in before["findings"]}

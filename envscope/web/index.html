@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.2.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.3.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -23,24 +23,22 @@
     </section>
 
     <section id="audit-results" aria-label="检测结果" aria-busy="false">
-      <div class="result-summary" aria-live="polite"><h2 id="verdict">尚未检测</h2><span><span id="coverage-count">—</span> 项在本项范围内通过</span></div>
-      <p id="verdict-note" class="note">未取得证据的项目会标为未知。</p>
-      <div class="result-toolbar"><label id="filter-label" class="finding-filter" hidden>显示<select id="finding-filter"><option value="all">全部检查</option><option value="needs">需要处理</option><option value="unknown">证据不足 / 未检测</option><option value="pass">本项通过</option></select></label><button id="share" class="link" disabled>导出结果</button></div>
-      <p id="filter-empty" class="empty-state" hidden>当前筛选下没有检查项。可更改筛选查看其他结果。</p>
-      <h2 class="group-heading" id="baseline-heading" hidden>基础检查</h2>
-      <div class="results" id="checks" role="list">
-        <section class="result" role="listitem"><div class="check-heading"><h3>HTTP IPv4</h3><span class="status unknown">未检测</span></div><p>由两个独立服务交叉观测出口。</p></section>
-        <section class="result" role="listitem"><div class="check-heading"><h3>HTTP IPv6</h3><span class="status unknown">未检测</span></div><p>单独观测 IPv6；无响应不能证明安全。</p></section>
-        <section class="result" role="listitem"><div class="check-heading"><h3>WebRTC</h3><span class="status unknown">未检测</span></div><p>收集 ICE 候选，区分 host、srflx 与 relay。</p></section>
-        <section class="result" role="listitem"><div class="check-heading"><h3>DNS</h3><span class="status unknown">未知</span></div><p>首版尚无权威 DNS 观测服务。</p></section>
-      </div>
-      <section id="extended-results" hidden><h2 class="group-heading">扩展检查</h2><p class="note">解析与选路、代理配置、连接质量、客户端及资料状态。</p><div id="extended-checks" role="list"></div></section>
-      <details id="measurement-details"><summary>测量细项与检测边界</summary><div id="technical-checks" role="list"></div></details>
+      <div class="result-summary" aria-live="polite"><h2 id="verdict">开始检测，定位需要处理的问题</h2><span id="coverage-count">14 类基础 / 18 项扩展</span></div>
+      <p id="verdict-note" class="note">结果会直接说明发现了什么、为什么需要处理，以及下一步怎么做。</p>
+      <label class="usage-selector">使用范围<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面</option><option value="cli">Claude Code</option><option value="both">桌面与 Code</option></select></label>
+      <p id="resolution" class="resolution" aria-live="polite" hidden></p>
+      <section id="solution-tools" class="solution-tools" hidden>
+        <div class="actions"><button id="prepare-solution" hidden>一站式处理</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy">测试已发现代理</button></div>
+        <div id="solution-plan"></div><div id="solution-output" class="solution-output" aria-live="polite"></div><div id="solution-backups" class="actions"></div>
+      </section>
+      <div id="problems"></div><div id="normal-observations" class="normal-observations"></div>
+      <div class="result-toolbar"><h2 id="checks-title" hidden>本次检查记录</h2><button id="share" class="link" disabled>导出结果</button></div>
+      <div id="checks"></div>
       <p class="note export-note">导出结果隐藏地址。环境信息仍可能识别设备，分享前请检查。</p>
     </section>
 
     <section class="environment"><h2>环境</h2><dl id="environment"><div><dt>时区</dt><dd>—</dd></div><div><dt>语言</dt><dd>—</dd></div><div><dt>运行环境</dt><dd>—</dd></div></dl></section>
-    <section class="limits"><h2>检测范围</h2><p>仅覆盖列出的端点与本次观测。实际 DNS 出口和目标进程全流量接管尚无充分证据；未知项保留为未知。系统 UDP 与浏览器 WebRTC 分开测量，未申请麦克风权限。</p></section>
+    <section class="limits"><h2>检测范围</h2><p id="coverage-note">本次会检查网络、代理、客户端与账号资料。系统 UDP 和浏览器 WebRTC 分开测量，不申请麦克风权限。</p></section>
     </div>
 
     <div id="page-accounts" class="page" hidden>
@@ -84,6 +82,7 @@
     <div id="page-settings" class="page" hidden>
       <h1>设置</h1><p class="subtle">设置比较目标与启动条件。保存这些偏好不会修改系统网络、时区或语言。</p>
       <form id="settings-form">
+        <label>使用范围<select name="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面</option><option value="cli">Claude Code</option><option value="both">桌面与 Code</option></select></label>
         <div class="form-grid"><label>目标国家代码<input name="country" maxlength="2" placeholder="可选，例如 US"></label><label>目标时区<input name="timezone" placeholder="Windows 用系统 ID，macOS 用 IANA ID"></label><label>目标地区格式<input name="locale" placeholder="可选，例如 en-US"></label><label>代理客户端<select name="client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option><option value="other">其他</option></select></label><label>目标代理组<input name="proxy_group" placeholder="留空时从运行规则识别"></label><label>STUN 端口的预期策略<select name="webrtc_policy"><option value="proxy">经代理</option><option value="reject">拒绝</option></select></label></div>
         <details><summary>允许的出口与启动条件</summary><p class="note">只有明确填写允许范围后，超出范围的地址才判为策略违反。留空不代表允许任何路径，也不证明安全。</p><div class="form-grid"><label>IPv4 地址或 CIDR，每行一个<textarea name="allowed_ipv4" rows="3"></textarea></label><label>IPv6 地址或 CIDR，每行一个<textarea name="allowed_ipv6" rows="3"></textarea></label></div>
           <label class="checkbox"><input type="checkbox" name="require_guard">启动前要求守护任务已注册</label><label class="checkbox"><input type="checkbox" name="require_rules">启动前要求代理运行规则通过核对</label><p class="note">启动仍要求有效出口、UDP、代理客户端、隧道网卡及 IPv6 配置证据；所有失败项都会阻止启动。此条件不等于完整隐私证明。</p>

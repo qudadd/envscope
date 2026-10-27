@@ -13,6 +13,7 @@ from .discovery import discover_proxies
 from .legacy import LegacyBridge
 from .report import redact
 from .transport import CurlTransport, application_state
+from .remedies import ConfigRemedies, SolutionPlans
 
 
 def _process(command, timeout=8):
@@ -69,7 +70,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None):
         self.store = store
         self.home = Path(home) if home else Path.home()
         self.legacy = legacy or LegacyBridge(home=self.home)
@@ -80,6 +81,35 @@ class Operations:
                 if platform.system() == "Windows" and home is None else self.home / "AppData/Roaming/Claude"
                 if platform.system() == "Windows" else self.home / "Library/Application Support/Claude")
         self.accounts = account_manager or AccountManager(state, data, stop_app=stop_claude, launch_app=launch_claude)
+        self.remedy_opener = remedy_opener or self._open_remedy
+        self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
+        self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
+                                      lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}))
+
+    def _open_remedy(self, action):
+        system = platform.system()
+        if action.startswith("config-"):
+            path = self.config_remedies.backup_for_editor(action.removeprefix("config-"))
+        elif action == "hosts-file":
+            path = Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/drivers/etc/hosts" if system == "Windows" else Path("/private/etc/hosts")
+        else:
+            path = None
+        if system == "Windows":
+            if path:
+                command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/notepad.exe"), str(path)]
+            else:
+                uri = {"clock-settings": "ms-settings:dateandtime", "storage-settings": "ms-settings:storagesense",
+                       "proxy-settings": "ms-settings:network-proxy"}.get(action)
+                if not uri:
+                    return False
+                command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "explorer.exe"), uri]
+        elif system == "Darwin":
+            command = ["/usr/bin/open", "-e", str(path)] if path else ["/usr/bin/open", "-b", "com.apple.systempreferences"]
+        else:
+            return False
+        subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return True
 
     def catalog(self):
         try:
@@ -101,9 +131,29 @@ class Operations:
                              "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(),
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
                              "history-report": {"id"}, "settings-restore": set()}
+        native_parameters.update({"solution-plan": {"report_id"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"}})
         if action in native_parameters and set(params) - native_parameters[action]:
             raise ValueError("unexpected action parameters")
         gate = preflight or (lambda: launch_gate(report, self.store.settings())[0])
+        if action in ("solution-plan", "solution-open") and (not report or params.get("report_id") != report.get("report_id")):
+            return {"state": "retest_required", "reason": "当前显示的不是本机最新检测，请重新检测后处理，不使用历史报告执行修复。"}
+        if action == "solution-plan":
+            return self.solutions.prepare(report)
+        if action == "solution-apply":
+            return self.solutions.apply(params.get("plan_id"), report, confirmed)
+        if action == "solution-undo":
+            return self.config_remedies.undo(params.get("backup_id"), confirmed)
+        if action == "solution-open":
+            problem = next((p for p in (report or {}).get("diagnosis", {}).get("problems", []) if p["id"] == params.get("problem_id")), None)
+            if not problem:
+                return {"state": "retest_required", "reason": "请重新检测，再使用当前问题的处理入口。"}
+            target = problem["action"]
+            if target not in ("config-desktop", "config-cli", "hosts-file", "clock-settings", "storage-settings", "proxy-settings"):
+                raise ValueError("该问题没有可打开的本机入口")
+            if target.startswith("config-") and confirmed is not True:
+                return {"state": "confirmation_required", "reason": "将备份原配置，再用系统编辑器打开；备份可能含认证信息，仅保存在本机。"}
+            opened = self.remedy_opener(target)
+            return {"state": "opened" if opened else "unsupported", "reason": ("原配置已备份到 ~/.envscope/config-backups；已提交编辑器打开请求，编辑保存后重新检测。" if target.startswith("config-") else "已提交打开请求；完成上方步骤后点击重新检测。") if opened else "请按上方路径在系统设置中打开对应项目。"}
         if action == "account-label":
             return {"state": "completed", "account": self.accounts.rename_label(params.get("slot"), params.get("label"))}
         if action in ("account-switch", "account-export", "account-import", "app-launch"):

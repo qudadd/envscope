@@ -14,12 +14,13 @@ from urllib.parse import urlsplit
 from .discovery import config_documents, discover_proxies
 from .accounts import AccountManager, AccountError
 from .transport import display_url
+from .config_files import inspect_text
 
 TARGETS = ("claude.ai", "api.anthropic.com")
 
 
 def bypass_matches(value):
-    entries = [s.strip() for s in re.split(r"[,;]", str(value)) if s.strip()][:128]
+    entries = [s.strip() for s in re.split(r"[,;\s]+", str(value)) if s.strip()][:128]
     matches = set()
     for pattern in entries:
         for host in TARGETS:
@@ -148,13 +149,11 @@ def config_shape(path):
             return {"exists": False}
         if path.is_symlink() or path.stat().st_size > 1048576:
             return {"exists": True, "valid": False, "error": "unsupported_size_or_symlink"}
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
-        if not isinstance(data, dict):
-            return {"exists": True, "valid": False}
-        mcp = data.get("mcpServers", {})
-        return {"exists": True, "valid": isinstance(mcp, dict), "mcp_server_count": len(mcp) if isinstance(mcp, dict) else 0}
-    except (OSError, ValueError):
-        return {"exists": True, "valid": False}
+        return {"exists": True, **inspect_text(path.read_text(encoding="utf-8-sig"))}
+    except OSError:
+        return {"exists": True, "valid": None, "error": "unreadable"}
+    except UnicodeError:
+        return {"exists": True, "valid": False, "error": "encoding", "explanation": "文件不是有效的 UTF-8 文本"}
 
 
 def account_markers(state, profile):
@@ -169,6 +168,16 @@ def account_markers(state, profile):
 
 
 def cli_facts(home, environ):
+    # Only the user settings scope is inspected. Project/managed scopes may override it.
+    config = config_shape(home / ".claude/settings.json")
+    effective = dict(environ)
+    if config.get("valid") is True:
+        try:
+            data = json.loads((home / ".claude/settings.json").read_text(encoding="utf-8-sig"))
+            effective.update(data.get("env", {}))
+        except (OSError, ValueError):
+            pass
+    environ = effective
     files = set()
     for directory in environ.get("PATH", "").split(os.pathsep)[:64]:
         if not directory or directory.startswith(("\\\\", "//")):
@@ -197,10 +206,23 @@ def cli_facts(home, environ):
         local = bool(parsed and parsed.hostname and (parsed.hostname == "localhost" or ipaddress.ip_address(parsed.hostname).is_loopback))
     except ValueError:
         local = False
-    return {"installation_count": len(files), "origins": classes, "config": config_shape(home / ".claude/settings.json"),
+    proxy_value = next((environ.get(k) for k in ("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY") if environ.get(k)), "")
+    proxy = proxy_endpoint(proxy_value) if proxy_value else None
+    extra_ca = environ.get("NODE_EXTRA_CA_CERTS")
+    try:
+        ca_exists = Path(extra_ca).is_file() if extra_ca else None
+    except (OSError, ValueError):
+        ca_exists = None
+    return {"installation_count": len(files), "origins": classes, "config": config,
             "api_key_present": bool(environ.get("ANTHROPIC_API_KEY")), "auth_token_present": bool(environ.get("ANTHROPIC_AUTH_TOKEN")),
             "custom_endpoint": bool(base), "endpoint_valid": url_valid, "endpoint_https_or_local": not base or bool(parsed and parsed.scheme == "https") or local,
-            "bedrock": environ.get("CLAUDE_CODE_USE_BEDROCK") == "1", "vertex": environ.get("CLAUDE_CODE_USE_VERTEX") == "1"}
+            "bedrock": environ.get("CLAUDE_CODE_USE_BEDROCK") == "1", "vertex": environ.get("CLAUDE_CODE_USE_VERTEX") == "1",
+            "proxy_configured": bool(proxy_value), "proxy_valid": not proxy_value or bool(proxy),
+            "proxy_scheme": urlsplit(proxy).scheme if proxy else None,
+            "proxy_bypass": bypass_matches(environ.get("no_proxy") or environ.get("NO_PROXY", "")),
+            "tls_verification_disabled": environ.get("NODE_TLS_REJECT_UNAUTHORIZED") == "0",
+            "extra_ca_configured": bool(extra_ca), "extra_ca_exists": ca_exists,
+            "settings_scope": "current-process-and-user-settings"}
 
 
 def local_snapshot(inventory, home=None, environ=None, system=None, system_reader=None, listener=probe_listeners, hosts_path=None):

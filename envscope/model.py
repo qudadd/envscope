@@ -41,14 +41,14 @@ class Finding:
         return value
 
 
-def make_report(findings, policy, mode="audit"):
+def make_report(findings, policy, mode="audit", preferences=None):
     from .policy import decide
 
     ids = [f.id for f in findings]
     if len(ids) != len(set(ids)):
         raise ValueError("duplicate finding ids")
     decision = decide(findings, policy.required_checks)
-    return {
+    report = {
         "schema_version": 1,
         "tool": "envscope",
         "version": __version__,
@@ -65,3 +65,6 @@ def make_report(findings, policy, mode="audit"):
         "findings": [f.to_dict() for f in findings],
         "boundary": "只读诊断；结论仅覆盖本次观测与配置范围，不证明零泄漏或防火墙保护。",
     }
+    from .diagnosis import diagnose
+    report["diagnosis"] = diagnose(report, preferences)
+    return report

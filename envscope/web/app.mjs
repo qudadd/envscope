@@ -1,5 +1,6 @@
 import {STATUS_TEXT, normalizeIP, isPublicIP, parseCandidate, assessHTTP, assessICE, sharingSnapshot} from "./logic.mjs";
 import {initDesktopControls} from "./controls.mjs";
+import {initDiagnosis} from "./diagnosis.mjs";
 
 const byId=id=>document.getElementById(id);
 const nodes={start:byId("start"),share:byId("share"),checks:byId("checks"),quit:byId("quit")};
@@ -11,13 +12,7 @@ const sessionPromise=(async()=>{
     if(!response.ok)return null;
     const value=await response.json();
     if(value.mode!=="desktop"||typeof value.token!=="string")return null;
-    byId("mode-note").textContent="14 类基础检查，18 项扩展检查。系统与浏览器结果自动汇总。";
-    const names=["代理客户端","TUN 网卡","出口国家","出口变化","时区","地区格式","IPv6 配置","DNS 配置","UDP / WebRTC","守护进程","代理路由规则","客户端语言","ASN 信息","服务连接"];
-    nodes.checks.replaceChildren(...names.map(title=>row(title,{status:"unknown",status_label:"未检测",summary:"等待一键检测"})));
-    byId("coverage-count").textContent="— / 32";
-    byId("baseline-heading").hidden=false;
-    byId("verdict-note").textContent="点击一键检测，查看观测、异常原因与处理建议。";
-    byId("measurement-details").hidden=true;
+    byId("mode-note").textContent="汇总 32 项检查，直接给出问题、处理方案与复检结果。";
     nodes.quit.hidden=false;
     return value;
   } catch {return null;} finally {clearTimeout(timer);}
@@ -67,67 +62,22 @@ async function gatherICE() {
   } finally {clearTimeout(timer);pc.onicecandidate=null;pc.onicegatheringstatechange=null;pc.close();}
 }
 
-function row(title,result) {
-  const article=document.createElement("section");article.className="result";article.setAttribute("role","listitem");
-  const head=document.createElement("div");head.className="check-heading";
-  const h=document.createElement("h3");h.textContent=title;
-  const status=document.createElement("span");status.className="status "+result.status;status.textContent=result.status_label||STATUS_TEXT[result.status];
-  head.append(h,status);const body=document.createElement("div");body.className="result-body";
-  const p=document.createElement("p");p.textContent=result.summary;article.append(head,body);body.append(p);
-  if(result.suggestion&&["warn","fail","unknown"].includes(result.status)){const next=document.createElement("p");next.className="suggestion";next.textContent="建议："+result.suggestion;body.append(next);}
-  if(result.evidence?.length||result.limitations?.length) {const detail=document.createElement("details");const summary=document.createElement("summary");summary.textContent="查看详情";
-    const pre=document.createElement("pre");pre.textContent=JSON.stringify({observations:result.evidence||[],limits:result.limitations||[]},null,2);detail.append(summary,pre);body.append(detail);}
-  return article;
-}
-
 function render(snapshot) {
   byId("workspace").dataset.state="complete";
-  byId("filter-label").hidden=true;byId("extended-results").hidden=true;
-  byId("baseline-heading").hidden=true;byId("filter-empty").hidden=true;
-  const safe=sharingSnapshot(snapshot);
-  const v4=assessHTTP(snapshot.http.filter(o=>o.family===4),4);
-  const v6=assessHTTP(snapshot.http.filter(o=>o.family===6),6);
-  const ice=assessICE(snapshot.ice,snapshot.http,snapshot.ice_complete);
-  const dns={status:"unknown",summary:"尚无权威 DNS 观测，无法验证实际解析出口。",evidence:[]};
-  const results=[v4,v6,ice,dns];
-  const safeResults=results.map((r,i)=>({...r,evidence:i<2?safe.http.filter(o=>o.family===(i===0?4:6)):i===2?safe.ice:[]}));
-  nodes.checks.replaceChildren(...safeResults.map((r,i)=>row(["HTTP IPv4","HTTP IPv6","WebRTC","DNS"][i],r)));
-  byId("coverage-count").textContent=String(results.filter(r=>r.status==="pass").length)+" / 4";
-  byId("verdict").textContent="检测尚不完整";
-  byId("verdict-note").textContent=results.some(r=>r.status==="warn")?"部分观测需要复核，DNS 仍缺少权威侧证据。逐项查看检测边界。":"本次没有验证完整的浏览器隐私路径，未知项目需要补充证据。";
-  byId("session-state").textContent="完成于 "+new Date(snapshot.created_at).toLocaleTimeString();
+  const results=[assessHTTP(snapshot.http.filter(o=>o.family===4),4),assessHTTP(snapshot.http.filter(o=>o.family===6),6),assessICE(snapshot.ice,snapshot.http,snapshot.ice_complete)];
+  nodes.checks.replaceChildren(...results.map((r,i)=>{const p=document.createElement("p");p.textContent=["浏览器 IPv4","浏览器 IPv6","浏览器 WebRTC"][i]+"："+r.summary;return p;}));
+  byId("verdict").textContent="浏览器探测已完成";
+  byId("verdict-note").textContent="正在等待系统结果。仅凭浏览器探测不能定位全部本机问题。";
+  byId("coverage-count").textContent="浏览器阶段";
+  byId("session-state").textContent="正在合并系统检查";
 }
 
 function renderDesktop(report) {
-  byId("workspace").dataset.state="complete";
-  const findings=report.findings;
-  const titles={"system.inventory":"系统网络信息","network.route":"全流量接管","http.egress":"系统 IPv4","http.ipv6":"系统 IPv6","udp.stun":"系统 UDP","dns.leak":"DNS","browser.webrtc":"浏览器 WebRTC","browser.http_v4":"浏览器 IPv4","browser.http_v6":"浏览器 IPv6"};
-  const baseline=findings.filter(f=>f.id.startsWith("baseline."));
-  const extra=findings.filter(f=>f.id.startsWith("extra."));
-  const measurements=baseline.length?findings.filter(f=>!f.id.startsWith("baseline.")&&!f.id.startsWith("extra.")):[];
-  const filter=byId("finding-filter").value;
-  const accepts=f=>filter==="needs"?["fail","warn"].includes(f.status):filter==="unknown"?["unknown","skipped"].includes(f.status):filter==="pass"?f.status==="pass":true;
-  byId("filter-label").hidden=false;
-  const visibleBaseline=(baseline.length?baseline:findings).filter(accepts);
-  const visibleMeasurements=measurements.filter(accepts);
-  nodes.checks.replaceChildren(...visibleBaseline.map(f=>row(titles[f.id]||f.title,f)));
-  byId("baseline-heading").hidden=!baseline.length||!visibleBaseline.length;
-  const visibleExtra=extra.filter(accepts);
-  byId("extended-results").hidden=!visibleExtra.length;
-  byId("extended-checks").replaceChildren(...visibleExtra.map(f=>row(f.title,f)));
-  byId("technical-checks").replaceChildren(...visibleMeasurements.map(f=>row(titles[f.id]||f.title,f)));
-  byId("measurement-details").hidden=!visibleMeasurements.length;
-  byId("filter-empty").hidden=visibleBaseline.length+visibleExtra.length+visibleMeasurements.length>0;
-  byId("measurement-details").open=measurements.some(f=>f.status==="fail");
-  const counted=baseline.length?[...baseline,...extra]:findings;
-  byId("coverage-count").textContent=String(counted.filter(f=>f.status==="pass").length)+" / "+String(counted.length);
-  byId("verdict").textContent=({blocked:"发现策略违反",incomplete:"检测尚不完整",review:"需要复核",clear_in_scope:"配置范围内通过"})[report.decision.verdict]||"检测尚不完整";
-  const needs=counted.filter(f=>["warn","fail"].includes(f.status)).length;
-  const unknown=counted.filter(f=>["unknown","skipped"].includes(f.status)).length;
-  byId("verdict-note").textContent=`${needs} 项需要处理，${unknown} 项证据不足或未检测。展开详情查看依据与边界。`;
+  byId("checks-title").hidden=false;
+  diagnosisUI.render(report);
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
-byId("finding-filter").addEventListener("change",()=>{if(lastReport)renderDesktop(lastReport);});
+const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit()});
 
 async function nativeAudit(session,snapshot) {
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);
@@ -141,15 +91,16 @@ async function nativeAudit(session,snapshot) {
   } finally {clearTimeout(timer);}
 }
 
-nodes.start.addEventListener("click",async()=>{
+async function runAudit(){
   nodes.start.disabled=true;nodes.share.disabled=true;lastSnapshot=null;lastReport=null;
   nodes.start.textContent="检测中…";byId("audit-results").setAttribute("aria-busy","true");
   byId("workspace").dataset.state="running";
-  nodes.checks.replaceChildren();byId("extended-results").hidden=true;byId("measurement-details").hidden=true;
-  byId("baseline-heading").hidden=true;byId("filter-label").hidden=true;byId("filter-empty").hidden=true;
-  byId("coverage-count").textContent="—";byId("verdict-note").textContent="正在采集本次观测。请保持本地页面打开。";
+  nodes.checks.replaceChildren();byId("problems").replaceChildren();byId("normal-observations").replaceChildren();
+  byId("checks-title").hidden=true;byId("solution-tools").hidden=true;byId("resolution").hidden=true;
+  byId("coverage-count").textContent="正在检测";byId("verdict-note").textContent="正在采集本次观测并分析问题。请保持本地页面打开。";
   byId("session-state").textContent="正在收集证据";byId("verdict").textContent="观测中…";
   try {
+    if(await sessionPromise)await diagnosisUI.run("settings-save",{usage:byId("usage").value});
     const [http,ice]=await Promise.all([
       Promise.all([request("https://api4.ipify.org?format=json","json","ipify-v4",4),request("https://www.cloudflare.com/cdn-cgi/trace","trace","cloudflare-v4",4),request("https://api6.ipify.org?format=json","json","ipify-v6",6)]),
       gatherICE()
@@ -169,7 +120,8 @@ nodes.start.addEventListener("click",async()=>{
     nodes.share.disabled=false;
   } catch {byId("verdict").textContent="观测未完成";byId("verdict-note").textContent="浏览器功能不可用或采集发生错误，不能判定通过。";byId("session-state").textContent="需要重新检测";}
   finally {nodes.start.disabled=false;nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");}
-});
+}
+nodes.start.addEventListener("click",()=>{if(!diagnosisUI.isBusy())void runAudit();});
 
 function download(value,suffix) {
   const blob=new Blob([JSON.stringify(value,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);

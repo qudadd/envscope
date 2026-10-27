@@ -129,7 +129,10 @@ def verify_rules(config, rules, proxies, preferences):
         matches = ((rule_type == "AND" and payload == "NETWORK,UDP,DSTPORT," + str(value)) or
                    (rule_type == "DSTPORT" and payload == str(value))) if kind == "port" else rule_type == "DOMAINSUFFIX" and str(rule.get("payload", "")).strip().lower() == value
         if disabled or not matches or rule.get("proxy") != target:
-            return {"status": "warn", "reason": "规则顺序、目标或启用状态不符合预期", "first_mismatch": str(value)}
+            return {"status": "warn", "reason": "规则顺序、目标或启用状态不符合预期", "first_mismatch": str(value),
+                    "expected_rule": {"position": index + 1, "kind": kind, "value": value, "target": target},
+                    "actual_rule": {"type": rule_type, "payload": str(rule.get("payload", ""))[:200],
+                                    "target": str(rule.get("proxy", ""))[:100], "disabled": disabled}}
     return {"status": "pass", "reason": "已核对 13 个域名、3 个 STUN 端口及当前节点", "mode": mode,
             "webrtc_policy": policy, "scope": "runtime-configuration-only"}
 

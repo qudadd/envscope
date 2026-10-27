@@ -2,7 +2,21 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS desktop environment toolkit. Alpha v0.2.0.
+A minimal Windows/macOS desktop environment toolkit. Alpha v0.3.0.
+
+The page explains specific problems, observations, causes and ordered next steps
+without requiring raw JSON. A reviewed solution plan can repair deterministic
+trailing commas, verify and set a local HTTP(S) proxy for Claude Code, remove
+matching Code bypass entries and restore Code TLS verification. Original files
+are backed up before atomic replacement. Fresh audits distinguish confirmed
+resolution from missing evidence; session-scoped undo preserves later edits.
+
+Backups in `~/.envscope/config-backups` are unencrypted and can contain secrets.
+They remain local, are excluded from diagnostic exports and survive exit. Plans
+are short-lived and bound to the current native report; history/imported reports
+cannot authorize writes. Other problems have fixed file/settings entries and
+concrete instructions. Organization access, trusted enterprise CAs and remote
+service failures require their respective owner.
 
 [Desktop downloads](https://github.com/qudadd/envscope/releases): Windows x64,
 macOS Apple Silicon and Intel. Alpha packages are not commercially signed/notarized.
@@ -29,7 +43,7 @@ sessions, maintenance permissions and Safari validation remain pending.
 
 The five minimal pages cover diagnostics, accounts, tools, history and settings.
 One-click auditing includes 14 baseline categories and 18 additional checks, with
-actionable suggestions and filters for issues, missing evidence and scoped passes.
+specific explanations, direct remedies and a before/after repair review.
 Added checks cover system DNS and selected routes, hosts overrides, system/env
 proxy differences and bypasses, configured loopback listeners, TUN/controller
 configuration, TLS verification, DNS/TCP/TLS/TTFB timings, HTTPS-date clock

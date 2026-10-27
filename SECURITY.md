@@ -1,5 +1,28 @@
 # Security and privacy boundaries
 
+## Reviewed configuration remedies
+
+Diagnostics do not change system or client settings. A separate reviewed plan
+requires explicit boolean confirmation. Native edits target only the fixed
+desktop JSON and Code user-settings JSON. Deterministic trailing commas are
+removed outside strings; ambiguous syntax, duplicate keys and nonstandard
+numbers are not guessed. Code proxy edits require a successful anonymous API
+response over a discovered credential-free loopback HTTP(S) proxy with TLS
+verification. TLS checks are restored, never disabled.
+
+Original files and recovery hashes are stored before replacement under
+`~/.envscope/config-backups`. Backups are unencrypted and can contain credentials;
+they are excluded from reports, support bundles and source control. Do not share
+them. Windows protection also depends on the home-directory ACL. Writes use a
+cross-process lock, link/reparse checks, content comparisons and atomic per-file
+replacement. Multi-step operations can partially complete; backups are retained.
+
+Plans expire, are single-use and bind to the current server-owned report. History
+cannot authorize a repair. Undo is session-scoped and refuses to overwrite later
+edits. Backups remain after exit for manual recovery; automatic crash recovery is
+not implemented. Execution is separate from fresh verification: missing evidence
+cannot become a resolved problem.
+
 Native diagnostics are read-only. Separate, explicitly confirmed account and
 maintenance operations can stop/launch Claude, exchange profile files, install
 the original helpers, update its core and change networking or locale. Merely

@@ -1,4 +1,5 @@
 import test from "node:test";
+import {describeProxy} from "../envscope/web/diagnosis.mjs";
 import assert from "node:assert/strict";
 import {normalizeIP,isPublicIP,parseCandidate,assessHTTP,assessICE,sharingSnapshot} from "../envscope/web/logic.mjs";
 
@@ -39,4 +40,22 @@ test("sharing snapshots remove all candidate addresses while preserving equality
   const safe=sharingSnapshot({http:[{ip:"8.8.8.8"}],ice:[{address:"8.8.8.8",type:"srflx"},{address:"host.local",type:"host"}],contains_sensitive:true});
   assert.equal(safe.http[0].ip,safe.ice[0].address);assert.equal(safe.contains_sensitive,false);
   assert.ok(!JSON.stringify(safe).includes("8.8.8.8"));assert.ok(!JSON.stringify(safe).includes("host.local"));
+});
+
+test("proxy explanation recognizes anonymous API 401 without claiming a bad key",()=>{
+  const text=describeProxy({endpoint:'https://api.anthropic.com/v1/models',http_status:401});
+  assert.ok(text.includes('此 401 无需修复'));
+  assert.ok(!text.includes('密钥失效'));
+});
+
+test("CONNECT 407 takes precedence over its curl receive error",()=>{
+  const text=describeProxy({http_status:407,error:'curl_exit_56'});
+  assert.ok(text.includes('代理要求认证'));
+  assert.ok(!text.includes('连接没有完成'));
+});
+
+test("proxy explanations separate DNS, TLS and rate limits without dumping raw errors",()=>{
+  assert.ok(describeProxy({error:'curl_exit_6'}).includes('目标域名解析失败'));
+  assert.ok(describeProxy({error:'curl_exit_60'}).includes('证书校验失败'));
+  assert.ok(describeProxy({http_status:429}).includes('停止连续重试'));
 });

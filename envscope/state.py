@@ -13,7 +13,7 @@ from .policy import Policy, public_ip
 from .report import diff_reports, redact, validate_report
 
 DEFAULTS = {"country": "", "timezone": "", "locale": "", "client": "auto", "proxy_group": "", "webrtc_policy": "proxy",
-            "allowed_ipv4": [], "allowed_ipv6": [], "require_guard": True, "require_rules": True}
+            "allowed_ipv4": [], "allowed_ipv6": [], "require_guard": True, "require_rules": True, "usage": "auto"}
 
 
 def validate_settings(value):
@@ -30,6 +30,8 @@ def validate_settings(value):
         raise ValueError("invalid client")
     if proposed["webrtc_policy"] not in ("proxy", "reject"):
         raise ValueError("invalid WebRTC policy")
+    if proposed["usage"] not in ("auto", "desktop", "cli", "both"):
+        raise ValueError("invalid usage")
     for field, version in (("allowed_ipv4", 4), ("allowed_ipv6", 6)):
         if (not isinstance(proposed[field], list) or len(proposed[field]) > 32
                 or any(not isinstance(item, str) for item in proposed[field])):
@@ -95,6 +97,8 @@ class StateStore:
             raise ValueError("invalid settings")
         proposed = validate_settings({**self.settings(), **value})
         previous = self.settings()
+        if proposed == previous:
+            return proposed
         self._write("settings.previous.private.json", previous)
         self._write("settings.private.json", proposed)
         self._settings = proposed

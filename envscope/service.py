@@ -17,6 +17,7 @@ from .state import StateStore
 from .operations import Operations, launch_gate
 from .accounts import AccountError, PreflightError
 from .transport import CurlTransport
+from .diagnosis import compare_diagnoses
 
 
 class DesktopHandler(SimpleHTTPRequestHandler):
@@ -123,7 +124,11 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     return launch_gate(self.server.last_raw_report, self.server.store.settings())[0]
                 result = self.server.operations.run(request["action"], request["params"], confirmed=request["confirmed"],
                                                     report=self.server.last_raw_report, preflight=preflight)
-                if request["action"] in ("settings-save", "settings-restore", "fix", "install", "update-apply", "set-region", "set-client"):
+                if request["action"] == "solution-apply" and result.get("before"):
+                    self.server.solution_before = result.pop("before")
+                elif request["action"] in ("solution-open", "solution-undo") and result.get("state") in ("opened", "completed") and self.server.last_raw_report:
+                    self.server.solution_before = {"problems": [{"id": p["id"], "title": p["title"]} for p in self.server.last_raw_report["diagnosis"]["problems"]]}
+                if request["action"] in ("settings-save", "settings-restore", "fix", "install", "update-apply", "set-region", "set-client") or request["action"] in ("solution-apply", "solution-undo") and result.get("state") not in ("confirmation_required", "retest_required"):
                     self.server.last_raw_report = None
                 if request["action"] in ("account-switch", "app-launch", "open-safe") and self.server.last_raw_report:
                     result["latest_report"] = redact(self.server.last_raw_report)
@@ -161,7 +166,10 @@ def collect_report(server, snapshot):
         finding.id = "browser.http_v" + str(family)
         finding.title = "浏览器 HTTP IPv" + str(family)
         findings.append(finding)
-    raw = make_report(findings, policy, "one-click-desktop")
+    raw = make_report(findings, policy, "one-click-desktop", server.store.settings())
+    if getattr(server, "solution_before", None) is not None:
+        raw["resolution"] = compare_diagnoses(server.solution_before, raw["diagnosis"])
+        server.solution_before = None
     server.last_raw_report, server.last_browser = raw, snapshot
     report = redact(raw)
     try:

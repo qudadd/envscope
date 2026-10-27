@@ -58,3 +58,9 @@ Source collection used an external Scrapling 0.4.15 installation. Scrapling is
 not a product dependency. Python, Playwright and PyInstaller used for development
 or packaging retain their own licenses; installing build tools does not change
 the EnvScope source license.
+
+The 0.3 troubleshooting rules reference official Claude Code network/settings
+and installation documentation, Claude API error semantics, curl error codes,
+and Microsoft Settings URI documentation. These are factual interface and
+troubleshooting references; no implementation code is copied. Research captures
+stay outside the repository, with provenance in docs/sources.lock.json.

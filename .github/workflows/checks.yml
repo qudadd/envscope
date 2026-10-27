@@ -24,6 +24,7 @@ jobs:
       - run: node --test tests/browser.test.mjs
       - run: node --check envscope/web/app.mjs
       - run: node --check envscope/web/controls.mjs
+      - run: node --check envscope/web/diagnosis.mjs
       - run: python -m scripts.check_release
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - run: python -m scripts.verify_package dist

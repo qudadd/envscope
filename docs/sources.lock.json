@@ -2,15 +2,145 @@
   "reviewed_on": "2026-10-27",
   "collector": "Scrapling 0.4.15, research only",
   "sources": [
-    {"repository": "YOURSJEYO/claude-switcher", "revision": "870c4ca0754234965878ef58144d7a755d965037", "license": "MIT", "role": "complete pinned source bundle, fixed maintenance adapters, diagnostic categories and rewritten STUN derivative"},
-    {"repository": "webrtc/samples", "revision": "6e2c5a117aa860d66d874f7c0df0ef9a3e2cd74e", "license": "BSD-3-Clause", "path": "src/content/peerconnection/trickle-ice/js/main.js", "captured_text_sha256": "d613cefc6fdbb4dacfc6d8eca00cd3f538054b1b0c0bc52970055da52169548a", "role": "standard API reference; no source copied"},
-    {"repository": "expressvpn/expressvpn_leak_testing", "revision": "9e4cee899ac04f7820ac351fa55efdc0c01370ba", "license": "MIT", "path": "docs/test_suite_overview.md", "captured_text_sha256": "12def746fef23747524d8e4825bde92b4c6d47847e1d39cc3cc74a4da8354da9", "role": "scenario testing reference; no source copied"},
-    {"repository": "mullvad/mullvadvpn-app", "revision": "0508389502500fdd8e375d1e53756d4053ca23de", "license": "GPL-3.0", "path": "test/README.md", "captured_text_sha256": "7d1b4d4dbad43b88c1e4c2fd548b94cd229d112771a671752fbcf8a81e21268e", "role": "VM testing reference only; no GPL source incorporated"},
-    {"url": "https://wiki.metacubex.one/api/", "role": "read-only documented HTTP interface"},
-    {"url": "https://www.rfc-editor.org/info/rfc8489/", "role": "STUN protocol reference"},
-    {"url": "https://learn.microsoft.com/en-us/powershell/module/nettcpip/find-netroute", "role": "read-only selected-route API; no source copied", "reviewed_on": "2026-10-27", "captured_text_sha256": "715c0649f74c489195a2bc3b86b44b170b21ec88d00c541e560f28911ac10689"},
-    {"url": "https://github.com/apple-oss-distributions/network_cmds/blob/main/route.tproj/route.8", "role": "route get command interface; no source copied", "reviewed_on": "2026-10-27", "captured_text_sha256": "72d3cd9317e02a1c819cd2e42e4d51ff6a1b73f1f4689c4d5f28a4635423eb1e"},
-    {"url": "https://curl.se/docs/manpage.html", "role": "TLS verification and timing interface; no source copied", "reviewed_on": "2026-10-27", "captured_text_sha256": "da306c270c14c56458d94fcbed8462cad3f3b863911c53a0dd4e7d74e521daed"},
-    {"url": "https://code.claude.com/docs/en/settings", "role": "configuration locations and environment flags; no source copied", "reviewed_on": "2026-10-27", "captured_text_sha256": "a0e7b9bfe670d145179df6a05c968442ac77f8dc0a4351a956c17bbb873e2236"}
+    {
+      "repository": "YOURSJEYO/claude-switcher",
+      "revision": "870c4ca0754234965878ef58144d7a755d965037",
+      "license": "MIT",
+      "role": "complete pinned source bundle, fixed maintenance adapters, diagnostic categories and rewritten STUN derivative"
+    },
+    {
+      "repository": "webrtc/samples",
+      "revision": "6e2c5a117aa860d66d874f7c0df0ef9a3e2cd74e",
+      "license": "BSD-3-Clause",
+      "path": "src/content/peerconnection/trickle-ice/js/main.js",
+      "captured_text_sha256": "d613cefc6fdbb4dacfc6d8eca00cd3f538054b1b0c0bc52970055da52169548a",
+      "role": "standard API reference; no source copied"
+    },
+    {
+      "repository": "expressvpn/expressvpn_leak_testing",
+      "revision": "9e4cee899ac04f7820ac351fa55efdc0c01370ba",
+      "license": "MIT",
+      "path": "docs/test_suite_overview.md",
+      "captured_text_sha256": "12def746fef23747524d8e4825bde92b4c6d47847e1d39cc3cc74a4da8354da9",
+      "role": "scenario testing reference; no source copied"
+    },
+    {
+      "repository": "mullvad/mullvadvpn-app",
+      "revision": "0508389502500fdd8e375d1e53756d4053ca23de",
+      "license": "GPL-3.0",
+      "path": "test/README.md",
+      "captured_text_sha256": "7d1b4d4dbad43b88c1e4c2fd548b94cd229d112771a671752fbcf8a81e21268e",
+      "role": "VM testing reference only; no GPL source incorporated"
+    },
+    {
+      "url": "https://wiki.metacubex.one/api/",
+      "role": "read-only documented HTTP interface"
+    },
+    {
+      "url": "https://www.rfc-editor.org/info/rfc8489/",
+      "role": "STUN protocol reference"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/powershell/module/nettcpip/find-netroute",
+      "role": "read-only selected-route API; no source copied",
+      "reviewed_on": "2026-10-27",
+      "captured_text_sha256": "715c0649f74c489195a2bc3b86b44b170b21ec88d00c541e560f28911ac10689"
+    },
+    {
+      "url": "https://github.com/apple-oss-distributions/network_cmds/blob/main/route.tproj/route.8",
+      "role": "route get command interface; no source copied",
+      "reviewed_on": "2026-10-27",
+      "captured_text_sha256": "72d3cd9317e02a1c819cd2e42e4d51ff6a1b73f1f4689c4d5f28a4635423eb1e"
+    },
+    {
+      "url": "https://curl.se/docs/manpage.html",
+      "role": "TLS verification and timing interface; no source copied",
+      "reviewed_on": "2026-10-27",
+      "captured_text_sha256": "da306c270c14c56458d94fcbed8462cad3f3b863911c53a0dd4e7d74e521daed"
+    },
+    {
+      "url": "https://code.claude.com/docs/en/settings",
+      "role": "configuration locations and environment flags; no source copied",
+      "reviewed_on": "2026-10-27",
+      "captured_text_sha256": "a0e7b9bfe670d145179df6a05c968442ac77f8dc0a4351a956c17bbb873e2236"
+    }
+  ],
+  "solution_review": [
+    {
+      "id": "curl-errors",
+      "url": "https://curl.se/libcurl/c/libcurl-errors.html",
+      "captured_at": "2026-10-27T10:42:34.686706+00:00",
+      "status": 200,
+      "chars": 17318,
+      "effective_url": "https://curl.se/libcurl/c/libcurl-errors.html",
+      "result": "extracted",
+      "sha256": "2c56674d30065a3e7b50234ae9afa77c17addbc5337167572cfa452025091494",
+      "role": "primary troubleshooting reference, no source code copied"
+    },
+    {
+      "id": "claude-network",
+      "url": "https://code.claude.com/docs/en/network-config",
+      "captured_at": "2026-10-27T10:42:34.686931+00:00",
+      "status": 200,
+      "chars": 29427,
+      "effective_url": "https://code.claude.com/docs/en/network-config",
+      "result": "extracted",
+      "sha256": "3a4207cbead42b6d78399a46cc32a74aba612fdf8c5ada3acef1d7b035db17b9",
+      "role": "primary troubleshooting reference, no source code copied"
+    },
+    {
+      "id": "claude-errors",
+      "url": "https://platform.claude.com/docs/en/api/errors",
+      "captured_at": "2026-10-27T10:42:34.687443+00:00",
+      "status": 200,
+      "chars": 4218,
+      "effective_url": "https://claude.com/app-unavailable-in-region",
+      "result": "unverified",
+      "role": "primary troubleshooting reference, no source code copied"
+    },
+    {
+      "id": "claude-settings",
+      "url": "https://code.claude.com/docs/en/settings",
+      "captured_at": "2026-10-27T10:42:34.687672+00:00",
+      "status": 200,
+      "chars": 36640,
+      "effective_url": "https://code.claude.com/docs/en/settings",
+      "result": "extracted",
+      "sha256": "a381e2b1151d3ae6d19cc7eb5bb01aa76ff6666b315f89f0e1148786be9ec6be",
+      "role": "primary troubleshooting reference, no source code copied"
+    },
+    {
+      "id": "claude-install",
+      "url": "https://code.claude.com/docs/en/troubleshoot-install",
+      "captured_at": "2026-10-27T10:42:35.553022+00:00",
+      "status": 200,
+      "chars": 68932,
+      "effective_url": "https://code.claude.com/docs/en/troubleshoot-install",
+      "result": "extracted",
+      "sha256": "9c6473cb09d047316875ce41d7d5d2f511a9abc58768d9daacc16fc5800ca01e",
+      "role": "primary troubleshooting reference, no source code copied"
+    },
+    {
+      "id": "windows-settings",
+      "url": "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings",
+      "captured_at": "2026-10-27T10:42:35.752208+00:00",
+      "status": 200,
+      "chars": 18829,
+      "effective_url": "https://learn.microsoft.com/en-us/windows/apps/develop/launch/launch-settings",
+      "result": "extracted",
+      "sha256": "5a5ab1f2e5c1ae62280e40381a82f649bb0283cbb2d64e0735ac60bcd3c02764",
+      "role": "primary troubleshooting reference, no source code copied"
+    },
+    {
+      "id": "anthropic-errors-reference",
+      "url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/claude-api/shared/error-codes.md",
+      "captured_at": "2026-10-27T10:42:35.756434+00:00",
+      "status": 200,
+      "chars": 20796,
+      "effective_url": "https://raw.githubusercontent.com/anthropics/skills/main/skills/claude-api/shared/error-codes.md",
+      "result": "extracted",
+      "sha256": "1abf8dcc262732f7ee5e4c58d1909fbb0722ac12e1b957bffdf64f28fde9e4d2",
+      "role": "primary troubleshooting reference, no source code copied"
+    }
   ]
 }

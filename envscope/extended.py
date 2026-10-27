@@ -125,7 +125,7 @@ def extended_checks(inventory, network, local, context):
         ["目录存在不代表已登录、会话有效或系统凭据已迁移。"], "首次使用需打开客户端完成登录；不要手动覆盖现有资料。")
     configs = [local.get("desktop_config", {}), local.get("cli", {}).get("config", {})]
     exists = [c for c in configs if c.get("exists")]
-    add("config", Status.WARN if any(c.get("valid") is False for c in exists) else Status.PASS if exists else Status.SKIPPED,
+    add("config", Status.WARN if any(c.get("valid") is False for c in exists) else Status.UNKNOWN if any(c.get("valid") is not True for c in exists) else Status.PASS if exists else Status.SKIPPED,
         "发现无效或不支持的配置格式" if any(c.get("valid") is False for c in exists) else "已存在的客户端 / CLI 配置为有效 JSON 对象" if exists else "未配置可选 JSON 文件", configs,
         ["只检查格式与 MCP 数量，不读取或导出命令参数、环境密钥；有效 JSON 不等于 MCP 可连接。"], "备份后检查 JSON 格式及 MCP 配置结构，不直接删除配置文件。")
     cli = local.get("cli", {})
@@ -134,7 +134,9 @@ def extended_checks(inventory, network, local, context):
         "PATH 中发现多个 CLI 候选入口" if count > 1 else "PATH 中发现一个 CLI 候选入口" if count == 1 else "未发现 CLI 入口；桌面使用可忽略", [{"candidate_count": count, "origins": cli.get("origins", [])}],
         ["最多检查 PATH 前 64 项；不执行候选文件，符号链接和同目录包装入口去重。"], "通过工具页核对 CLI 安装来源和 PATH 顺序，避免不同安装相互覆盖。")
     credential_conflict = cli.get("api_key_present") and cli.get("auth_token_present")
-    invalid_cli = cli.get("endpoint_valid") is False or cli.get("endpoint_https_or_local") is False or credential_conflict or cli.get("bedrock") and cli.get("vertex")
+    invalid_cli = (cli.get("endpoint_valid") is False or cli.get("endpoint_https_or_local") is False or credential_conflict or cli.get("bedrock") and cli.get("vertex")
+                   or cli.get("proxy_scheme") in ("socks5", "socks5h") or cli.get("proxy_valid") is False or cli.get("tls_verification_disabled")
+                   or cli.get("extra_ca_configured") and cli.get("extra_ca_exists") is False)
     configured_cli = cli.get("custom_endpoint") or cli.get("api_key_present") or cli.get("auth_token_present") or cli.get("bedrock") or cli.get("vertex")
     add("cli_env", Status.WARN if invalid_cli else Status.PASS if configured_cli else Status.SKIPPED,
         "CLI 接口或认证环境配置需要复核" if invalid_cli else "CLI 环境配置已检查，未发现已知冲突" if configured_cli else "未设置所检查的 CLI 环境变量", [cli],

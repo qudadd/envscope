@@ -61,9 +61,18 @@ def save(report, output, html_path=None, sensitive=False):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(html_report(public), encoding="utf-8")
     # Never print evidence, proxy URLs, or addresses by default.
-    print("EnvScope " + __version__ + " · " + VERDICTS[public["decision"]["verdict"]])
-    for finding in public["findings"]:
-        print("  " + finding["id"] + " [" + STATUSES[finding["status"]] + "] " + finding["summary"])
+    diagnosis = public["diagnosis"]
+    print("EnvScope " + __version__ + " · " + diagnosis["headline"])
+    print(diagnosis["summary"])
+    for index, problem in enumerate(diagnosis["problems"], 1):
+        print(str(index) + ". " + problem["title"])
+        print("   " + problem["observed"])
+        print("   " + problem["cause"])
+        for step in problem["steps"]:
+            print("   - " + step)
+    for statement in diagnosis["normal"]:
+        print("  " + statement)
+    print(diagnosis["coverage"])
     print("JSON: " + str(Path(output).resolve()))
     return 0 if report["decision"]["verdict"] == "clear_in_scope" else 1 if report["decision"]["verdict"] == "blocked" else 2
 
@@ -121,7 +130,7 @@ def main(argv=None):
         snapshot = load_snapshot(args.browser) if args.browser else None
         findings = audit(policy, transport, args.online, args.stun, args.ipv6, args.target, snapshot,
                          args.controller, os.environ.get(args.controller_secret_env), baseline_config=StateStore().settings())
-        return save(make_report(findings, policy), args.output, args.html, args.include_sensitive)
+        return save(make_report(findings, policy, preferences=StateStore().settings()), args.output, args.html, args.include_sensitive)
     except (ValueError, OSError) as exc:
         # Parser/OS exception details can contain credentials or private file content.
         print("EnvScope 输入或本地资源错误（" + type(exc).__name__ + "）；请检查参数、文件格式和权限。", file=sys.stderr)

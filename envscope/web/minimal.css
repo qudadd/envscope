@@ -108,3 +108,29 @@ td .link{margin-left:15px}
 #technical-checks{margin-top:16px}
 #settings-form>details,#page-accounts>details{margin-top:26px;border-top:1px solid var(--line);padding-top:19px}
 #settings-output{max-width:100%;overflow-wrap:anywhere}
+.usage-selector{display:flex;align-items:center;gap:12px;margin:22px 0 26px}
+.usage-selector select{width:180px;margin:0;padding:7px 10px}
+.problem{border-top:1px solid var(--line);padding:25px 0 27px}
+.problem h3{font-size:17px;font-weight:600;line-height:1.6;margin-bottom:9px}
+.problem .observed{font-size:13px;margin:0 0 8px;color:var(--ink)}
+.problem .cause{font-size:13px;color:var(--muted);max-width:76ch;margin-bottom:14px}
+.problem ol{padding-left:20px;font-size:13px;line-height:1.9;max-width:80ch;margin:14px 0 19px}
+.problem li+li{margin-top:5px}
+.problem-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:13px}
+.normal-observations{font-size:13px;line-height:1.9;max-width:80ch}
+.normal-observations p{margin:13px 0}
+.solution-tools{border-top:1px solid var(--line);padding-top:6px;margin-top:3px}
+.solution-tools .actions{margin:18px 0;gap:12px}
+#prepare-solution{background:var(--ink);color:white;border-color:var(--ink)}
+#quick-proxy-select{width:280px;margin:0}
+#solution-plan h3{font-size:15px;margin:20px 0 10px}
+#solution-plan ul{font-size:13px;padding-left:18px;line-height:1.9;max-width:82ch}
+.solution-output{font-size:13px;line-height:1.9;white-space:pre-line;max-width:85ch;margin:16px 0}
+.solution-output:empty,#solution-backups:empty{display:none}
+.resolution{font-size:13px;padding:8px 0 8px 13px;border-left:2px solid var(--ink);margin:15px 0 22px}
+#checks td{text-align:left;vertical-align:top;font-size:12px;line-height:1.85;color:var(--muted);padding:12px 12px 12px 0}
+#checks td:first-child{width:25%;color:var(--ink)}
+#checks td:last-child{padding-right:0}
+#checks table{margin:0 0 20px}
+#checks-title{font-size:14px}
+#workspace[data-state=complete] .result-toolbar{margin-top:30px;padding-top:24px;border-top:1px solid var(--line)}

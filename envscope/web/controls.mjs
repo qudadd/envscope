@@ -1,4 +1,5 @@
 // Fixed desktop actions. No user input becomes an executable or shell command.
+import {describeProxy} from './diagnosis.mjs';
 const $=id=>document.getElementById(id);
 const LABELS={install:"安装维护核心与后台保护",uninstall:"卸载原版维护组件",status:"读取原版账号状态",check:"原版概要检测",checkdetail:"原版完整检测",fix:"修复环境", "update-check":"检查维护核心更新","update-apply":"更新维护核心","set-region":"按出口重设系统地区","set-client":"更换原版代理客户端",fingerprint:"设备信息","cli-info":"CLI 安装信息","open-safe":"打开临时浏览器","snapshot-export":"导出加密 DMG","snapshot-import":"导入加密 DMG","diagnose-proxy":"原版代理诊断"};
 const VERDICTS={blocked:"发现策略违反",incomplete:"检测尚不完整",review:"需要复核",clear_in_scope:"配置范围内通过"};
@@ -29,6 +30,7 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
     if(options.some(o=>o.value===$("proxy-url").value))$("proxy-found").value=$("proxy-url").value;
   }
   async function action(id,params={},output="tool-output",confirmation=null){
+    if(document.documentElement.dataset.operationBusy==='true'){$(output).textContent="正在执行一站式处理，请等待完成。";return null;}
     if(busy){$(output).textContent="已有操作进行中，请稍候。";return null;}
     const descriptor=catalog?.legacy.actions.find(a=>a.id===id);
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
@@ -47,7 +49,7 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
       else if(result.state==="completed"&&id==="account-switch")$(output).textContent="已准备槽位 "+result.result.slot+(result.result.launched?"，已提交应用启动请求。":"，应用未启动，请查看安装状态。")+(result.result.warnings?.length?"\n"+result.result.warnings.join("\n"):"");
       else if(result.state==="completed"&&id==="support-bundle")$(output).textContent="诊断包已导出，分享前请复核。";
       else if(result.state==="completed"&&id==="history-report")$(output).textContent="已读取历史结果。";
-      else if(result.state==="completed"&&id==="proxy-diagnose")$(output).textContent=result.evidence.map(o=>(o.endpoint||"测试端点")+"\nHTTP "+o.http_status+" · "+({access_denied:"拒绝访问",rate_limited:"请求限流",authentication_required:"需要认证",http_success_only:"已收到成功响应",transport_unverified:"连接未验证",server_error:"服务错误",redirect_not_followed:"重定向未跟随"}[o.access]||o.access)+(o.elapsed_ms!==undefined?" · "+o.elapsed_ms+" ms":"")).join("\n\n")+"\n\n"+(result.boundary||"");
+      else if(result.state==="completed"&&id==="proxy-diagnose")$(output).textContent=result.evidence.map(describeProxy).join("\n\n")+"\n\n"+(result.boundary||"");
       else if(result.stdout!==undefined)$(output).textContent=(STATES[result.state]||result.state)+"\n原版输出（未独立验证）\n"+result.stdout+"\n"+(result.stderr||result.reason||"");
       else if(result.state==="blocked")$(output).textContent="操作已阻止。\n"+(result.reason||"")+"\n"+(result.reasons||[]).join("\n");
       else {const display={...result};delete display.latest_report;$(output).textContent=(STATES[result.state]||result.state||"")+"\n"+JSON.stringify(display,null,2);}
@@ -79,6 +81,7 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
   function renderSettings(){
     const form=$("settings-form");for(const [key,value] of Object.entries(catalog.settings)){const field=form.elements.namedItem(key);if(!field)continue;
       if(field.type==="checkbox")field.checked=value;else field.value=Array.isArray(value)?value.join("\n"):value;}
+    $("usage").value=catalog.settings.usage||"auto";
   }
   function renderMaintenance(){
     const l=catalog.legacy,select=$("maintenance-action"),previous=select.value;
