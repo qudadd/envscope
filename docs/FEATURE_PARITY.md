@@ -202,6 +202,15 @@ service both expose the native baseline. Windows hardware/CLI inventory is
 informational and has the narrower scope shown above. These additions do not
 convert untested installed-system behavior into native-device acceptance.
 
+Version 0.2 also supplies eighteen additional measurements: target system DNS
+and selected routes, hosts overrides, system/environment proxy differences and
+bypasses, configured loopback listeners, runtime TUN and controller binding,
+TLS verification, phase timings and HTTPS-date clock comparison, desktop/profile/
+JSON discovery, CLI entry/environment conflicts, disk capacity and account
+structural integrity. Findings include remediation suggestions; filters affect
+display only. Guard checks require enabled and running state, not registration
+alone. Selected system routes do not close the per-process traffic evidence gap.
+
 Platform boundaries still requiring evidence include macOS Intel/Apple Silicon,
 actual CLI/browser locations, Windows Store versus classic Claude packaging,
 the Windows updater/task permissions and macOS helper ownership. Upstream source

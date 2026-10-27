@@ -11,6 +11,10 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--stun-worker":
         worker_main(sys.argv[2:])
         return 0
+    if len(sys.argv) > 1 and sys.argv[1] == "--network-worker":
+        from .network_facts import main as network_main
+        network_main(sys.argv[2:])
+        return 0
     server = make_server()
     thread = threading.Thread(target=expire_idle, args=(server,), daemon=True)
     thread.start()

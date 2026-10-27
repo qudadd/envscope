@@ -1,6 +1,11 @@
 # EnvScope
 
-A minimal Windows/macOS desktop environment toolkit. Alpha v0.1.0.
+![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
+
+A minimal Windows/macOS desktop environment toolkit. Alpha v0.2.0.
+
+[Desktop downloads](https://github.com/qudadd/envscope/releases): Windows x64,
+macOS Apple Silicon and Intel. Alpha packages are not commercially signed/notarized.
 
 Based on the complete pinned functionality of
 [claude-switcher](https://github.com/YOURSJEYO/claude-switcher), with independent
@@ -21,6 +26,13 @@ Windows has been built and locally checked. macOS inventory parsing has fixture
 tests and an app-build workflow; real macOS and Safari validation is pending.
 
 The five minimal pages cover diagnostics, accounts, tools, history and settings.
+One-click auditing includes 14 baseline categories and 18 additional checks, with
+actionable suggestions and filters for issues, missing evidence and scoped passes.
+Added checks cover system DNS and selected routes, hosts overrides, system/env
+proxy differences and bypasses, configured loopback listeners, TUN/controller
+configuration, TLS verification, DNS/TCP/TLS/TTFB timings, HTTPS-date clock
+comparison, desktop/profile/config discovery, CLI entry/config conflicts, disk
+capacity and account-transaction integrity. Each check states its limits.
 Native additions include verified staged account copies and rollback, dynamic
 slots and labels, fresh launch preflight, proxy discovery without port scanning,
 explicit-proxy connectivity and timing, a 50-report redacted history with private

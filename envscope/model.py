@@ -28,6 +28,7 @@ class Finding:
     scope: str
     evidence: list = field(default_factory=list)
     limitations: list = field(default_factory=list)
+    suggestion: str = ""
 
     def __post_init__(self):
         if not re.fullmatch(r"[a-z][a-z0-9_.-]{0,79}", self.id):

@@ -68,6 +68,10 @@ def discover_proxies(home=None, platform_name=None, environ=None, system_reader=
             value = r.stdout if r.returncode == 0 else ""
         else:
             value = ""
+        if isinstance(value, dict):
+            value = str(value.get("ProxyServer", "")) if value.get("ProxyEnable") == 1 else ""
+        if not isinstance(value, str):
+            value = ""
         if system == "Darwin":
             fields = dict(re.findall(r"^\s*(\w+)\s*:\s*(\S+)", value, re.M))
             for prefix, scheme in (("HTTP", "http"), ("HTTPS", "http"), ("SOCKS", "socks5")):

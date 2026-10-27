@@ -65,6 +65,8 @@ def validate_report(value):
                 or f.get("status") not in STATUSES or any(not isinstance(f.get(k), str) for k in ("title", "summary", "scope"))
                 or not isinstance(f.get("evidence"), list) or not isinstance(f.get("limitations"), list)):
             raise ValueError("invalid or duplicate finding")
+        if not isinstance(f.get("suggestion", ""), str) or len(f.get("suggestion", "")) > 1000:
+            raise ValueError("invalid suggestion")
         ids.add(f["id"])
     if not isinstance(value.get("decision"), dict) or value["decision"].get("verdict") not in VERDICTS:
         raise ValueError("invalid decision")
@@ -90,10 +92,11 @@ def html_report(report):
     for f in report["findings"]:
         details = json.dumps(f["evidence"], ensure_ascii=False, indent=2)
         limits = "".join("<li>" + escape(v) + "</li>" for v in f["limitations"])
+        suggestion = '<p>建议：' + escape(f["suggestion"]) + '</p>' if f.get("suggestion") and f["status"] in ("warn", "fail", "unknown") else ""
         rows.append('<section><div class="row"><h2>' + escape(f["title"]) + '</h2><span class="status ' + escape(f["status"]) + '">'
                      + escape(STATUSES[f["status"]]) + '</span></div><p>' + escape(f["summary"]) + '</p><small>'
                      + escape(f["id"] + " · " + f["scope"]) + '</small><details><summary>查看证据与边界</summary><pre>'
-                     + escape(details) + '</pre><ul>' + limits + '</ul></details></section>')
+                     + escape(details) + '</pre><ul>' + limits + '</ul></details>' + suggestion + '</section>')
     style = '''body{font:13px/1.8 system-ui,sans-serif;background:#fff;color:#171717;max-width:850px;margin:36px auto;padding:0 24px}
 header{margin-bottom:25px}h1{font-size:23px;font-weight:500;margin:0 0 18px}h2{font-size:13px;font-weight:500;margin:0}
 .verdict{font-size:16px}.row{display:flex;align-items:baseline;gap:20px;justify-content:space-between}

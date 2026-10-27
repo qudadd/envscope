@@ -11,10 +11,12 @@ const sessionPromise=(async()=>{
     if(!response.ok)return null;
     const value=await response.json();
     if(value.mode!=="desktop"||typeof value.token!=="string")return null;
-    byId("mode-note").textContent="一次检测系统网络和当前浏览器，结果自动汇总。";
+    byId("mode-note").textContent="14 类基础检查，18 项扩展检查。系统与浏览器结果自动汇总。";
     const names=["代理客户端","TUN 网卡","出口国家","出口变化","时区","地区格式","IPv6 配置","DNS 配置","UDP / WebRTC","守护进程","代理路由规则","客户端语言","ASN 信息","服务连接"];
-    nodes.checks.replaceChildren(...names.map(title=>row(title,{status:"unknown",summary:"等待一键检测"})));
-    byId("coverage-count").textContent="0 / 14";
+    nodes.checks.replaceChildren(...names.map(title=>row(title,{status:"unknown",status_label:"未检测",summary:"等待一键检测"})));
+    byId("coverage-count").textContent="— / 32";
+    byId("baseline-heading").hidden=false;
+    byId("verdict-note").textContent="点击一键检测，查看观测、异常原因与处理建议。";
     byId("measurement-details").hidden=true;
     nodes.quit.hidden=false;
     return value;
@@ -69,14 +71,19 @@ function row(title,result) {
   const article=document.createElement("section");article.className="result";article.setAttribute("role","listitem");
   const head=document.createElement("div");head.className="check-heading";
   const h=document.createElement("h3");h.textContent=title;
-  const status=document.createElement("span");status.className="status "+result.status;status.textContent=STATUS_TEXT[result.status];
-  head.append(h,status);const p=document.createElement("p");p.textContent=result.summary;article.append(head,p);
+  const status=document.createElement("span");status.className="status "+result.status;status.textContent=result.status_label||STATUS_TEXT[result.status];
+  head.append(h,status);const body=document.createElement("div");body.className="result-body";
+  const p=document.createElement("p");p.textContent=result.summary;article.append(head,body);body.append(p);
+  if(result.suggestion&&["warn","fail","unknown"].includes(result.status)){const next=document.createElement("p");next.className="suggestion";next.textContent="建议："+result.suggestion;body.append(next);}
   if(result.evidence?.length||result.limitations?.length) {const detail=document.createElement("details");const summary=document.createElement("summary");summary.textContent="查看详情";
-    const pre=document.createElement("pre");pre.textContent=JSON.stringify({observations:result.evidence||[],limits:result.limitations||[]},null,2);detail.append(summary,pre);article.append(detail);}
+    const pre=document.createElement("pre");pre.textContent=JSON.stringify({observations:result.evidence||[],limits:result.limitations||[]},null,2);detail.append(summary,pre);body.append(detail);}
   return article;
 }
 
 function render(snapshot) {
+  byId("workspace").dataset.state="complete";
+  byId("filter-label").hidden=true;byId("extended-results").hidden=true;
+  byId("baseline-heading").hidden=true;byId("filter-empty").hidden=true;
   const safe=sharingSnapshot(snapshot);
   const v4=assessHTTP(snapshot.http.filter(o=>o.family===4),4);
   const v6=assessHTTP(snapshot.http.filter(o=>o.family===6),6);
@@ -92,19 +99,35 @@ function render(snapshot) {
 }
 
 function renderDesktop(report) {
+  byId("workspace").dataset.state="complete";
   const findings=report.findings;
   const titles={"system.inventory":"系统网络信息","network.route":"全流量接管","http.egress":"系统 IPv4","http.ipv6":"系统 IPv6","udp.stun":"系统 UDP","dns.leak":"DNS","browser.webrtc":"浏览器 WebRTC","browser.http_v4":"浏览器 IPv4","browser.http_v6":"浏览器 IPv6"};
   const baseline=findings.filter(f=>f.id.startsWith("baseline."));
-  const measurements=baseline.length?findings.filter(f=>!f.id.startsWith("baseline.")):[];
-  nodes.checks.replaceChildren(...(baseline.length?baseline:findings).map(f=>row(titles[f.id]||f.title,f)));
-  byId("technical-checks").replaceChildren(...measurements.map(f=>row(titles[f.id]||f.title,f)));
-  byId("measurement-details").hidden=!measurements.length;
+  const extra=findings.filter(f=>f.id.startsWith("extra."));
+  const measurements=baseline.length?findings.filter(f=>!f.id.startsWith("baseline.")&&!f.id.startsWith("extra.")):[];
+  const filter=byId("finding-filter").value;
+  const accepts=f=>filter==="needs"?["fail","warn"].includes(f.status):filter==="unknown"?["unknown","skipped"].includes(f.status):filter==="pass"?f.status==="pass":true;
+  byId("filter-label").hidden=false;
+  const visibleBaseline=(baseline.length?baseline:findings).filter(accepts);
+  const visibleMeasurements=measurements.filter(accepts);
+  nodes.checks.replaceChildren(...visibleBaseline.map(f=>row(titles[f.id]||f.title,f)));
+  byId("baseline-heading").hidden=!baseline.length||!visibleBaseline.length;
+  const visibleExtra=extra.filter(accepts);
+  byId("extended-results").hidden=!visibleExtra.length;
+  byId("extended-checks").replaceChildren(...visibleExtra.map(f=>row(f.title,f)));
+  byId("technical-checks").replaceChildren(...visibleMeasurements.map(f=>row(titles[f.id]||f.title,f)));
+  byId("measurement-details").hidden=!visibleMeasurements.length;
+  byId("filter-empty").hidden=visibleBaseline.length+visibleExtra.length+visibleMeasurements.length>0;
   byId("measurement-details").open=measurements.some(f=>f.status==="fail");
-  byId("coverage-count").textContent=String(findings.filter(f=>f.status==="pass").length)+" / "+String(findings.length);
+  const counted=baseline.length?[...baseline,...extra]:findings;
+  byId("coverage-count").textContent=String(counted.filter(f=>f.status==="pass").length)+" / "+String(counted.length);
   byId("verdict").textContent=({blocked:"发现策略违反",incomplete:"检测尚不完整",review:"需要复核",clear_in_scope:"配置范围内通过"})[report.decision.verdict]||"检测尚不完整";
-  byId("verdict-note").textContent="已汇总系统与浏览器观测。未知项仍需补充证据，可展开查看。";
+  const needs=counted.filter(f=>["warn","fail"].includes(f.status)).length;
+  const unknown=counted.filter(f=>["unknown","skipped"].includes(f.status)).length;
+  byId("verdict-note").textContent=`${needs} 项需要处理，${unknown} 项证据不足或未检测。展开详情查看依据与边界。`;
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
+byId("finding-filter").addEventListener("change",()=>{if(lastReport)renderDesktop(lastReport);});
 
 async function nativeAudit(session,snapshot) {
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);
@@ -120,6 +143,11 @@ async function nativeAudit(session,snapshot) {
 
 nodes.start.addEventListener("click",async()=>{
   nodes.start.disabled=true;nodes.share.disabled=true;lastSnapshot=null;lastReport=null;
+  nodes.start.textContent="检测中…";byId("audit-results").setAttribute("aria-busy","true");
+  byId("workspace").dataset.state="running";
+  nodes.checks.replaceChildren();byId("extended-results").hidden=true;byId("measurement-details").hidden=true;
+  byId("baseline-heading").hidden=true;byId("filter-label").hidden=true;byId("filter-empty").hidden=true;
+  byId("coverage-count").textContent="—";byId("verdict-note").textContent="正在采集本次观测。请保持本地页面打开。";
   byId("session-state").textContent="正在收集证据";byId("verdict").textContent="观测中…";
   try {
     const [http,ice]=await Promise.all([
@@ -134,12 +162,13 @@ nodes.start.addEventListener("click",async()=>{
     const session=await sessionPromise;
     if(session){
       byId("session-state").textContent="正在检测系统网络";
+      byId("verdict-note").textContent="浏览器观测已完成，正在合并系统检查。";
       try {lastReport=await nativeAudit(session,lastSnapshot);renderDesktop(lastReport);document.dispatchEvent(new Event("envscope-audit-complete"));}
-      catch {byId("verdict-note").textContent="系统检测未完成，已保留浏览器观测；可重新检测。";}
+      catch {byId("verdict-note").textContent="系统检测未完成，已保留浏览器观测；可重新检测。";byId("session-state").textContent="系统检测未完成";}
     }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
     nodes.share.disabled=false;
   } catch {byId("verdict").textContent="观测未完成";byId("verdict-note").textContent="浏览器功能不可用或采集发生错误，不能判定通过。";byId("session-state").textContent="需要重新检测";}
-  finally {nodes.start.disabled=false;nodes.start.textContent="重新检测";}
+  finally {nodes.start.disabled=false;nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");}
 });
 
 function download(value,suffix) {

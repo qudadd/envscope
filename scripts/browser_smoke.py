@@ -8,6 +8,7 @@ from playwright.sync_api import expect, sync_playwright
 from envscope.service import make_server
 from envscope.model import Finding, Status
 from envscope.baseline import DOMAINS
+from envscope.extended import extended_checks
 from envscope.operations import Operations
 from envscope.state import StateStore
 from envscope.legacy import LegacyBridge
@@ -25,7 +26,8 @@ def main():
         names = [("proxy", "代理客户端"), ("tun", "TUN 网卡"), ("country", "出口国家"), ("ip_stability", "出口变化"),
                  ("timezone", "时区"), ("locale", "地区格式"), ("ipv6", "IPv6 配置"), ("dns", "DNS 配置"),
                  ("webrtc", "UDP / WebRTC"), ("guard", "守护进程"), ("rules", "代理路由规则"), ("language", "客户端语言"), ("asn", "ASN 信息"), ("reachability", "服务连接")]
-        return findings + [Finding("baseline." + key, title, Status.UNKNOWN, "离线夹具：尚无有效证据", "test-fixture") for key, title in names]
+        return (findings + [Finding("baseline." + key, title, Status.UNKNOWN, "离线夹具：尚无有效证据", "test-fixture") for key, title in names]
+                + extended_checks({}, {"dns": [], "routes": []}, {}, {}))
     directory = tempfile.TemporaryDirectory()
     store = StateStore(memory=True)
     class FixtureOperations(Operations):
@@ -44,8 +46,9 @@ def main():
     try:
         with sync_playwright() as runtime:
             browser = runtime.chromium.launch(headless=True)
-            for label, width, height in (("desktop", 1280, 1000), ("desktop-wide", 1440, 1000)):
-                context = browser.new_context(viewport={"width": width, "height": height}, accept_downloads=True)
+            for label, width, height in (("desktop-small", 1024, 800), ("desktop", 1280, 1000), ("desktop-wide", 1440, 1000)):
+                context = browser.new_context(viewport={"width": width, "height": height}, accept_downloads=True,
+                                              locale="zh-CN", timezone_id="UTC")
                 page = context.new_page()
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
@@ -58,6 +61,7 @@ def main():
                 expect(page.locator("#share")).to_be_enabled()
                 assert page.locator("#verdict").inner_text() == "检测尚不完整"
                 assert page.locator("#checks .result").count() == 14
+                assert page.locator("#extended-checks .result").count() == 18
                 assert page.locator("#technical-checks .status.unknown").count() == 4
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "horizontal overflow"
                 with page.expect_download() as downloaded:
@@ -69,6 +73,17 @@ def main():
                 assert value["contains_sensitive"] is False
                 assert value["mode"] == "one-click-desktop"
                 page.screenshot(path=str(ARTIFACTS / f"{label}-unavailable.png"), full_page=True)
+                page.locator("#extended-results h2").evaluate("el => el.scrollIntoView({block:'start'})")
+                page.screenshot(path=str(ARTIFACTS / f"{label}-extended.png"))
+                page.locator("#finding-filter").select_option("unknown")
+                assert page.locator("#checks .status.pass").count() == 0
+                page.locator("#finding-filter").select_option("needs")
+                expect(page.locator("#filter-empty")).to_be_visible()
+                page.locator("#finding-filter").select_option("pass")
+                expect(page.locator("#measurement-details")).to_be_visible()
+                assert page.locator("#technical-checks .status.pass").count() == 1
+                assert page.locator("#baseline-heading").is_hidden()
+                page.locator("#finding-filter").select_option("all")
                 page.get_by_role("button", name="账号", exact=True).click()
                 expect(page.locator("#account-list")).to_contain_text("A")
                 assert page.locator("#account-list tr").count() >= 5
@@ -96,9 +111,13 @@ def main():
                 page.get_by_role("button", name="历史", exact=True).click()
                 page.get_by_role("button", name="比较", exact=True).click()
                 expect(page.locator("#history-output")).to_contain_text("出口证据不足")
+                page.screenshot(path=str(ARTIFACTS / f"{label}-history.png"), full_page=True)
+                for name in ("检测", "账号", "工具", "历史", "设置"):
+                    page.get_by_role("button", name=name, exact=True).click()
+                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), name + " overflow"
                 assert not errors, errors
                 summary[label] = {"page_errors": 0, "horizontal_overflow": False,
-                                  "baseline_categories": 14, "share_download": "passed", "account_labels": "passed",
+                                  "baseline_categories": 14, "extended_checks": 18, "filters": "passed", "share_download": "passed", "account_labels": "passed",
                                   "proxy_diagnostics": "passed", "preferences": "passed", "history_compare": "passed"}
                 context.close()
             browser.close()

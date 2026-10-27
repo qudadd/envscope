@@ -46,6 +46,15 @@ Automatic proxy discovery accepts credential-free literal loopback endpoints
 only, reads known settings and never scans ports. Manual explicit proxy tests
 may use an operator-supplied remote proxy; they do not change OS proxy settings.
 
+Additional checks read only selected configuration and metadata. They do not
+execute PAC/WPAD, CLI candidates or MCP commands, and do not export credential
+values, other hosts entries, proxy bypass hostnames or raw HTTP headers/cookies.
+Loopback TCP checks are bounded to four already-configured endpoints. DNS/route
+collection runs in a deadline-bound subprocess; OS route selection is not
+per-process traffic or packet evidence. TLS checks never disable verification.
+HTTP Date/Age comparisons are hints, not authenticated NTP. Optional absent
+configuration is skipped rather than treated as a fault.
+
 Default reports replace IPs with local aliases and remove recognized secrets
 and URL query strings. This is not complete anonymization: timezone, language,
 platform and software details can remain identifiable. Raw reports and browser

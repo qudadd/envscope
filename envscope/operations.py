@@ -129,7 +129,8 @@ class Operations:
                 started = time.monotonic()
                 response = transport.get(url, headers_only=True)
                 evidence.append({"endpoint": url, "http_status": response.status, "access": application_state(response),
-                                 "elapsed_ms": round((time.monotonic() - started) * 1000), "error": response.error})
+                                 "elapsed_ms": round((time.monotonic() - started) * 1000), "error": response.error,
+                                 "timings": response.timings, "tls_verified": response.tls_verified})
             return {"state": "completed", "evidence": evidence, "boundary": "只验证明确指定代理的无认证连接；不证明账号可用。"}
         if action == "cli-info" and platform.system() == "Windows":
             if params:

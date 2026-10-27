@@ -32,6 +32,11 @@ def main():
         assert result.returncode == 0, "frozen worker failed"
         assert json.loads(output.read_text())["ip"] == "8.8.8.8"
         thread.join(timeout=2)
+        network_output = Path(directory) / "network.private.json"
+        result = subprocess.run([str(executable), "--network-worker", "--offline", str(network_output)], capture_output=True,
+                                timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        assert result.returncode == 0, "frozen network worker failed"
+        assert json.loads(network_output.read_text())["mode"] == "offline"
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 

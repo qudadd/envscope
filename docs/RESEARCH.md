@@ -19,6 +19,8 @@
 
 这些观察针对锁定版本。macOS 主线已对部分 STUN 规则和运行内核验证做出改进，不能把 Windows 的同类问题泛化为所有平台均相同。
 
+0.2 增补接口核对：[Microsoft Find-NetRoute](https://learn.microsoft.com/en-us/powershell/module/nettcpip/find-netroute) 返回所选源地址与路由；[Apple route 手册源码](https://github.com/apple-oss-distributions/network_cmds/blob/main/route.tproj/route.8) 用于只读查询语法；[curl 官方手册](https://curl.se/docs/manpage.html) 用于 TLS 校验结果与分段耗时；[Claude Code 设置文档](https://code.claude.com/docs/en/settings) 用于配置位置和环境变量范围。只参考公开接口，不复制这些项目的实现或文档正文。
+
 ## 其他方案
 
 | 来源与版本 | 采用内容 | 集成方式 |

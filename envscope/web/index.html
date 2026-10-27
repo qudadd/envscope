@@ -10,31 +10,33 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.1.0 / alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.2.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
-  <main>
+  <main id="workspace" data-state="ready">
     <div id="page-audit" class="page">
     <section class="introduction">
-      <h1>环境检测</h1>
+      <div class="intro-heading"><h1>环境检测</h1><div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div></div>
       <p id="mode-note">检查当前浏览器的 HTTP 出口和 WebRTC 候选地址。</p>
-      <div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div>
-      <p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p>
+      <details class="network-note"><summary>只读检测，探测会联系外部服务</summary><p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p></details>
     </section>
 
-    <section aria-label="检测结果">
+    <section id="audit-results" aria-label="检测结果" aria-busy="false">
       <div class="result-summary" aria-live="polite"><h2 id="verdict">尚未检测</h2><span><span id="coverage-count">—</span> 项在本项范围内通过</span></div>
       <p id="verdict-note" class="note">未取得证据的项目会标为未知。</p>
+      <div class="result-toolbar"><label id="filter-label" class="finding-filter" hidden>显示<select id="finding-filter"><option value="all">全部检查</option><option value="needs">需要处理</option><option value="unknown">证据不足 / 未检测</option><option value="pass">本项通过</option></select></label><button id="share" class="link" disabled>导出结果</button></div>
+      <p id="filter-empty" class="empty-state" hidden>当前筛选下没有检查项。可更改筛选查看其他结果。</p>
+      <h2 class="group-heading" id="baseline-heading" hidden>基础检查</h2>
       <div class="results" id="checks" role="list">
         <section class="result" role="listitem"><div class="check-heading"><h3>HTTP IPv4</h3><span class="status unknown">未检测</span></div><p>由两个独立服务交叉观测出口。</p></section>
         <section class="result" role="listitem"><div class="check-heading"><h3>HTTP IPv6</h3><span class="status unknown">未检测</span></div><p>单独观测 IPv6；无响应不能证明安全。</p></section>
         <section class="result" role="listitem"><div class="check-heading"><h3>WebRTC</h3><span class="status unknown">未检测</span></div><p>收集 ICE 候选，区分 host、srflx 与 relay。</p></section>
         <section class="result" role="listitem"><div class="check-heading"><h3>DNS</h3><span class="status unknown">未知</span></div><p>首版尚无权威 DNS 观测服务。</p></section>
       </div>
+      <section id="extended-results" hidden><h2 class="group-heading">扩展检查</h2><p class="note">解析与选路、代理配置、连接质量、客户端及资料状态。</p><div id="extended-checks" role="list"></div></section>
       <details id="measurement-details"><summary>测量细项与检测边界</summary><div id="technical-checks" role="list"></div></details>
-      <div class="export"><button id="share" class="link" disabled>导出结果</button></div>
-      <p class="note">导出结果隐藏地址。环境信息仍可能识别设备，分享前请检查。</p>
+      <p class="note export-note">导出结果隐藏地址。环境信息仍可能识别设备，分享前请检查。</p>
     </section>
 
     <section class="environment"><h2>环境</h2><dl id="environment"><div><dt>时区</dt><dd>—</dd></div><div><dt>语言</dt><dd>—</dd></div><div><dt>运行环境</dt><dd>—</dd></div></dl></section>
@@ -90,6 +92,6 @@
       </form>
     </div>
   </main>
-  <footer><span>本地运行 · 无追踪脚本</span><button id="quit" class="link" hidden>结束本地服务</button></footer>
+  <footer><span>Windows / macOS<br>本地运行，无追踪脚本</span><button id="quit" class="link" hidden>结束本地服务</button></footer>
 </body>
 </html>

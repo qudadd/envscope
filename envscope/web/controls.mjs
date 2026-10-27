@@ -15,6 +15,7 @@ export async function initDesktopControls({sessionPromise,onReport,download}) {
   function page(name){
     for(const n of document.querySelectorAll(".page"))n.hidden=n.id!=="page-"+name;
     for(const n of document.querySelectorAll(".tab")){if(n.dataset.page===name)n.setAttribute("aria-current","page");else n.removeAttribute("aria-current");}
+    window.scrollTo(0,0);
   }
   for(const n of document.querySelectorAll(".tab"))n.addEventListener("click",()=>page(n.dataset.page));
   async function refresh(){

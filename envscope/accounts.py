@@ -263,6 +263,14 @@ class AccountManager:
                              "state": "recovery_required" if pending else "active" if slot == current else "archived" if has_snapshot else "empty"})
         return {"current": current, "accounts": accounts, "pending": pending}
 
+    def inspect_integrity(self):
+        """Read structural metadata without walking or hashing profile contents."""
+        self._check_roots()
+        current = self._read_current()
+        labels = self._labels()
+        slots = self._slots(labels)
+        return {"valid": True, "tracked": current is not None, "slot_count": len(slots), "pending": self._pending()}
+
     @contextmanager
     def _lock(self):
         self._check_roots()

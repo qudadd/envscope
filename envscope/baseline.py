@@ -11,7 +11,7 @@ from urllib.request import build_opener, ProxyHandler, Request
 
 from .model import Finding, Status
 from .policy import normalize_ip
-from .transport import application_state
+from .transport import response_evidence
 from .discovery import config_documents
 
 DOMAINS = ("claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com", "challenges.cloudflare.com",
@@ -33,7 +33,7 @@ def proxy_runtime(inventory, preferences):
              "clashx": ("clashx",), "surge": ("surge",)}
     matches = clients if expected == "auto" else [c for c in clients if str(c).lower() in names.get(expected, ())]
     return baseline_finding("proxy", "代理客户端", Status.PASS if matches else Status.UNKNOWN,
-                            "已发现代理客户端进程" if clients else "未确认代理客户端进程", [{"clients": clients}],
+                            "已发现所选代理客户端进程" if matches else "未确认所选代理客户端进程", [{"clients": clients}],
                             ["进程存在不等于流量已接管。"])
 
 
@@ -53,7 +53,7 @@ def tunnel(inventory):
 def guard_state():
     try:
         if platform.system() == "Windows":
-            script = "$t=Get-ScheduledTask -TaskName 'ClaudeBodyguard' -ErrorAction SilentlyContinue; if($t){[string]$t.State}"
+            script = "$t=Get-ScheduledTask -TaskName 'ClaudeBodyguard' -ErrorAction SilentlyContinue; if($t){@{registered=$true;enabled=([string]$t.State -ne 'Disabled');running=([string]$t.State -eq 'Running')}|ConvertTo-Json -Compress}else{'{\"registered\":false}'}"
             command = [shutil.which("powershell.exe") or "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script]
         elif platform.system() == "Darwin":
             command = ["/bin/launchctl", "print", "system/local.claude-bodyguard"]
@@ -61,9 +61,17 @@ def guard_state():
             return {"registered": False, "error": "unsupported"}
         r = subprocess.run(command, capture_output=True, text=True, timeout=4,
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        return {"registered": r.returncode == 0 and bool(r.stdout.strip()), "running": "Running" in r.stdout,
-                "kind": "scheduled-task" if platform.system() == "Windows" else "launchd"}
-    except (OSError, subprocess.TimeoutExpired):
+        if platform.system() == "Windows":
+            if r.returncode != 0:
+                raise ValueError("guard query unavailable")
+            value = json.loads(r.stdout)
+            if not isinstance(value, dict):
+                raise ValueError("invalid guard response")
+            return {"registered": value.get("registered") is True, "enabled": value.get("enabled") is True,
+                    "running": value.get("running") is True, "kind": "scheduled-task"}
+        return {"registered": r.returncode == 0 and bool(r.stdout.strip()), "enabled": r.returncode == 0,
+                "running": bool(re.search(r"\bstate\s*=\s*running\b", r.stdout)), "kind": "launchd"}
+    except (OSError, ValueError, subprocess.TimeoutExpired):
         return {"registered": False, "error": "unavailable"}
 
 
@@ -153,7 +161,12 @@ def runtime_rules(preferences):
             if len(body) > 1048576:
                 raise ValueError("oversized runtime response")
             return json.loads(body)
-        return verify_rules(read("/configs"), read("/rules"), read("/proxies"), preferences)
+        config = read("/configs")
+        value = verify_rules(config, read("/rules"), read("/proxies"), preferences)
+        tun = config.get("tun") if isinstance(config, dict) else None
+        value["runtime"] = {"mode": config.get("mode"), "tun_enabled": tun.get("enable"), "auto_route": tun.get("auto-route"),
+                            "dns_hijack_configured": bool(tun.get("dns-hijack"))} if isinstance(tun, dict) else {"mode": config.get("mode") if isinstance(config, dict) else None}
+        return value
     except (OSError, ValueError, AttributeError):
         return {"status": "unknown", "reason": "无法读取或验证代理内核运行规则"}
 
@@ -165,12 +178,13 @@ def extra_network(transport):
             value = json.loads(response.body) if response.status == 200 and not response.error else {}
             if not isinstance(value, dict):
                 return {}
-            return {k: str(value[k])[:160] for k in ("country", "timezone", "org") if k in value}
+            return {**{k: str(value[k])[:160] for k in ("country", "timezone", "org") if k in value},
+                    "_transport": response_evidence("https://ipinfo.io/json", response)}
         except (ValueError, TypeError):
             return {}
     def target(url):
         response = transport.get(url, headers_only=True)
-        return {"endpoint": url, "http_status": response.status, "access": application_state(response), "error": response.error}
+        return response_evidence(url, response)
     with ThreadPoolExecutor(max_workers=3) as pool:
         info = pool.submit(metadata)
         web = pool.submit(target, "https://claude.ai/")
@@ -178,7 +192,7 @@ def extra_network(transport):
         return info.result(), [web.result(), api.result()]
 
 
-def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences, transport, online=False):
+def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences, transport, online=False, context=None):
     with ThreadPoolExecutor(max_workers=3) as pool:
         guard_job = pool.submit(guard_state)
         rules_job = pool.submit(runtime_rules, preferences) if online else None
@@ -186,6 +200,8 @@ def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences,
         guard = guard_job.result()
         rules = rules_job.result() if rules_job else {"status": "unknown", "reason": "尚未读取运行规则"}
         metadata, targets = extra_job.result() if extra_job else ({}, [])
+    if context is not None:
+        context.update(runtime=rules.get("runtime", {}), responses=targets + ([metadata["_transport"]] if "_transport" in metadata else []))
     expected_country = preferences.get("country")
     country = metadata.get("country") or next((o.get("country") for o in v4 if o.get("country")), None)
     timezone = inventory.get("network", {}).get("timezone_id") or inventory.get("timezone_iana")
@@ -221,8 +237,8 @@ def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences,
                 baseline_finding("webrtc", "UDP / WebRTC", rtc_status, "系统 UDP 与浏览器 ICE 分别比较完成" if rtc_status == Status.PASS else "系统 UDP 与浏览器 ICE 需分别查看测量细项",
                                  [{"native_udp": udp_result.status.value, "browser_ice": browser_result.status.value}],
                                  ["两种探测不互相替代；无响应不能证明没有旁路。"]),
-                baseline_finding("guard", "守护进程", Status.PASS if guard["registered"] else Status.WARN,
-                                 "已发现已注册的守护任务" if guard["registered"] else "尚未确认守护任务，可在维护中安装", [guard], ["进程级轮询保护存在时间窗口，不是防火墙阻断保证。"]),
+                baseline_finding("guard", "守护进程", Status.PASS if guard.get("registered") and guard.get("enabled") and guard.get("running") else Status.UNKNOWN if guard.get("error") else Status.WARN,
+                                 "已确认守护任务启用且正在运行" if guard.get("running") and guard.get("enabled") else "守护任务未运行、已停用或尚未安装", [guard], ["进程级轮询保护存在时间窗口，不是防火墙阻断保证。"]),
                 baseline_finding("rules", "代理路由规则", Status(rules["status"]), rules["reason"], [rules]),
                 language_result,
                 baseline_finding("asn", "ASN 信息", Status.PASS if metadata.get("org") else Status.UNKNOWN,

@@ -49,6 +49,10 @@ they never run merely because EnvScope starts or performs its native audit.
   reads a documented loopback HTTP interface. No proxy core or implementation is
   linked, copied or bundled.
 - RFC 8489: https://www.rfc-editor.org/info/rfc8489/. Protocol reference.
+- Microsoft Find-NetRoute documentation, Apple route command manual, curl manual
+  and Claude Code settings documentation are public-interface references for the
+  additional checks. No implementation code or document body is bundled from
+  those sources; their links and review dates are recorded in docs/sources.lock.json.
 
 Source collection used an external Scrapling 0.4.15 installation. Scrapling is
 not a product dependency. Python, Playwright and PyInstaller used for development

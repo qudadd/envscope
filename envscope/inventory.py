@@ -100,6 +100,7 @@ $v=@{
  region_locale=(Get-Culture).Name
  ipv6_bindings=@(Get-NetAdapterBinding -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue | Select-Object Name,Enabled)
  known_clients=@(Get-Process -Name 'mihomo','verge-mihomo','sing-box','wireguard','openvpn','tailscaled' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessName -Unique)
+ desktop_packages=@(Get-AppxPackage -Name '*Claude*' -ErrorAction SilentlyContinue | Select-Object Name,Version)
 }
 ConvertTo-Json -InputObject $v -Depth 6 -Compress
 """
