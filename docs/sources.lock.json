@@ -1,0 +1,12 @@
+{
+  "reviewed_on": "2026-10-27",
+  "collector": "Scrapling 0.4.15, research only",
+  "sources": [
+    {"repository": "YOURSJEYO/claude-switcher", "revision": "870c4ca0754234965878ef58144d7a755d965037", "license": "MIT", "role": "complete pinned source bundle, fixed maintenance adapters, diagnostic categories and rewritten STUN derivative"},
+    {"repository": "webrtc/samples", "revision": "6e2c5a117aa860d66d874f7c0df0ef9a3e2cd74e", "license": "BSD-3-Clause", "path": "src/content/peerconnection/trickle-ice/js/main.js", "captured_text_sha256": "d613cefc6fdbb4dacfc6d8eca00cd3f538054b1b0c0bc52970055da52169548a", "role": "standard API reference; no source copied"},
+    {"repository": "expressvpn/expressvpn_leak_testing", "revision": "9e4cee899ac04f7820ac351fa55efdc0c01370ba", "license": "MIT", "path": "docs/test_suite_overview.md", "captured_text_sha256": "12def746fef23747524d8e4825bde92b4c6d47847e1d39cc3cc74a4da8354da9", "role": "scenario testing reference; no source copied"},
+    {"repository": "mullvad/mullvadvpn-app", "revision": "0508389502500fdd8e375d1e53756d4053ca23de", "license": "GPL-3.0", "path": "test/README.md", "captured_text_sha256": "7d1b4d4dbad43b88c1e4c2fd548b94cd229d112771a671752fbcf8a81e21268e", "role": "VM testing reference only; no GPL source incorporated"},
+    {"url": "https://wiki.metacubex.one/api/", "role": "read-only documented HTTP interface"},
+    {"url": "https://www.rfc-editor.org/info/rfc8489/", "role": "STUN protocol reference"}
+  ]
+}

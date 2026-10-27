@@ -1,0 +1,16 @@
+* text=auto
+*.py text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+MANIFEST.in text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.command text eol=lf
+*.cmd text eol=crlf
+envscope/vendor/claude_switcher/** -text
+envscope/vendor/claude_switcher/VENDOR_MANIFEST.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

@@ -1,0 +1,156 @@
+import {STATUS_TEXT, normalizeIP, isPublicIP, parseCandidate, assessHTTP, assessICE, sharingSnapshot} from "./logic.mjs";
+import {initDesktopControls} from "./controls.mjs";
+
+const byId=id=>document.getElementById(id);
+const nodes={start:byId("start"),share:byId("share"),checks:byId("checks"),quit:byId("quit")};
+let lastSnapshot=null,lastReport=null;
+const sessionPromise=(async()=>{
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),1500);
+  try {
+    const response=await fetch("/api/session",{signal:controller.signal,credentials:"omit",cache:"no-store"});
+    if(!response.ok)return null;
+    const value=await response.json();
+    if(value.mode!=="desktop"||typeof value.token!=="string")return null;
+    byId("mode-note").textContent="一次检测系统网络和当前浏览器，结果自动汇总。";
+    const names=["代理客户端","TUN 网卡","出口国家","出口变化","时区","地区格式","IPv6 配置","DNS 配置","UDP / WebRTC","守护进程","代理路由规则","客户端语言","ASN 信息","服务连接"];
+    nodes.checks.replaceChildren(...names.map(title=>row(title,{status:"unknown",summary:"等待一键检测"})));
+    byId("coverage-count").textContent="0 / 14";
+    byId("measurement-details").hidden=true;
+    nodes.quit.hidden=false;
+    return value;
+  } catch {return null;} finally {clearTimeout(timer);}
+})();
+const environment={timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"unknown",languages:[...navigator.languages],
+  platform:navigator.userAgentData?.platform||navigator.platform||"unknown",automated:navigator.webdriver===true};
+const envRows=[["时区",environment.timezone],["语言",environment.languages.join(" · ")],["运行环境",environment.platform+(environment.automated?" / 自动化会话":"")]];
+byId("environment").replaceChildren(...envRows.map(([label,value])=>{const row=document.createElement("div");const dt=document.createElement("dt");const dd=document.createElement("dd");dt.textContent=label;dd.textContent=value;row.append(dt,dd);return row;}));
+
+async function request(url,parser,source,family) {
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),4000);
+  try {
+    const response=await fetch(url,{signal:controller.signal,credentials:"omit",cache:"no-store",redirect:"error",referrerPolicy:"no-referrer"});
+    if(response.status!==200) return {source,family,error:`http_${response.status}`};
+    const text=await response.text();
+    if(text.length>65536) return {source,family,error:"oversized_response"};
+    let ip;
+    if(parser==="json") {const value=JSON.parse(text);ip=value?.ip;}
+    else {const line=text.split("\n").find(x=>x.startsWith("ip="));ip=line?.slice(3).trim();}
+    const normalized=normalizeIP(ip);
+    if(!normalized || !isPublicIP(ip) || (normalized.includes(":")?6:4)!==family) return {source,family,error:"invalid_ip_payload"};
+    return {source,family,ip:normalized};
+  } catch {return {source,family,error:"unavailable_or_blocked"};}
+  finally {clearTimeout(timer);}
+}
+
+async function gatherICE() {
+  if(!window.RTCPeerConnection) return {candidates:[],complete:false,error:"unsupported"};
+  let pc;
+  try {pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.cloudflare.com:3478"},{urls:"stun:stun.l.google.com:19302"}]});}
+  catch {return {candidates:[],complete:false,error:"unavailable"};}
+  const candidates=[];const seen=new Set();let settle;let finished=false;
+  const completed=new Promise(resolve=>{settle=resolve;});
+  const finish=complete=>{if(!finished){finished=true;settle({candidates,complete});}};
+  const timer=setTimeout(()=>finish(false),5500);
+  pc.onicecandidate=event=>{
+    if(!event.candidate){finish(true);return;}
+    const candidate=parseCandidate(event.candidate.candidate);
+    if(candidate && candidates.length<128) {const key=JSON.stringify(candidate);if(!seen.has(key)){candidates.push(candidate);seen.add(key);}}
+  };
+  pc.onicegatheringstatechange=()=>{if(pc.iceGatheringState==="complete")finish(true);};
+  try {
+    pc.createDataChannel("envscope");
+    // Race the whole gathering setup as well as the candidate wait.
+    void (async()=>{try{await pc.setLocalDescription(await pc.createOffer());}catch{finish(false);}})();
+    return await completed;
+  } finally {clearTimeout(timer);pc.onicecandidate=null;pc.onicegatheringstatechange=null;pc.close();}
+}
+
+function row(title,result) {
+  const article=document.createElement("section");article.className="result";article.setAttribute("role","listitem");
+  const head=document.createElement("div");head.className="check-heading";
+  const h=document.createElement("h3");h.textContent=title;
+  const status=document.createElement("span");status.className="status "+result.status;status.textContent=STATUS_TEXT[result.status];
+  head.append(h,status);const p=document.createElement("p");p.textContent=result.summary;article.append(head,p);
+  if(result.evidence?.length||result.limitations?.length) {const detail=document.createElement("details");const summary=document.createElement("summary");summary.textContent="查看详情";
+    const pre=document.createElement("pre");pre.textContent=JSON.stringify({observations:result.evidence||[],limits:result.limitations||[]},null,2);detail.append(summary,pre);article.append(detail);}
+  return article;
+}
+
+function render(snapshot) {
+  const safe=sharingSnapshot(snapshot);
+  const v4=assessHTTP(snapshot.http.filter(o=>o.family===4),4);
+  const v6=assessHTTP(snapshot.http.filter(o=>o.family===6),6);
+  const ice=assessICE(snapshot.ice,snapshot.http,snapshot.ice_complete);
+  const dns={status:"unknown",summary:"尚无权威 DNS 观测，无法验证实际解析出口。",evidence:[]};
+  const results=[v4,v6,ice,dns];
+  const safeResults=results.map((r,i)=>({...r,evidence:i<2?safe.http.filter(o=>o.family===(i===0?4:6)):i===2?safe.ice:[]}));
+  nodes.checks.replaceChildren(...safeResults.map((r,i)=>row(["HTTP IPv4","HTTP IPv6","WebRTC","DNS"][i],r)));
+  byId("coverage-count").textContent=String(results.filter(r=>r.status==="pass").length)+" / 4";
+  byId("verdict").textContent="检测尚不完整";
+  byId("verdict-note").textContent=results.some(r=>r.status==="warn")?"部分观测需要复核，DNS 仍缺少权威侧证据。逐项查看检测边界。":"本次没有验证完整的浏览器隐私路径，未知项目需要补充证据。";
+  byId("session-state").textContent="完成于 "+new Date(snapshot.created_at).toLocaleTimeString();
+}
+
+function renderDesktop(report) {
+  const findings=report.findings;
+  const titles={"system.inventory":"系统网络信息","network.route":"全流量接管","http.egress":"系统 IPv4","http.ipv6":"系统 IPv6","udp.stun":"系统 UDP","dns.leak":"DNS","browser.webrtc":"浏览器 WebRTC","browser.http_v4":"浏览器 IPv4","browser.http_v6":"浏览器 IPv6"};
+  const baseline=findings.filter(f=>f.id.startsWith("baseline."));
+  const measurements=baseline.length?findings.filter(f=>!f.id.startsWith("baseline.")):[];
+  nodes.checks.replaceChildren(...(baseline.length?baseline:findings).map(f=>row(titles[f.id]||f.title,f)));
+  byId("technical-checks").replaceChildren(...measurements.map(f=>row(titles[f.id]||f.title,f)));
+  byId("measurement-details").hidden=!measurements.length;
+  byId("measurement-details").open=measurements.some(f=>f.status==="fail");
+  byId("coverage-count").textContent=String(findings.filter(f=>f.status==="pass").length)+" / "+String(findings.length);
+  byId("verdict").textContent=({blocked:"发现策略违反",incomplete:"检测尚不完整",review:"需要复核",clear_in_scope:"配置范围内通过"})[report.decision.verdict]||"检测尚不完整";
+  byId("verdict-note").textContent="已汇总系统与浏览器观测。未知项仍需补充证据，可展开查看。";
+  byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
+}
+
+async function nativeAudit(session,snapshot) {
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);
+  try {
+    const response=await fetch("/api/audit",{method:"POST",signal:controller.signal,credentials:"omit",
+      headers:{"Content-Type":"application/json","X-EnvScope-Token":session.token},body:JSON.stringify({snapshot})});
+    if(!response.ok)throw new Error("native_unavailable");
+    const report=await response.json();
+    if(report.tool!=="envscope"||report.contains_sensitive!==false||!Array.isArray(report.findings))throw new Error("invalid_report");
+    return report;
+  } finally {clearTimeout(timer);}
+}
+
+nodes.start.addEventListener("click",async()=>{
+  nodes.start.disabled=true;nodes.share.disabled=true;lastSnapshot=null;lastReport=null;
+  byId("session-state").textContent="正在收集证据";byId("verdict").textContent="观测中…";
+  try {
+    const [http,ice]=await Promise.all([
+      Promise.all([request("https://api4.ipify.org?format=json","json","ipify-v4",4),request("https://www.cloudflare.com/cdn-cgi/trace","trace","cloudflare-v4",4),request("https://api6.ipify.org?format=json","json","ipify-v6",6)]),
+      gatherICE()
+    ]);
+    // Browser fetch cannot force an address family on a dual-stack endpoint;
+    // the IPv6-specific service supplies an observation, never a negative proof.
+    lastSnapshot={schema_version:1,kind:"envscope-browser-observations",created_at:new Date().toISOString(),
+      contains_sensitive:true,http,ice:ice.candidates,ice_complete:ice.complete,environment};
+    render(lastSnapshot);
+    const session=await sessionPromise;
+    if(session){
+      byId("session-state").textContent="正在检测系统网络";
+      try {lastReport=await nativeAudit(session,lastSnapshot);renderDesktop(lastReport);document.dispatchEvent(new Event("envscope-audit-complete"));}
+      catch {byId("verdict-note").textContent="系统检测未完成，已保留浏览器观测；可重新检测。";}
+    }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
+    nodes.share.disabled=false;
+  } catch {byId("verdict").textContent="观测未完成";byId("verdict-note").textContent="浏览器功能不可用或采集发生错误，不能判定通过。";byId("session-state").textContent="需要重新检测";}
+  finally {nodes.start.disabled=false;nodes.start.textContent="重新检测";}
+});
+
+function download(value,suffix) {
+  const blob=new Blob([JSON.stringify(value,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");link.href=url;link.download=`envscope-${suffix}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+void initDesktopControls({sessionPromise,download,onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
+nodes.share.addEventListener("click",()=>{if(lastReport)download(lastReport,"report");else if(lastSnapshot)download(sharingSnapshot(lastSnapshot),"share");});
+nodes.quit.addEventListener("click",async()=>{
+  const session=await sessionPromise;if(!session)return;
+  try{const response=await fetch("/api/quit",{method:"POST",headers:{"X-EnvScope-Token":session.token}});
+    if(response.ok){nodes.start.disabled=true;nodes.quit.hidden=true;byId("session-state").textContent="本地检测已结束";}}
+  catch{byId("session-state").textContent="本地进程已停止";}
+});

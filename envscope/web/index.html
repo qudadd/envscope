@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://www.cloudflare.com https://api4.ipify.org https://api6.ipify.org; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>EnvScope — 环境检测</title>
+  <link rel="stylesheet" href="minimal.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <header><a href="./">EnvScope</a><span>0.1.0 / alpha</span></header>
+  <nav id="desktop-nav" aria-label="主要功能" hidden>
+    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
+  </nav>
+  <main>
+    <div id="page-audit" class="page">
+    <section class="introduction">
+      <h1>环境检测</h1>
+      <p id="mode-note">检查当前浏览器的 HTTP 出口和 WebRTC 候选地址。</p>
+      <div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div>
+      <p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p>
+    </section>
+
+    <section aria-label="检测结果">
+      <div class="result-summary" aria-live="polite"><h2 id="verdict">尚未检测</h2><span><span id="coverage-count">—</span> 项在本项范围内通过</span></div>
+      <p id="verdict-note" class="note">未取得证据的项目会标为未知。</p>
+      <div class="results" id="checks" role="list">
+        <section class="result" role="listitem"><div class="check-heading"><h3>HTTP IPv4</h3><span class="status unknown">未检测</span></div><p>由两个独立服务交叉观测出口。</p></section>
+        <section class="result" role="listitem"><div class="check-heading"><h3>HTTP IPv6</h3><span class="status unknown">未检测</span></div><p>单独观测 IPv6；无响应不能证明安全。</p></section>
+        <section class="result" role="listitem"><div class="check-heading"><h3>WebRTC</h3><span class="status unknown">未检测</span></div><p>收集 ICE 候选，区分 host、srflx 与 relay。</p></section>
+        <section class="result" role="listitem"><div class="check-heading"><h3>DNS</h3><span class="status unknown">未知</span></div><p>首版尚无权威 DNS 观测服务。</p></section>
+      </div>
+      <details id="measurement-details"><summary>测量细项与检测边界</summary><div id="technical-checks" role="list"></div></details>
+      <div class="export"><button id="share" class="link" disabled>导出结果</button></div>
+      <p class="note">导出结果隐藏地址。环境信息仍可能识别设备，分享前请检查。</p>
+    </section>
+
+    <section class="environment"><h2>环境</h2><dl id="environment"><div><dt>时区</dt><dd>—</dd></div><div><dt>语言</dt><dd>—</dd></div><div><dt>运行环境</dt><dd>—</dd></div></dl></section>
+    <section class="limits"><h2>检测范围</h2><p>仅覆盖列出的端点与本次观测。实际 DNS 出口和目标进程全流量接管尚无充分证据；未知项保留为未知。系统 UDP 与浏览器 WebRTC 分开测量，未申请麦克风权限。</p></section>
+    </div>
+
+    <div id="page-accounts" class="page" hidden>
+      <h1>账号</h1><p class="subtle">切换前自动重检，退出应用后校验存档，再交换配置。</p>
+      <p id="account-note" class="note"></p><div id="account-list"></div>
+      <div class="inline-form"><label>新槽位<input id="new-slot" maxlength="32" placeholder="work"></label><label>名称<input id="new-label" maxlength="80" placeholder="可选"></label><button id="account-add">添加</button></div>
+      <details><summary>本地目录备份与导入</summary>
+        <p class="note">目录包含登录资料，未加密。仅支持非活动账号导出、空槽位导入；不能保证跨系统迁移登录状态。macOS 的加密 DMG 位于工具页。</p>
+        <div class="form-grid"><label>槽位<input id="archive-slot" placeholder="B" maxlength="32"></label><label>绝对目录路径<input id="archive-path" placeholder="选择一个新目录作为导出目标"></label></div>
+        <div class="actions"><button id="account-export">导出目录</button><button id="account-import">导入目录</button></div>
+      </details>
+      <pre id="account-output" class="output" aria-live="polite"></pre>
+    </div>
+
+    <div id="page-tools" class="page" hidden>
+      <h1>工具</h1><section class="tool-section"><h2>代理连接</h2><p class="note">从现有环境、系统与客户端配置中发现本机代理，不扫描端口。发现不代表连接已验证。</p>
+        <label>已发现的地址<select id="proxy-found"><option value="">未发现，手动填写</option></select></label>
+        <div class="inline-form"><label class="grow">代理地址<input id="proxy-url" type="password" autocomplete="off" placeholder="http://127.0.0.1:7897"></label><button id="proxy-test">测试连接</button></div>
+        <p class="note">仅经指定代理检测 Claude 网页与 API，区分连接失败、需认证、拒绝访问、限流及服务错误。代理失败不回退直连。</p>
+      </section>
+      <section class="tool-section"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">指纹信息用于排障，不推断账号风险。诊断包隐藏地址、密钥和用户目录名，分享前仍请复核。</p></section>
+      <section class="tool-section"><h2>维护</h2><p id="backend-note" class="note">正在读取已安装的维护核心。</p>
+        <label>操作<select id="maintenance-action"></select></label>
+        <div id="maintenance-effects" class="note"></div>
+        <div id="param-client" class="parameter" hidden><label>代理客户端<select id="legacy-client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option></select></label></div>
+        <div id="param-policy" class="parameter" hidden><label>STUN 端口策略<select id="legacy-policy"><option value="proxy">经代理</option><option value="reject">拒绝</option></select></label></div>
+        <div id="param-url" class="parameter" hidden><label>网页地址<input id="safe-url" type="url" value="https://claude.ai/"></label></div>
+        <div id="param-snapshot" class="parameter" hidden><div class="form-grid"><label>账号<select id="snapshot-account"><option>A</option><option>B</option><option>C</option><option>D</option></select></label><label>DMG 绝对路径<input id="snapshot-file"></label></div><label>密码<input id="snapshot-password" type="password" autocomplete="new-password"></label></div>
+        <div class="actions"><button id="maintenance-run">执行</button><span id="maintenance-availability"></span></div>
+        <p class="note">首次安装会打开随附的原版交互安装器。修复可能修改系统和代理设置；执行前列出具体影响。原版更新只更新维护核心。</p>
+      </section>
+      <pre id="tool-output" class="output" aria-live="polite">尚未执行操作</pre>
+    </div>
+
+    <div id="page-history" class="page" hidden>
+      <h1>历史</h1><p class="subtle">最近 50 次本机检测。使用私有标记比较出口，不保存原始地址。</p><div id="history-list"></div>
+      <div class="form-grid"><label>较早的检测<select id="history-before"></select></label><label>较新的检测<select id="history-after"></select></label></div>
+      <div class="actions"><button id="history-compare">比较</button></div><pre id="history-output" class="output" aria-live="polite"></pre>
+    </div>
+
+    <div id="page-settings" class="page" hidden>
+      <h1>设置</h1><p class="subtle">设置比较目标与启动条件。保存这些偏好不会修改系统网络、时区或语言。</p>
+      <form id="settings-form">
+        <div class="form-grid"><label>目标国家代码<input name="country" maxlength="2" placeholder="可选，例如 US"></label><label>目标时区<input name="timezone" placeholder="Windows 用系统 ID，macOS 用 IANA ID"></label><label>目标地区格式<input name="locale" placeholder="可选，例如 en-US"></label><label>代理客户端<select name="client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option><option value="other">其他</option></select></label><label>目标代理组<input name="proxy_group" placeholder="留空时从运行规则识别"></label><label>STUN 端口的预期策略<select name="webrtc_policy"><option value="proxy">经代理</option><option value="reject">拒绝</option></select></label></div>
+        <details><summary>允许的出口与启动条件</summary><p class="note">只有明确填写允许范围后，超出范围的地址才判为策略违反。留空不代表允许任何路径，也不证明安全。</p><div class="form-grid"><label>IPv4 地址或 CIDR，每行一个<textarea name="allowed_ipv4" rows="3"></textarea></label><label>IPv6 地址或 CIDR，每行一个<textarea name="allowed_ipv6" rows="3"></textarea></label></div>
+          <label class="checkbox"><input type="checkbox" name="require_guard">启动前要求守护任务已注册</label><label class="checkbox"><input type="checkbox" name="require_rules">启动前要求代理运行规则通过核对</label><p class="note">启动仍要求有效出口、UDP、代理客户端、隧道网卡及 IPv6 配置证据；所有失败项都会阻止启动。此条件不等于完整隐私证明。</p>
+        </details>
+        <div class="actions"><button type="submit">保存</button><button type="button" id="settings-restore" class="link">恢复上次偏好</button><span id="settings-output" aria-live="polite"></span></div>
+      </form>
+    </div>
+  </main>
+  <footer><span>本地运行 · 无追踪脚本</span><button id="quit" class="link" hidden>结束本地服务</button></footer>
+</body>
+</html>

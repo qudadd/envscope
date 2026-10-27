@@ -1,0 +1,9 @@
+.DS_Store
+*.tmp
+accounts/
+lastip
+last-check.txt
+*.log
+
+build/
+_trash/

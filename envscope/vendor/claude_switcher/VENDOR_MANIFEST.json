@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/YOURSJEYO/claude-switcher",
+  "commit": "870c4ca0754234965878ef58144d7a755d965037",
+  "license": "MIT",
+  "license_file": "LICENSE",
+  "source": "git archive with core.autocrlf=false of the pinned commit; canonical Git blob bytes",
+  "upstream_checksums": "SHA256SUMS (retained unchanged; covers only the upstream-listed artifacts)",
+  "files": {
+    ".github/workflows/checks.yml": {
+      "sha256": "e64effc18d9878b865466a924c2af088ee0adb38cd8661c37c7e952c9412332a",
+      "size": 1443,
+      "executable": false
+    },
+    ".github/workflows/release.yml": {
+      "sha256": "3c6ae10e294b738d4ce174a2fb2bf06528cbc965301b1bd36360d89314874d4f",
+      "size": 3560,
+      "executable": false
+    },
+    ".gitignore": {
+      "sha256": "025630d6ef3e0154176ddcf179cda9f172001b0843dd7c9b3fda8c17e0e381fd",
+      "size": 70,
+      "executable": false
+    },
+    "AGENTS.md": {
+      "sha256": "f2eebd3638210d731d23b830f5d115fe983f2ce0dc9940bbcdbcda1a0680cf21",
+      "size": 17261,
+      "executable": false
+    },
+    "LICENSE": {
+      "sha256": "c288d9b3c1c5bdb2038628f39c82b82375570798005c8e263b365057457b393a",
+      "size": 1085,
+      "executable": false
+    },
+    "README.en.md": {
+      "sha256": "3b7896faa3f0d531d4fcb4844841a1c8928df8322b1e0883ceefbdc3d60abeda",
+      "size": 5906,
+      "executable": false
+    },
+    "README.md": {
+      "sha256": "7a8597ccd9e34971b1e400d589cea909f6c1b242f65231ad630644d0995e266a",
+      "size": 30192,
+      "executable": false
+    },
+    "SECURITY.md": {
+      "sha256": "d98d1a35aaba89fa83c2232a14d4b0c105f0ba897d9ed495a45bf65612a95689",
+      "size": 2849,
+      "executable": false
+    },
+    "SHA256SUMS": {
+      "sha256": "fe6c44eac68dd27d4c5d9fba193557c5c2b4172cb8f9990ecd73988e59a8a189",
+      "size": 754,
+      "executable": false
+    },
+    "app/main.swift": {
+      "sha256": "2bed29842048b3479413dd3ff0578350b8c4261f47d48fb397f7fb17c9ad8cc7",
+      "size": 52404,
+      "executable": false
+    },
+    "assets/icon-2048.png": {
+      "sha256": "d60b8a1379b39645e69eb7873ad772b6c897d4d78dd423e0fec62cbea3e7ef3d",
+      "size": 2533959,
+      "executable": false
+    },
+    "assets/icon-gen.swift": {
+      "sha256": "516c9392cfa1166f274ba94797c19acba3401aab71be2e7cdb146dc402f36bd4",
+      "size": 2745,
+      "executable": false
+    },
+    "assets/wechat-group.png": {
+      "sha256": "7f2d694a43e90241b597d79f43c6cd3345f251358d0fe0e8c8781734a9d65ccb",
+      "size": 62692,
+      "executable": false
+    },
+    "core/claude-switch.sh": {
+      "sha256": "29affb4c32b8198cbbee53253aa9f2616f5b6245126c2fcb66189001848d7570",
+      "size": 75106,
+      "executable": false
+    },
+    "core/stun-probe.py": {
+      "sha256": "2c891f5f3cf392a6bb736dacc65a945afe89ae8e4d88e353b04fd1f9cd792ab1",
+      "size": 2234,
+      "executable": false
+    },
+    "daemons/claude-bodyguard.sh": {
+      "sha256": "b423fce9ee729d554494b9ec6905aa00d766e7de63c3ad5f44deba38231e433e",
+      "size": 1543,
+      "executable": false
+    },
+    "daemons/local.claude-bodyguard.plist": {
+      "sha256": "0105bf35a2bcbc286fd785534f7730059354cbfb2c6a30a1ba3fb44c146dab4f",
+      "size": 633,
+      "executable": false
+    },
+    "daemons/local.claude-update.plist": {
+      "sha256": "d467716f831d87ad167e6dac98b34bd299f4c5230eb89ffbafebebe66f6d69d9",
+      "size": 616,
+      "executable": false
+    },
+    "daemons/local.tz-watchdog.plist": {
+      "sha256": "c0b6b95e88becfb9aa51ec75e3c2a04b8e5a8a2698c5f87ec139d57621971300",
+      "size": 625,
+      "executable": false
+    },
+    "daemons/tz-watchdog.sh": {
+      "sha256": "b09e1e98efafbf6935ea55f01b079f0d4d692d22727bf0649ee1861202527cd7",
+      "size": 531,
+      "executable": false
+    },
+    "docs/WEB-README.md": {
+      "sha256": "ef476639bf2ffbd7282d9d159f580c687ef284167e06a0a4e1ffece4e6282bd4",
+      "size": 4211,
+      "executable": false
+    },
+    "docs/app.js": {
+      "sha256": "53bbb59388e5d94fd28993c2821b1ff2af88679b4cf84c6feb236a738d7158d6",
+      "size": 41054,
+      "executable": false
+    },
+    "docs/favicon.svg": {
+      "sha256": "bcebc9b4f45a4160aa4d76b1f3faec7aa9e8955c8cc746470bcf7f7bf11fdfaa",
+      "size": 584,
+      "executable": false
+    },
+    "docs/images/macos-menu-bar-demo-dark.jpg": {
+      "sha256": "5a2698ae0a5ca71704c14c2a3f9598ee47ba1b84e637e7162f1670095660f428",
+      "size": 158209,
+      "executable": false
+    },
+    "docs/images/macos-menu-bar-demo.jpg": {
+      "sha256": "718638699a50b6a533db0cb01a7fa29fec107f978e2c2d9cc1d4c3e3aec0d87d",
+      "size": 151054,
+      "executable": false
+    },
+    "docs/index.html": {
+      "sha256": "90e661e6144ca52f2cd305fd3ae6d3fb12584fd493370cded058fe068eacdc0f",
+      "size": 5634,
+      "executable": false
+    },
+    "docs/screenshot.png": {
+      "sha256": "2d6cef91164ae0b512daad4ad339c7179564105bf17b48ae3ddba3a0b1546ca1",
+      "size": 448876,
+      "executable": false
+    },
+    "docs/style.css": {
+      "sha256": "874fd81cbdf1aecf731d9a44c3257d9e18574c89b8b5b3fa57ef47a4c826dd20",
+      "size": 16337,
+      "executable": false
+    },
+    "docs/superpowers/plans/2026-10-26-webrtc-rules.md": {
+      "sha256": "5d66c32a22e77621fa007201b6c807cb08681e93f01da7dc72613efd4ef324c9",
+      "size": 3071,
+      "executable": false
+    },
+    "installer/卸载.command": {
+      "sha256": "2ed59432d85917f1c0b67d8276bf348e3a2cf55b5330af4f8cedd9a3672e6b0f",
+      "size": 1465,
+      "executable": true
+    },
+    "installer/安装.command": {
+      "sha256": "d115132f7e83a6848aa81f66a4ee820bb3988bb46012a5bfdb1c80b4c0a3755a",
+      "size": 13547,
+      "executable": true
+    },
+    "linux/README.md": {
+      "sha256": "d7e76cbf152b5fd50323015879750c28f4b83402334302239b9271c9ab700350",
+      "size": 4609,
+      "executable": false
+    },
+    "linux/claude-bodyguard.sh": {
+      "sha256": "654154179166fc9c91ed43f46cc36c5513ce31b6fb661ae2338718173755b773",
+      "size": 1796,
+      "executable": true
+    },
+    "linux/claude-switch.sh": {
+      "sha256": "3d0e190446ee0355040c4e4f27fea6143bda05c0045157b023d856b2d3311c5d",
+      "size": 21621,
+      "executable": true
+    },
+    "linux/install.sh": {
+      "sha256": "408e9e80a0586f05aa98016586cbe865b9fdc59a60b37bd3a98235bb4325b15e",
+      "size": 8183,
+      "executable": true
+    },
+    "linux/stun-probe.py": {
+      "sha256": "2c891f5f3cf392a6bb736dacc65a945afe89ae8e4d88e353b04fd1f9cd792ab1",
+      "size": 2234,
+      "executable": false
+    },
+    "scripts/gen-sums.sh": {
+      "sha256": "0f9943dd89cfc126cb56afabfa8489af66577dc5de4e7822a0ab040786825a2b",
+      "size": 516,
+      "executable": true
+    },
+    "scripts/package-macos.sh": {
+      "sha256": "bf586fd02b3e2cf4f21a288a5647a831000cb8893ce71380a50a7059f210c679",
+      "size": 5129,
+      "executable": true
+    },
+    "tests/MENU-BAR-TESTING.md": {
+      "sha256": "3a6f834a8fc419a85147513795be955b166a60769782b186379f738d8659ba18",
+      "size": 3909,
+      "executable": false
+    },
+    "tests/MenuBarFixture.swift": {
+      "sha256": "12315552f3e247558641e7f4d52eaf0b04385e1f3f16648f70ff36c86629774e",
+      "size": 2901,
+      "executable": false
+    },
+    "tests/MenuBarModelTests.swift": {
+      "sha256": "445a9b7680f3f38e364d8b76d61c2bb17f1660827be5728ec626e64d3980f310",
+      "size": 15562,
+      "executable": false
+    },
+    "tests/test_cli_info.py": {
+      "sha256": "1bfb9f3c3a570a572d22c3d2dddc783d188cce3802e841d645fce8475042ecbf",
+      "size": 2161,
+      "executable": false
+    },
+    "tests/test_menu_bar_model.py": {
+      "sha256": "ab62d48aa6fc71053696973a3ea8bff828aea7bd5c966403a068e5ff3b2ff73a",
+      "size": 2494,
+      "executable": false
+    },
+    "tests/test_multi_account.py": {
+      "sha256": "6f82bcdac1f0baff35a7c945bdae2205fb3b4c74ea11df99723b678e48c58c8c",
+      "size": 16226,
+      "executable": false
+    },
+    "tests/test_open_safe.py": {
+      "sha256": "8ec48b1a423524c7cedd4904ca2070d06c8f0c10b26282f7867566b4480b7398",
+      "size": 3073,
+      "executable": false
+    },
+    "tests/test_proxy_diagnose.py": {
+      "sha256": "5f1a7534a1477852527aea89b57e6e82f2d062fd7ef046d7891774aeac7f20fa",
+      "size": 9327,
+      "executable": false
+    },
+    "tests/test_set_client.py": {
+      "sha256": "1a66273eecb1933147272862ea4ac5c1c46ff002a0e9c2c49ad8449e361b44a3",
+      "size": 1692,
+      "executable": false
+    },
+    "tests/test_snapshot_safety.py": {
+      "sha256": "9e3cb5f6ba33232dcc1fd3b6e263ed86fe4e96e909a4963e705ac72c1e0be0d4",
+      "size": 6795,
+      "executable": false
+    },
+    "tests/test_snapshot_transfer.py": {
+      "sha256": "5a387b150f74a1632729da242cb90dd085df712eaba2125019ce78951e3ee145",
+      "size": 4572,
+      "executable": false
+    },
+    "tests/test_webrtc_rules.py": {
+      "sha256": "84a42128f96f5ed8e6721271d51687d445746c8b10203effa7c7c19e8d0d6163",
+      "size": 21317,
+      "executable": false
+    },
+    "tests/test_windows_rules_static.py": {
+      "sha256": "ae40f8e1c0312403d9de130659bc345717a8965383ac716bdcc50490ad5bcfe9",
+      "size": 9995,
+      "executable": false
+    },
+    "tests/test_windows_update_static.py": {
+      "sha256": "392b67e9d192c4d5700cd77665b0e6707e016402e895f2b0ab5651d9de160516",
+      "size": 10322,
+      "executable": false
+    },
+    "windows/README.md": {
+      "sha256": "1f6ab853afd7d12a237de6f9a7d0c896769511503e0086a3c111f6fd02993e28",
+      "size": 9609,
+      "executable": false
+    },
+    "windows/SwitcherUI.ps1": {
+      "sha256": "3c5ee1ac3fcb8b76c590d5f6dcd9048519c5cf96ce50a117a14b8d377f0e20b5",
+      "size": 22708,
+      "executable": false
+    },
+    "windows/claude-bodyguard.ps1": {
+      "sha256": "985aa306e320e3178d5391abe2103d9c7fc585675987742b40965c427db0ae42",
+      "size": 3278,
+      "executable": false
+    },
+    "windows/claude-switch.ps1": {
+      "sha256": "d9e9ccbf88002c99ee9293787dfa95b916fbcb2f0a17f98a687ac4a0e053df97",
+      "size": 46704,
+      "executable": false
+    },
+    "windows/install.ps1": {
+      "sha256": "f4452edb385da491fe0c6a9873cdb617631c528793f826e4c74158a6110f1945",
+      "size": 10181,
+      "executable": false
+    }
+  }
+}
