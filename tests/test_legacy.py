@@ -71,7 +71,7 @@ class LegacyBridgeTests(unittest.TestCase):
             self.assertEqual(len(data), metadata["size"], relative)
         self.assertIn("Claude Switcher Contributors", (VENDOR / "LICENSE").read_text())
         self.assertFalse((VENDOR / ".git").exists())
-        for line in (VENDOR / "SHA256SUMS").read_text().splitlines():
+        for line in (VENDOR / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
             expected, relative = line.split(None, 1)
             self.assertEqual(hashlib.sha256((VENDOR / relative).read_bytes()).hexdigest(), expected)
         for name in ("install.ps1", "claude-switch.ps1", "claude-bodyguard.ps1", "SwitcherUI.ps1"):

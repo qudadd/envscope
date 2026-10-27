@@ -8,6 +8,7 @@ permissions:
 jobs:
   package:
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
