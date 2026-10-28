@@ -174,7 +174,7 @@ class DesktopRuntime:
             draw.rectangle(rect, fill="black")
         def open_settings(icon, item):
             self.show()
-            self.window.evaluate_js("document.querySelector('[data-page=\"settings\"]').click()")
+            self.window.run_js("document.querySelector('[data-page=\"settings\"]').click()")
         def ready(icon):
             icon.visible = True
             self.ready.set()

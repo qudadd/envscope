@@ -22,6 +22,12 @@ from . import __version__
 
 
 class DesktopHandler(SimpleHTTPRequestHandler):
+    # Windows MIME registrations can override Python's module defaults.
+    # ES modules must have a JavaScript type when nosniff is enabled.
+    extensions_map = {**SimpleHTTPRequestHandler.extensions_map,
+                      ".mjs": "text/javascript", ".js": "text/javascript",
+                      ".css": "text/css", ".html": "text/html"}
+
     def log_message(self, *args):
         pass
 

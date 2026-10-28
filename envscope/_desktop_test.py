@@ -31,20 +31,30 @@ def main(output=None):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         errors = []
+        def read_js(expression):
+            # evaluate_js wraps code in eval, which our CSP deliberately blocks.
+            # Both supported native renderers return run_js string results.
+            value = window.run_js('JSON.stringify(' + expression + ')')
+            return json.loads(value) if isinstance(value, str) else None
         def exercise():
             try:
                 deadline = time.monotonic() + 25
                 while time.monotonic() < deadline:
-                    if window.evaluate_js("document.getElementById('native-preferences')?.hidden === false"):
+                    if read_js("document.getElementById('native-preferences')?.hidden === false"):
                         break
                     time.sleep(0.2)
                 else:
+                    result['page_state'] = read_js("({ready:document.readyState, text:document.body.innerText.slice(0,1500), scripts:[...document.scripts].map(s=>s.src)})")
                     raise AssertionError('Native UI did not connect to the fixture server')
                 result['native_window'] = True
                 assert runtime.ready.wait(5), 'Tray did not initialize'
                 result['tray'] = True
-                ids = window.evaluate_js("[...document.querySelectorAll('[id]')].map(n=>n.id)")
+                ids = read_js("[...document.querySelectorAll('[id]')].map(n=>n.id)")
                 assert len(ids) == len(set(ids)), 'Duplicate DOM IDs'
+                # Exercise the actual menu callback and its CSP-compatible JS.
+                runtime.icon.menu.items[1](runtime.icon)
+                assert read_js("document.getElementById('page-settings').hidden === false")
+                result['tray_settings'] = True
                 assert runtime.closing() is False
                 result['close_hides'] = True
                 runtime.show()

@@ -47,6 +47,14 @@ class DesktopAPITests(unittest.TestCase):
         self.thread.join(timeout=2)
         self.directory.cleanup()
 
+    def test_static_module_types_ignore_host_registry(self):
+        with patch('mimetypes.guess_type', return_value=('text/plain', None)):
+            for path, expected in (('/app.mjs', 'text/javascript'), ('/desktop.mjs', 'text/javascript'), ('/minimal.css', 'text/css')):
+                with self.opener.open(self.origin + path, timeout=2) as response:
+                    self.assertEqual(response.headers.get_content_type(), expected)
+                    self.assertTrue(response.read())
+                    self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')
+
     def post(self, value, token=None, origin=None, path="/api/audit"):
         headers = {"Content-Type": "application/json", "Origin": origin or self.origin,
                    "X-EnvScope-Token": self.token if token is None else token}
