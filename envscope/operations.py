@@ -79,7 +79,9 @@ def launch_gate(report, preferences):
 class Operations:
     def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None):
         self.store = store
-        self.home = Path(home) if home else Path.home()
+        # Resolve only the trusted home alias (macOS /var temp paths or a
+        # relocated home); account/configuration children remain link-checked.
+        self.home = (Path(home) if home is not None else Path.home()).resolve()
         self.legacy = legacy or LegacyBridge(home=self.home)
         self.discoverer = discoverer or discover_proxies
         self.launcher = launcher or launch_claude

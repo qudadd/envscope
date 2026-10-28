@@ -17,7 +17,7 @@ import sys
 import tempfile
 import time
 
-from envscope.scheduler import UserScheduler, LABEL, TASK
+from envscope.scheduler import UserScheduler, LABEL, windows_identity, MARKER
 
 
 def execution(scheduler):
@@ -57,12 +57,21 @@ def main(argv=None):
     base = Path(tempfile.mkdtemp(prefix="envscope-scheduler-acceptance-")).resolve()
     home = base / "home with spaces 测试"
     home.mkdir()
-    scheduler = UserScheduler(home, home / ".envscope/maintenance", command=command, cwd=str(executable.parent))
+    commands = []
+    def runner(args, **kwargs):
+        result = subprocess.run(args, **kwargs)
+        if any(v in args for v in ("/Create", "/Delete", "bootstrap", "bootout")):
+            # Only our attempted fixed registration/removal command; never log
+            # arbitrary user task definitions or signed URLs/credentials.
+            commands.append({"operation": next(v for v in args if v in ("/Create", "/Delete", "bootstrap", "bootout")),
+                             "returncode": result.returncode, "stdout": result.stdout[:1200], "stderr": result.stderr[:1200]})
+        return result
+    scheduler = UserScheduler(home, home / ".envscope/maintenance", command=command, cwd=str(executable.parent), runner=runner)
     spec = scheduler.build(5)
     evidence = {"system": scheduler.system, "worker": "frozen-maintenance-check-runtime",
                 "network_probes": False, "user_config_edits": False, "interval_minutes": 5,
                 "registration": False, "automatic_runs": 0, "removed": False,
-                "scope": "real OS scheduler lifecycle, not real Claude/network acceptance"}
+                "scope": "real OS scheduler lifecycle, not real Claude/network acceptance", "os_commands": commands}
     path = Path("artifacts/scheduler-acceptance.json")
     path.parent.mkdir(exist_ok=True)
     started = datetime.now(timezone.utc)
@@ -97,6 +106,13 @@ def main(argv=None):
             raise RuntimeError("Two successful automatic runs were not observed within eight minutes")
     except Exception as error:
         evidence["error"] = type(error).__name__ + ": " + str(error)
+        if attempted and scheduler.system == "Windows":
+            result = scheduler._powershell("Export-ScheduledTask -TaskName 'EnvScopeMaintenance' -TaskPath '\\' -ErrorAction SilentlyContinue")
+            if result.returncode == 0 and result.stdout.strip():
+                actual = windows_identity(result.stdout)
+                if actual and actual.get("marker") == MARKER:
+                    evidence["actual_identity"] = actual
+                    evidence["expected_identity"] = windows_identity(spec["body"])
         raise
     finally:
         try:

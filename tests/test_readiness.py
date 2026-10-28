@@ -87,6 +87,8 @@ class ReadinessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             launch, stop = Mock(return_value=True), Mock(return_value=True)
             operations = Operations(StateStore(memory=True), directory, discoverer=lambda: [], launcher=launch, restart_stopper=stop)
+            self.assertEqual(operations.home, Path(directory).resolve())
+            self.assertEqual(operations.accounts.state_dir.parent, Path(directory).resolve())
             for action in ("app-launch", "app-restart"):
                 for confirmed in (False, 1, "yes"):
                     self.assertEqual(operations.run(action, {}, confirmed, ready_report())["state"], "confirmation_required")

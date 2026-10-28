@@ -227,7 +227,7 @@ def cli_facts(home, environ):
 
 
 def local_snapshot(inventory, home=None, environ=None, system=None, system_reader=None, listener=probe_listeners, hosts_path=None):
-    home = Path(home) if home else Path.home()
+    home = (Path(home) if home is not None else Path.home()).resolve()
     env, system = os.environ if environ is None else environ, system or platform.system()
     profile = (Path(env.get("APPDATA") or home / "AppData/Roaming") / "Claude" if system == "Windows" else home / "Library/Application Support/Claude")
     hostfile = hosts_path or (Path(env.get("WINDIR", "C:/Windows")) / "System32/drivers/etc/hosts" if system == "Windows" else Path("/etc/hosts"))
