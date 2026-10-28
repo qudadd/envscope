@@ -10,11 +10,13 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.7.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.7.1 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
-    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
+    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
   <main id="workspace" data-state="ready">
+    <section id="connection-banner" class="connection-banner" role="status" hidden><strong id="connection-title">本地服务已断开</strong><p id="connection-message">请重新双击 EnvScope 启动器，并使用它新打开的页面；旧地址可能已经失效。</p><button id="connection-retry" class="link">重新连接本页</button></section>
+    <p id="connection-status" class="connection-status" role="status">正在连接本地服务…</p><div id="catalog-error" class="connection-banner" role="status" hidden><p>功能列表暂时无法读取。环境信息仍可单独查看；账号和维护操作请先重新读取列表。</p><button id="catalog-retry" class="link">重新读取功能列表</button></div>
     <div id="page-audit" class="page">
     <p id="welcome-loading" class="note" role="status">正在读取本机使用偏好…</p>
     <section id="learning-panel" class="learning" aria-labelledby="learning-title" hidden>
@@ -35,6 +37,7 @@
     <section id="audit-results" aria-label="检测结果" aria-busy="false">
       <div class="result-summary" aria-live="polite"><h2 id="verdict">先打开平时使用的连接工具，再检测</h2><span id="coverage-count">14 项基础 · 18 项扩展</span></div>
       <p id="verdict-note" class="note">检测后自动合并处理方案。你确认一次，再写入配置、修复并复检。</p>
+      <button id="show-all-checks" class="link">查看全部 32 项检查与说明</button>
       <details id="connection-options" class="connection-options"><summary>环境设置：自动识别，检测后确认</summary>
         <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option></select></label>
         <label class="checkbox"><input id="enhance-cli" type="checkbox" checked>识别到 Code 时，同时完善连接设置</label>
@@ -76,6 +79,13 @@
     </div>
     </div>
 
+    <div id="page-checks" class="page" hidden>
+      <h1>全部检查</h1><p class="subtle">14 项基础对应 claude-switcher，18 项扩展检查连接、配置和安装。每一项都能查看用途、结果与下一步。</p>
+      <p id="all-checks-context" class="note" role="status">尚未检测，下面是完整检查目录。</p>
+      <div class="check-filters"><label>查找项目<input id="check-search" type="search" placeholder="例如：DNS、登录、证书"></label><label>分类<select id="check-group"><option value="all">全部分类</option><option value="baseline">14 项基础</option><option value="extra">18 项扩展</option><option value="measurement">补充测量</option></select></label><label>状态<select id="check-status"><option value="all">全部状态</option><option value="attention">需要处理或复核</option><option value="unknown">未核实或未测量</option><option value="pass">范围内通过</option><option value="not_run">尚未检测</option></select></label></div>
+      <p id="check-count" class="note" role="status"></p><div id="all-checks-list"></div>
+      <div class="actions"><button id="checks-return" class="link">返回一键检测与修复</button></div>
+    </div>
     <div id="page-upkeep" class="page" hidden>
       <h1>持续维护</h1><p class="subtle">定期复检，记录变化。可选保持已经验证的 Code 配置，关闭页面后仍由系统调度。</p>
       <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p>
@@ -92,9 +102,11 @@
     </div>
 
     <div id="page-accounts" class="page" hidden>
-      <h1>账号</h1><p class="subtle">切换前自动重检，退出应用后校验存档，再交换配置。</p>
+      <h1>账号</h1><p class="subtle">为 Claude 桌面版保存不同的本机登录资料。这里只管理存档，登录仍在 Claude 中完成。</p>
+      <section class="account-guide" aria-label="账号使用步骤"><h2>第一次怎样使用</h2><ol><li>只有一个账号：正常在 Claude 登录即可，无需添加槽位。</li><li>需要多个账号：先给 A 命名，检测通过后点“保存当前资料到 A”。</li><li>给 B 命名，点“首次登录”；现有资料会保留在 A，在新打开的 Claude 中登录自己的另一个账号。</li><li>以后用“切换并打开”返回已有存档。请先保存工作；切换会退出桌面应用。</li></ol><p class="note">A、B 是资料文件夹的代号，不是邮箱或已注册账号。添加名称不会创建 Claude 账号，也不会登录。Claude Code 和浏览器的登录不随此处切换。</p><button id="account-check" class="link">检测启动条件</button></section>
+      <p id="account-readiness" class="note" role="status">先检测环境；切换时还会重新检测。</p><button id="account-view-checks" class="link">查看启动条件与处理办法</button>
       <p id="account-note" class="note"></p><div id="account-list"></div>
-      <div class="inline-form"><label>新槽位<input id="new-slot" maxlength="32" placeholder="work"></label><label>名称<input id="new-label" maxlength="80" placeholder="可选"></label><button id="account-add">添加</button></div>
+      <div class="inline-form"><label>新增资料代号<input id="new-slot" maxlength="32" placeholder="work" aria-describedby="slot-help"></label><label>显示名称<input id="new-label" maxlength="80" placeholder="例如：工作账号"></label><button id="account-add">添加</button></div><p id="slot-help" class="note">代号使用英文字母、数字、下划线或短横线，以字母或数字开头；最多 32 字符。可先使用现有的 A、B。</p>
       <details><summary>本地目录备份与导入</summary>
         <p class="note">目录包含登录资料，未加密。仅支持非活动账号导出、空槽位导入；不能保证跨系统迁移登录状态。macOS 的加密 DMG 位于工具页。</p>
         <div class="form-grid"><label>槽位<input id="archive-slot" placeholder="B" maxlength="32"></label><label>绝对目录路径<input id="archive-path" placeholder="选择一个新目录作为导出目标"></label></div>
@@ -109,7 +121,8 @@
         <div class="inline-form"><label class="grow">代理地址<input id="proxy-url" type="password" autocomplete="off" placeholder="http://127.0.0.1:7897"></label><button id="proxy-test">测试连接</button></div>
         <p class="note">仅经指定代理检测 Claude 网页与 API，区分连接失败、需认证、拒绝访问、限流及服务错误。代理失败不回退直连。</p>
       </section>
-      <section class="tool-section"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">指纹信息用于排障，不推断账号风险。诊断包隐藏地址、密钥和用户目录名，分享前仍请复核。</p></section>
+      <section class="tool-section" id="environment-tools"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">点击后在下方显示，不会打开额外窗口。设备和浏览器信息用于排障，不推断账号风险。</p><div id="environment-output" class="information-output" role="status" tabindex="-1"><p class="note">选择一项查看；无需先安装维护核心。</p></div></section>
+      <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生实现检测和资料交换，系统级修复与进程守护仍通过原版维护核心。随附源码不等于已安装维护核心。</p><table><thead><tr><th>用途</th><th>claude-switcher</th><th>EnvScope</th></tr></thead><tbody><tr><td>检查与解释</td><td>14 类环境检查</td><td>14 项基础 + 18 项扩展，另列独立测量；提供用途和下一步</td></tr><tr><td>桌面账号</td><td>Mac A–D；Windows A/B 界面</td><td>可命名的动态槽位，校验复制、失败回滚、切换前复检</td></tr><tr><td>配置修复</td><td>偏重系统、代理和路由</td><td>增加 Code 配置预览、备份撤销与自动复检；系统修复仍接入原版</td></tr><tr><td>长期保持</td><td>进程守护；Mac 时区守护</td><td>增加定时复检、历史与批准的 Code 字段恢复；进程守护需另装原版核心</td></tr><tr><td>仍有边界</td><td>Mac 有加密 DMG、临时浏览器等</td><td>这些 Mac 工具仍由原版提供；Windows 尚无原生等价功能，定时复检也不是断网保护</td></tr></tbody></table><p class="note">对照随附固定版本 870c4ca；2026-10-28 核对上游 f20a38a，后续 Windows 控制接口回退修复尚未纳入随附核心。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FEATURE_PARITY.md" target="_blank" rel="noopener noreferrer">完整源码对照与功能边界</a></details>
       <section class="tool-section"><h2>配置备份</h2><p class="note">最近 20 份可识别恢复记录，关闭后仍保留。撤销会先停用持续维护，并校验备份和当前文件；后续已有修改时拒绝覆盖。原文位于 ~/.envscope/config-backups，可能含密钥，不可分享。</p><div id="config-backups"></div></section>
       <section class="tool-section"><h2>维护</h2><p id="backend-note" class="note">正在读取已安装的维护核心。</p>
         <label>操作<select id="maintenance-action"></select></label>

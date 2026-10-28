@@ -1,5 +1,37 @@
 # Feature parity and integration audit
 
+## 0.7.1 usability and upstream refresh (2026-10-28)
+
+The complete 14 + 18 index is now a first-class page, available before a run,
+with search, status filters, explanations and explicit missing evidence. Native
+CLI and basic device information work on Windows and macOS without installing
+the legacy backend. Account guidance distinguishes a local slot from a real
+login and offers current-profile adoption, first login and archived-profile
+switching. Read results appear beside their controls. Visible-page heartbeats
+and an offline banner address expired loopback tabs.
+
+The current upstream main was verified as `f20a38aaa4cd70947eb3ea929cd47c60e62a3463`.
+It is five commits ahead of our immutable pin. The changed executable source is
+`windows/claude-switch.ps1`: `Get-ClashApi` now falls back from `clash-verge.yaml`
+to `config.yaml`. This change is **not** in the bundled maintenance core.
+The other changed files are an ignore file, its static regression, and two
+Windows native EXE planning/specification documents. Those documents do not
+establish that a WPF client or installer has been delivered. The pinned audit
+below remains explicitly tied to `870c4ca`; it is not a claim of tracking main.
+[Verified upstream diff](https://github.com/YOURSJEYO/claude-switcher/compare/870c4ca0754234965878ef58144d7a755d965037...f20a38aaa4cd70947eb3ea929cd47c60e62a3463).
+
+| User task | claude-switcher pinned baseline | EnvScope 0.7.1 |
+|---|---|---|
+| Inspect environment | 14 categories | 14 baseline + 18 extended categories, additional independent measurements, readable guidance |
+| Save desktop identities | Mac A–D; Windows A/B UI | Named dynamic slots, verified staged copies, rollback and fresh preflight |
+| Repair configuration | System/proxy/routing oriented | Adds Code field previews, backups, undo and independent recheck; system repairs still use legacy core |
+| Keep settings | Process guard; Mac timezone watchdog | Adds scheduled checks and approved Code field restoration; these are not process guards |
+| Mac auxiliary tools | Encrypted DMG and temporary browser | Retained through separately installed original backend; no native Windows equivalent |
+
+More diagnostic rows do not imply complete replacement of the original product.
+The native firewall kill switch, signed automatic product update, cross-platform
+encrypted snapshots and Windows isolated browser remain gaps.
+
 v0.7 adds a native desktop handoff in the main workflow: reviewed launch or
 graceful restart, a fresh native preflight before each launch, installation and
 desktop JSON checks, account recovery and locking, and a separate Claude web
@@ -58,8 +90,8 @@ Status terms below describe implementation boundaries, not real-device approval:
 | `fix` | Start proxy; restore Clash TUN; timezone/IPv6/DNS/guard; locale/Claude language; routing/STUN retest; `core:874` | Start Clash; timezone/IPv6/DNS/guard; routing migration/restart/rollback; `windows/core:619` | Legacy adapter; ordinary EnvScope detection remains read-only |
 | `set-region` | Re-detect country/timezone/locale, update core and watchdog; `core:1047` | Not upstream; reinstall/manual edit required | macOS legacy adapter; native cross-platform region editor is a gap |
 | `set-client <mode>` | `clash-verge`, `shadowrocket`, `sing-box`, `clashx`, `surge`, `auto`; `core:1024` | No command; installer sets mode | macOS legacy adapter; discovery is distinct from modification |
-| `fingerprint` | Fonts, GPU/display, virtualization; informational and nonblocking; `core:1202` | Not upstream | macOS legacy adapter; native Windows GPU/driver, model and font inventory (no risk inference) |
-| `cli-info` | PATH/real path/version, native/brew/npm/bun classification, desktop CLI, install conflicts, config size; `core:1240` | Not upstream | macOS legacy adapter; native Windows PATH/config-existence inventory; full version/conflict classification remains a gap |
+| `fingerprint` | Fonts, GPU/display, virtualization; informational and nonblocking; `core:1202` | Not upstream | Native basic OS/architecture and graphics information on both platforms; Windows model/driver/font count. Original Mac detail retained under `legacy-fingerprint`; no risk inference |
+| `cli-info` | PATH/real path/version, native/brew/npm/bun classification, desktop CLI, install conflicts, config size; `core:1240` | Not upstream | Native PATH/config-directory inventory on both platforms, without running discovered programs. Original Mac detail retained under `legacy-cli-info`; native full version/conflict classification remains a gap |
 | `open-safe <http(s) URL>` | Chrome/Chromium/Edge/Brave temporary profile, disabled sync/extensions/non-proxied UDP, language setting, cleanup; `core:1291` | Not upstream | macOS legacy adapter; native Windows isolated-browser launch is a gap |
 | `snapshot-export <A-D> <file> [--password-stdin]` | Inactive archived slot to verified AES-256 DMG; `core:1330` | Not upstream | macOS encrypted legacy adapter. Native `copy_snapshot_to` is only a verified **unencrypted directory hook** |
 | `snapshot-import <file> <A-D> [--password-stdin]` | Readonly DMG mount, metadata/slot validation, refuse occupied slot, staged import; `core:1378` | Not upstream | macOS encrypted legacy adapter. Native `import_snapshot_from` copies a validated directory into an empty inactive slot |

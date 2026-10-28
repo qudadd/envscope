@@ -1,9 +1,7 @@
 """User-triggered desktop operations; no maintenance action runs on import."""
-import json
 import os
 from pathlib import Path
 import platform
-import shutil
 import subprocess
 import time
 
@@ -15,6 +13,8 @@ from .transport import CurlTransport, application_state
 from .remedies import ConfigRemedies, SolutionPlans
 from .maintenance import Maintenance
 from .readiness import launch_readiness
+from .check_catalog import check_catalog
+from .environment_info import cli_information, device_information
 
 
 def _process(command, timeout=8):
@@ -128,12 +128,17 @@ class Operations:
         except AccountError as error:
             accounts = {"current": None, "accounts": [], "pending": [], "error": str(error)}
         legacy = self.legacy.capabilities()
+        # Retain the original macOS detailed readers separately from the
+        # always-available native information panels.
+        detailed = [{**entry, "id": "legacy-" + entry["id"]} for entry in legacy["actions"]
+                    if entry["id"] in ("cli-info", "fingerprint")]
         for entry in legacy["actions"]:
-            if entry["id"] in ("cli-info", "fingerprint") and platform.system() == "Windows":
+            if entry["id"] in ("cli-info", "fingerprint"):
                 entry.update(supported=True, available=True, requires_confirmation=False, reason="native_read_only")
+        legacy["actions"].extend(detailed)
         return {"legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
                 "settings": self.store.settings(), "history": self.store.history(), "maintenance": self.maintenance.status(),
-                "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(),
+                "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
@@ -150,6 +155,8 @@ class Operations:
         if action in native_parameters and set(params) - native_parameters[action]:
             raise ValueError("unexpected action parameters")
         gate = preflight or (lambda: launch_gate(report, self.store.settings())[0])
+        if action in ("legacy-cli-info", "legacy-fingerprint"):
+            return self.legacy.run(action.removeprefix("legacy-"), params, confirmed=confirmed, preflight=gate)
         if action == "learning-complete":
             return {"state": "completed", "learning": self.store.complete_learning(params.get("version"))}
         if action in ("solution-plan", "solution-open", "maintenance-plan") and (not report or params.get("report_id") != report.get("report_id")):
@@ -223,19 +230,14 @@ class Operations:
                                  "elapsed_ms": round((time.monotonic() - started) * 1000), "error": response.error,
                                  "timings": response.timings, "tls_verified": response.tls_verified})
             return {"state": "completed", "evidence": evidence, "boundary": "只验证明确指定代理的无认证连接；不证明账号可用。"}
-        if action == "cli-info" and platform.system() == "Windows":
+        if action == "cli-info":
             if params:
                 raise ValueError("unexpected parameters")
-            candidates = {name: shutil.which(name) for name in ("claude", "claude.exe", "claude.cmd", "node", "npm")}
-            return {"state": "completed", "installations": candidates, "config_exists": (self.home / ".claude").is_dir(),
-                    "note": "只读安装位置，不自动卸载或升级。"}
-        if action == "fingerprint" and platform.system() == "Windows":
+            return cli_information(self.home)
+        if action == "fingerprint":
             if params:
                 raise ValueError("unexpected parameters")
-            code = "@{gpu=@(Get-CimInstance Win32_VideoController|Select-Object Name,DriverVersion);machine=Get-CimInstance Win32_ComputerSystem|Select-Object Manufacturer,Model;fonts=@(Get-ChildItem $env:WINDIR\\Fonts -File|Select-Object -ExpandProperty Name)}|ConvertTo-Json -Depth 5 -Compress"
-            result = _process(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", code])
-            return {"state": "completed" if result.returncode == 0 else "failed", "observations": json.loads(result.stdout) if result.returncode == 0 else {},
-                    "note": "设备信息仅展示，不构成账号风险或地区判断。"}
+            return device_information()
         if action == "support-bundle":
             return {"state": "completed", "bundle": redact({"settings": {k: v for k, v in self.store.settings().items() if not k.startswith("allowed_")},
                                                               "report": report, "backend": self.legacy.capabilities(),

@@ -2,6 +2,8 @@ import {STATUS_TEXT, normalizeIP, isPublicIP, parseCandidate, assessHTTP, assess
 import {initDesktopControls} from "./controls.mjs";
 import {initDiagnosis, setFlowStage} from "./diagnosis.mjs";
 import {initGuide} from "./guide.mjs";
+import {initInspection} from "./inspection.mjs";
+import {initConnection, disconnected} from "./connection.mjs";
 
 const byId=id=>document.getElementById(id);
 const nodes={start:byId("start"),share:byId("share"),checks:byId("checks"),quit:byId("quit")};
@@ -18,6 +20,8 @@ const sessionPromise=(async()=>{
     return value;
   } catch {return null;} finally {clearTimeout(timer);}
 })();
+initConnection(sessionPromise);
+initInspection();
 const environment={timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"unknown",languages:[...navigator.languages],
   platform:navigator.userAgentData?.platform||navigator.platform||"unknown",automated:navigator.webdriver===true};
 const envRows=[["时区",environment.timezone],["语言",environment.languages.join(" · ")],["运行环境",environment.platform+(environment.automated?" / 自动化会话":"")]];
@@ -73,10 +77,11 @@ function render(snapshot) {
   byId("session-state").textContent="正在合并系统检查";
 }
 
-function renderDesktop(report) {
+function renderDesktop(report,source='current') {
   byId("checks-title").hidden=false;
   diagnosisUI.render(report);
   guideUI.render(report);
+  document.dispatchEvent(new CustomEvent('envscope-report',{detail:{report,source}}));
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
 const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
@@ -136,12 +141,12 @@ function download(value,suffix) {
   const blob=new Blob([JSON.stringify(value,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);
   const link=document.createElement("a");link.href=url;link.download=`envscope-${suffix}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-void initDesktopControls({sessionPromise,download,retest:()=>runAudit(),onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
+void initDesktopControls({sessionPromise,download,retest:()=>runAudit(),onReport:(report,source)=>{lastReport=report;renderDesktop(report,source);nodes.share.disabled=false;}});
 nodes.share.addEventListener("click",()=>{if(lastReport)download(lastReport,"report");else if(lastSnapshot)download(sharingSnapshot(lastSnapshot),"share");});
 nodes.quit.addEventListener("click",async()=>{
   const session=await sessionPromise;if(!session)return;
   try{const response=await fetch("/api/quit",{method:"POST",headers:{"X-EnvScope-Token":session.token}});
-    if(response.ok){nodes.start.disabled=true;nodes.quit.hidden=true;byId("session-state").textContent="本地检测已结束";}
+    if(response.ok){nodes.start.disabled=true;nodes.quit.hidden=true;byId("session-state").textContent="本地检测已结束";document.dispatchEvent(new CustomEvent('envscope-service-closed'));}
     else if(response.status===409)byId("session-state").textContent="等待当前检测或操作结束后再退出";}
-  catch{byId("session-state").textContent="本地进程已停止";}
+  catch{byId("session-state").textContent="本地进程已停止";disconnected();}
 });

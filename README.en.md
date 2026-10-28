@@ -2,7 +2,13 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS Claude environment toolkit. Alpha v0.7.0.
+A minimal Windows/macOS Claude environment toolkit. Alpha v0.7.1.
+
+This usability release adds a searchable, always-visible 32-check catalog,
+inline native information panels, desktop account guidance, visible-page
+keepalive and explicit disconnected-tab recovery. It preserves the original
+macOS detailed readers as separate maintenance actions. See the
+[task-based acceptance record](docs/USABILITY_TESTING.md).
 
 The main workflow now includes reviewed desktop launch and graceful restart.
 Each launch repeats native checks, including installation, desktop JSON, account

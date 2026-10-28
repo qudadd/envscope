@@ -41,7 +41,7 @@ export function initGuide({sessionPromise,run,retest,isBusy,operate,onReport}){
     }else if(step===1){
       $('learning-title').textContent='检测后，只用先看下一步';body.append(el('p','不用先弄懂 DNS、TUN 或每个技术名词。先跟着结果处理真正影响使用的事情。','subtle'));
       const rows=el('ol',undefined,'lesson-steps');
-      for(const [title,text] of [['看原因','首页先说明哪里影响使用。没有测到的内容会写“还不能确认”，不会算成电脑故障。'],['看改动，再修复','先预览要修改的内容；你确认后才执行。修改配置先备份，完成后自动复检，可在工具页撤销。'],['回到 Claude 试用','本工具测试网络，不验证账号权限。最后需要在自己的 Claude 登录，并收到一条实际回复。']]){const li=el('li');li.append(el('h2',title),el('p',text));rows.append(li);}body.append(rows);
+      for(const [title,text] of [['看原因','首页先说明哪里影响使用。左侧“全部检查”可查看 32 项用途和结果。没有测到的内容会写“还不能确认”，不会算成电脑故障。'],['看改动，再修复','先预览要修改的内容；你确认后才执行。修改配置先备份，完成后自动复检，可在工具页撤销。'],['回到 Claude 试用','本工具测试网络，不验证账号权限。最后需要在自己的 Claude 登录，并收到一条实际回复。只有管理多个桌面账号时，才需要在账号页保存资料。']]){const li=el('li');li.append(el('h2',title),el('p',text));rows.append(li);}body.append(rows);
     }else{
       $('learning-title').textContent='能正常使用后，再选择怎样保持';body.append(el('p','第一次检测只读，不会安装后台任务。下面两项都需要后续单独确认。','subtle'));
       const rows=el('dl',undefined,'lesson-options');for(const [title,text] of [['定时复检','按 5 / 15 / 60 分钟记录连接和配置变化，关闭界面后也可运行。'],['配置保持','可选恢复已经验证的 Code 代理与证书校验设置；每次先备份，保留其他配置。'],['开源进程保护','沿用 claude-switcher 的独立维护入口；可能停止客户端，安装前列出影响。']]){const row=el('div');row.append(el('dt',title),el('dd',text));rows.append(row);}body.append(rows,el('p','开始前，打开你平时使用的连接工具。检测会联系 Claude、网络出口和实时连接探测服务；仅在本机保留脱敏记录。','note'));
