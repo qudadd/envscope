@@ -1,10 +1,12 @@
 import json
 import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import zipfile
+from types import SimpleNamespace
 
 from envscope.accounts import AccountManager, AccountError
 from envscope.browser import environment_finding
@@ -153,6 +155,21 @@ class IsolatedBrowserTests(unittest.TestCase):
 
 
 class EnvironmentCoverageTests(unittest.TestCase):
+    def test_native_archive_dialog_preserves_complete_paths_and_cancellation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            operations = Operations(StateStore(memory=True), directory, legacy=Mock(), discoverer=lambda:[])
+            operations.desktop_runtime = Mock()
+            filename = '/fixture/账户 备份.envsnap'
+            fake_webview = SimpleNamespace(SAVE_DIALOG=1, OPEN_DIALOG=2)
+            with patch.dict(sys.modules, {'webview':fake_webview}):
+                for mode in ('export','import'):
+                    for value, expected in ((filename,filename), ((filename,),filename), (None,None), ((),None)):
+                        with self.subTest(mode=mode,value=value):
+                            operations.desktop_runtime.window.create_file_dialog.return_value = value
+                            result = operations.run('archive-choose-file', {'mode':mode})
+                            self.assertEqual(result['file'],expected)
+                            self.assertEqual(result['state'],'selected' if expected else 'cancelled')
+
     def test_changed_guard_mode_and_unreadable_mode_cannot_pass(self):
         from envscope.baseline import guard_finding, installed_guard_mode
         running = {'registered':True,'enabled':True,'running':True}

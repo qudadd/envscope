@@ -174,7 +174,9 @@ class Operations:
             import webview
             result = desktop.window.create_file_dialog(webview.SAVE_DIALOG if params['mode']=='export' else webview.OPEN_DIALOG,
                         allow_multiple=False, save_filename='Claude-backup.envsnap', file_types=('EnvScope archive (*.envsnap)',))
-            return {'state':'selected' if result else 'cancelled','file':result[0] if result else None}
+            # Cocoa save returns a string; Windows and open dialogs return a sequence.
+            filename = result if isinstance(result, str) else result[0] if result else None
+            return {'state':'selected' if filename else 'cancelled','file':filename}
         if action == 'browser-cleanup':
             if params:
                 raise ValueError('unexpected browser parameters')
