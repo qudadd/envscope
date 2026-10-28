@@ -224,4 +224,6 @@ python -m scripts.verify_package dist
 
 桌面包构建：安装开发依赖 `pyinstaller>=6.10,<7`，在目标 Windows/macOS 系统运行 `python -m scripts.build_desktop`。也可在 GitHub Actions 手动运行 `desktop packages`。桌面产物目前未签名，首次启动体验需要纳入平台验收。
 
+macOS 打包要求 cryptography 静态链接 OpenSSL，构建脚本会检查。Intel 从源码构建加密库时，先安装 Rust、OpenSSL 开发库，按[官方说明](https://cryptography.io/en/latest/installation/#building-cryptography-on-macos)使用 `OPENSSL_STATIC=1` 并禁用旧 wheel 缓存；CI 已配置此步骤，避免与 Python 自带的 OpenSSL 冲突。最终用户不需要这些构建工具。
+
 阅读 [逐项功能对照](docs/FEATURE_PARITY.md)、[验证记录](docs/VALIDATION.md)、[源码审查与方案取舍](docs/RESEARCH.md)、[检测架构](docs/ARCHITECTURE.md)、[实施路线](docs/ROADMAP.md)、[安全边界](SECURITY.md) 和 [第三方来源](THIRD_PARTY_NOTICES.md)。

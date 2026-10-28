@@ -7,6 +7,9 @@ licensed under Apache-2.0 OR BSD-3-Clause. Distribution licenses, including its
 bundled component notices, are retained in native package licenses. EnvScope
 uses Scrypt and AES-256-GCM, not a custom cipher. Runtime range:
 `cryptography>=46,<51`; the release build records the resolved version.
+macOS bundles require static OpenSSL linkage to avoid collisions with Python's
+runtime. Intel CI compiles the current cryptography source with `OPENSSL_STATIC=1`;
+the shared OpenSSL license is retained in `licenses/OPENSSL-LICENSE.txt`.
 
 EnvScope is MIT licensed. It contains no Scrapling, proxy core, browser automation
 framework, VPN application, account database, or captured research pages at runtime.

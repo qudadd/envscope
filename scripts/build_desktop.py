@@ -5,6 +5,7 @@ import importlib.metadata
 import json
 import hashlib
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,11 @@ def main():
     root = Path(__file__).resolve().parents[1]
     if platform.system() not in ("Windows", "Darwin"):
         raise SystemExit("Desktop builds target Windows or macOS only.")
+    if platform.system() == 'Darwin':
+        from cryptography.hazmat.bindings import _rust
+        linked = subprocess.check_output(['/usr/bin/otool', '-L', _rust.__file__], text=True)
+        if re.search(r'lib(?:ssl|crypto)[^/\s]*\.dylib', linked):
+            raise RuntimeError('Build cryptography with OPENSSL_STATIC=1 before packaging; dynamic OpenSSL can collide with the bundled Python runtime.')
     command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--windowed",
                "--name", "EnvScope", "--collect-data", "envscope", "--hidden-import", "envscope._stun_worker",
                "--collect-all", "webview", "--collect-submodules", "pystray",

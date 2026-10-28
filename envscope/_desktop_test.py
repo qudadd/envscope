@@ -19,6 +19,7 @@ def main(output=None):
     from envscope.legacy import LegacyBridge
     result = {"platform": platform.system(), "release": __release__, "native_window": False, "tray": False, "close_hides": False, "reopened": False, "quit": False, "network_probes": False, "user_data_changed": False}
     with tempfile.TemporaryDirectory(prefix='envscope-native-test-') as directory:
+        directory = Path(directory).resolve()
         store = StateStore(Path(directory) / 'state')
         store._write('desktop-preferences.private.json', {'check_updates': False})
         operations = Operations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),
