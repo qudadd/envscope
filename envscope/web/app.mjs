@@ -80,7 +80,8 @@ function renderDesktop(report) {
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
 const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
-const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy});
+const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy,operate:diagnosisUI.operate,
+  onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
 
 async function nativeAudit(session,snapshot) {
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);

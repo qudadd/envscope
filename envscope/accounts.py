@@ -269,7 +269,9 @@ class AccountManager:
         current = self._read_current()
         labels = self._labels()
         slots = self._slots(labels)
-        return {"valid": True, "tracked": current is not None, "slot_count": len(slots), "pending": self._pending()}
+        present = self.data_dir.is_dir()
+        return {"valid": current is None or present, "tracked": current is not None, "live_profile_present": present,
+                "slot_count": len(slots), "pending": self._pending()}
 
     @contextmanager
     def _lock(self):
@@ -410,6 +412,37 @@ class AccountManager:
             except Exception:
                 result["warnings"].append("Profile is ready, but the application could not be launched.")
         return result
+
+    def launch_checked(self, preflight, launch_app, restart=False, stop_app=None):
+        """Launch without adopting or exchanging profiles, under the account lock."""
+        if type(restart) is not bool or not callable(launch_app) or restart and not callable(stop_app):
+            raise AccountError("Explicit process callbacks are required.")
+        if not callable(preflight):
+            raise PreflightError("A fresh preflight is required.")
+
+        def check():
+            try:
+                ready = preflight()
+            except Exception as exc:
+                raise PreflightError("Desktop preflight did not complete.") from exc
+            if ready is not True:
+                raise PreflightError("Desktop preflight did not pass; no launch was requested.")
+
+        check()
+        with self._lock():
+            self._require_clean()
+            if self._read_current() is not None and not self.data_dir.is_dir():
+                raise RecoveryRequired("The tracked live profile is missing; restore it before launching.")
+            if restart:
+                if stop_app() is not True:
+                    return {"launched": False, "stop_confirmed": False, "profiles_changed": False}
+                # Exit may take time or the network may change while it closes.
+                check()
+                self._require_clean()
+                if self._read_current() is not None and not self.data_dir.is_dir():
+                    raise RecoveryRequired("The tracked live profile is missing after exit.")
+            launched = launch_app() is True
+            return {"launched": launched, "stop_confirmed": True if restart else None, "profiles_changed": False}
 
     def switch(self, slot, preflight):
         slot = validate_slot(slot)

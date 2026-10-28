@@ -7,6 +7,7 @@ permissions:
   contents: read
 jobs:
   package:
+    timeout-minutes: 18
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +27,22 @@ jobs:
       - name: Frozen macOS smoke
         if: runner.os == 'macOS'
         run: python -m scripts.packaged_smoke dist/desktop/EnvScope.app/Contents/MacOS/EnvScope
+      - name: Actual Windows user scheduler lifecycle
+        if: runner.os == 'Windows'
+        env:
+          ENVSCOPE_SCHEDULER_ACCEPTANCE: '1'
+        run: python -m scripts.scheduler_acceptance dist/desktop/EnvScope/EnvScope.exe
+      - name: Actual macOS user scheduler lifecycle
+        if: runner.os == 'macOS'
+        env:
+          ENVSCOPE_SCHEDULER_ACCEPTANCE: '1'
+        run: python -m scripts.scheduler_acceptance dist/desktop/EnvScope.app/Contents/MacOS/EnvScope
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Scheduler-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/scheduler-acceptance.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: EnvScope-${{ runner.os }}-${{ runner.arch }}

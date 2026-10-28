@@ -1,13 +1,22 @@
 # Feature parity and integration audit
 
+v0.7 adds a native desktop handoff in the main workflow: reviewed launch or
+graceful restart, a fresh native preflight before each launch, installation and
+desktop JSON checks, account recovery and locking, and a separate Claude web
+endpoint condition. It does not exchange profiles or certify authentication.
+Frozen Windows, Apple Silicon and Intel packages now have a real OS scheduler
+lifecycle release gate: registration, two automatic worker runs, and removal.
+See [product acceptance scope](PRODUCT_ACCEPTANCE.md).
+
 v0.4 exposes all 14 upstream identities as an evidence/remedy/upkeep checklist,
 adds reviewed per-item entry points, cross-restart verified config undo, and
 native user-scoped scheduled checks on Windows/macOS. Optional drift recovery
 only restores five approved Code env keys; it does not replace the upstream
 process guard, timezone watchdog, account manager or system repair. See
 [checklist and maintenance boundaries](CLAUDE_CHECKS.md). Real OS task lifecycle
-acceptance is pending; registration is tested with injected runners and Windows
-definitions are checked against the official XSD.
+acceptance was pending in v0.4; v0.7 adds the isolated lifecycle gate described
+above. Login and sleep transitions remain outside that gate. Windows definitions
+are also checked against the official XSD.
 
 v0.3 adds evidence-based problem interpretation and an integrated solution flow:
 explicit observations, causes, ordered steps, fixed settings/file entries,

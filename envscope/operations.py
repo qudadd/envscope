@@ -1,5 +1,4 @@
 """User-triggered desktop operations; no maintenance action runs on import."""
-from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -8,13 +7,14 @@ import shutil
 import subprocess
 import time
 
-from .accounts import AccountManager, AccountError
+from .accounts import AccountManager, AccountError, RecoveryRequired
 from .discovery import discover_proxies
 from .legacy import LegacyBridge
 from .report import redact
 from .transport import CurlTransport, application_state
 from .remedies import ConfigRemedies, SolutionPlans
 from .maintenance import Maintenance
+from .readiness import launch_readiness
 
 
 def _process(command, timeout=8):
@@ -47,36 +47,43 @@ def launch_claude():
     return False
 
 
+def quit_claude_gracefully():
+    """Request a normal exit; never escalate a failed restart into forced kill."""
+    if platform.system() == "Windows":
+        code = r"""$p=@(Get-Process -Name Claude -ErrorAction SilentlyContinue)
+foreach($item in $p){if(-not $item.Path -or $item.Path -notmatch '\\(?:WindowsApps\\[^\\]*Claude[^\\]*|Programs\\Claude|Claude|app-[^\\]+)\\'){exit 2}}
+foreach($item in $p){if($item.MainWindowHandle -ne 0){[void]$item.CloseMainWindow()}}
+for($i=0;$i -lt 24;$i++){if(-not (Get-Process -Name Claude -ErrorAction SilentlyContinue)){exit 0};Start-Sleep -Milliseconds 500}
+exit 1
+"""
+        return _process(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", code], timeout=18).returncode == 0
+    if platform.system() == "Darwin":
+        state = _process(["/usr/bin/pgrep", "-x", "Claude"]).returncode
+        if state == 1:
+            return True
+        if state != 0 or _process(["/usr/bin/osascript", "-e", 'tell application "Claude" to quit'], timeout=8).returncode != 0:
+            return False
+        for _ in range(20):
+            state = _process(["/usr/bin/pgrep", "-x", "Claude"]).returncode
+            if state != 0:
+                return state == 1
+            time.sleep(0.5)
+    return False
+
+
 def launch_gate(report, preferences):
-    if not report:
-        return False, ["请先完成一键检测"]
-    try:
-        age = (datetime.now(timezone.utc) - datetime.fromisoformat(report["created_at"])).total_seconds()
-        if not 0 <= age < 90:
-            return False, ["检测已过期，请重新检测"]
-    except (ValueError, TypeError, KeyError):
-        return False, ["检测时间不可验证"]
-    by_id = {f["id"]: f for f in report["findings"]}
-    failed = [f["title"] for f in report["findings"] if f["status"] == "fail"]
-    required = ["http.egress", "udp.stun", "baseline.proxy", "baseline.tun", "baseline.ipv6"]
-    if preferences.get("require_guard", True):
-        required.append("baseline.guard")
-    if preferences.get("require_rules", True):
-        required.append("baseline.rules")
-    unverified = [by_id[k]["title"] if k in by_id else k for k in required if k not in by_id or by_id[k]["status"] != "pass"]
-    reasons = ["存在失败项：" + ", ".join(failed)] if failed else []
-    if unverified:
-        reasons.append("启动前尚未通过：" + ", ".join(unverified))
-    return not reasons, reasons
+    value = launch_readiness(report, preferences)
+    return value["ready"], value["reasons"]
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None):
         self.store = store
         self.home = Path(home) if home else Path.home()
         self.legacy = legacy or LegacyBridge(home=self.home)
         self.discoverer = discoverer or discover_proxies
         self.launcher = launcher or launch_claude
+        self.restart_stopper = restart_stopper or quit_claude_gracefully
         state = self.home / ".claude-switcher"
         data = (Path(os.environ.get("APPDATA", str(self.home / "AppData/Roaming"))) / "Claude"
                 if platform.system() == "Windows" and home is None else self.home / "AppData/Roaming/Claude"
@@ -131,7 +138,7 @@ class Operations:
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
         native_parameters = {"account-label": {"slot", "label"}, "account-switch": {"slot"},
-                             "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(),
+                             "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(), "app-restart": set(),
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
                              "history-report": {"id"}, "settings-restore": set(), "learning-complete": {"version"}}
         native_parameters.update({"solution-plan": {"report_id", "check_id", "enhance_cli", "proxy"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"},
@@ -181,7 +188,7 @@ class Operations:
             return {"state": "opened" if opened else "unsupported", "reason": ("原配置已备份到 ~/.envscope/config-backups；已提交编辑器打开请求，编辑保存后重新检测。" if target.startswith("config-") else "已提交打开请求；完成上方步骤后点击重新检测。") if opened else "请按上方路径在系统设置中打开对应项目。"}
         if action == "account-label":
             return {"state": "completed", "account": self.accounts.rename_label(params.get("slot"), params.get("label"))}
-        if action in ("account-switch", "account-export", "account-import", "app-launch"):
+        if action in ("account-switch", "account-export", "account-import", "app-launch", "app-restart"):
             if confirmed is not True:
                 return {"state": "confirmation_required", "reason": "此操作会影响应用进程或账号文件"}
             if action == "account-switch":
@@ -191,10 +198,17 @@ class Operations:
                         "note": "这是未加密的本地目录备份，不能直接公开分享。加密镜像请使用 macOS 快照功能。"}
             if action == "account-import":
                 return {"state": "completed", "result": self.accounts.import_snapshot_from(params.get("file"), params.get("slot"))}
-            if gate() is not True:
-                return {"state": "blocked", "reason": "启动前重新检测未通过，请返回检测页查看原因。"}
-            launched = self.launcher()
-            return {"state": "started" if launched else "failed", "reason": "已提交应用启动请求" if launched else "未找到可启动的 Claude 桌面应用"}
+            try:
+                result = self.accounts.launch_checked(gate, self.launcher, restart=action == "app-restart", stop_app=self.restart_stopper)
+            except RecoveryRequired:
+                return {"state": "blocked", "reason": "账号资料尚待恢复，未提交启动请求。所有副本已保留，请先在账号页核对。"}
+            if result["launched"]:
+                reason = "已提交 Claude 桌面启动请求。请在实际窗口登录并确认收到回复。"
+            elif result["stop_confirmed"] is False:
+                reason = "Claude 尚未确认退出，未重开也未强制终止。请保存工作后手动退出，再使用复检后打开。"
+            else:
+                reason = "未确认启动请求成功。请核对官方桌面版安装；配置和账号资料没有交换。"
+            return {"state": "started" if result["launched"] else "failed", "reason": reason, **result}
         if action == "proxy-diagnose":
             transport = CurlTransport(params.get("proxy"))
             if not transport.proxy:

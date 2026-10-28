@@ -50,20 +50,30 @@ def main():
         baseline = [Finding("baseline." + key, title, Status.UNKNOWN, "离线夹具：尚无有效证据", "test-fixture") for key, title in names]
         baseline[-1] = Finding("baseline.reachability", "服务连接", Status.PASS, "离线响应夹具", "test-fixture",
                                [{"endpoint":"https://api.anthropic.com/v1/models","http_status":401,"error":"","tls_verified":True}])
+        if operations.desktop_ready:
+            baseline[-1].evidence.append({"endpoint":"https://claude.ai/", "http_status":200, "tls_verified":True})
+            for finding in baseline:
+                if finding.id in ("baseline.proxy", "baseline.tun", "baseline.ipv6", "baseline.guard", "baseline.rules"):
+                    finding.status = Status.PASS
+            findings += [Finding(key, key, Status.PASS, "offline handoff fixture", "test-fixture") for key in ("http.egress", "udp.stun")]
         return (findings + baseline + extended_checks({}, {"dns": [], "routes": []},
-                {"desktop_config":config_shape(config_file),"cli":{**cli_facts(Path(directory.name), {}),"installation_count":1}}, {}))
+                {"installed":operations.desktop_ready,"account":operations.accounts.inspect_integrity(),
+                 "desktop_config":config_shape(config_file),"cli":{**cli_facts(Path(directory.name), {}),"installation_count":1}}, {}))
     directory = tempfile.TemporaryDirectory()
     store = StateStore(memory=True)
     class FixtureOperations(Operations):
         valid_proxy = False
+        desktop_ready = False
         def run(self, action, params, **kwargs):
             if action == "proxy-diagnose":
                 return {"state": "completed", "evidence": [{"endpoint":"https://api.anthropic.com/v1/models", "http_status":401 if self.valid_proxy else 403,"tls_verified":True,"error":""}], "boundary": "offline fixture"}
             return super().run(action, params, **kwargs)
     def never_run(*args, **kwargs):
         raise AssertionError("Smoke test must never execute the original backend")
+    handoff_events = []
     operations = FixtureOperations(store, directory.name, legacy=LegacyBridge(platform_name='Windows', home=directory.name, runner=never_run),
-                                   discoverer=lambda: [{"url": "http://127.0.0.1:7897", "sources": ["离线夹具"], "connection_verified": False}])
+                                   discoverer=lambda: [{"url": "http://127.0.0.1:7897", "sources": ["离线夹具"], "connection_verified": False}],
+                                   launcher=lambda: handoff_events.append('launch') or True, restart_stopper=lambda: handoff_events.append('quit') or True)
     operations.config_remedies.environ = {}
     config_file=operations.config_remedies.paths['desktop']
     cli_file=operations.config_remedies.paths['cli']
@@ -81,6 +91,8 @@ def main():
             browser = runtime.chromium.launch(headless=True)
             for label, width, height in (("desktop-small", 1024, 800), ("desktop", 1280, 1000), ("desktop-wide", 1440, 1000)):
                 operations.valid_proxy = False
+                operations.desktop_ready = False
+                handoff_events.clear()
                 store._learning = {"version": 0, "completed": False}
                 store.save_settings({"usage": "auto", "country": ""})
                 config_file.write_bytes(original)
@@ -174,6 +186,28 @@ def main():
                 page.locator('#start').click()
                 expect(page.locator('#share')).to_be_enabled()
                 expect(page.locator('#start')).to_be_enabled()
+                # Native handoff always rechecks, and uses fixture callbacks only.
+                expect(page.locator('#desktop-handoff')).to_be_visible()
+                page.once('dialog',lambda dialog:dialog.dismiss())
+                page.locator('#desktop-launch').click()
+                assert handoff_events == [], 'cancelled handoff cannot launch'
+                page.once('dialog',lambda dialog:dialog.accept())
+                page.locator('#desktop-launch').click()
+                expect(page.locator('#desktop-output')).to_contain_text('操作前复检未通过')
+                assert handoff_events == [], 'unverified requirements cannot launch'
+                operations.desktop_ready = True
+                page.once('dialog',lambda dialog:dialog.accept())
+                page.locator('#desktop-launch').click()
+                expect(page.locator('#desktop-output')).to_contain_text('已提交 Claude 桌面启动请求')
+                expect(page.locator('#desktop-readiness')).to_contain_text('本轮所列启动条件已核实')
+                assert handoff_events == ['launch']
+                page.once('dialog',lambda dialog:dialog.accept())
+                page.locator('#desktop-restart').click()
+                expect(page.locator('#desktop-output')).to_contain_text('已提交 Claude 桌面启动请求')
+                expect(page.locator('#start')).to_be_enabled()
+                assert handoff_events == ['launch','quit','launch']
+                page.screenshot(path=str(ARTIFACTS/f'{label}-handoff.png'),full_page=True)
+                operations.desktop_ready = False
                 page.locator('#try-success').click()
                 expect(page.locator('#try-feedback')).to_contain_text('不会改变技术检测结论')
                 page.locator('#try-help').click()
@@ -183,6 +217,8 @@ def main():
                 expect(page.locator('#symptom-advice')).to_contain_text('/mcp')
                 page.screenshot(path=str(ARTIFACTS/f'{label}-symptoms.png'))
                 page.locator('#symptom-help>summary').click()
+                page.locator('#start').click()
+                expect(page.locator('#share')).to_be_enabled()
                 expect(page.locator('#apply-solution')).to_have_count(0)
                 page.locator('#beginner-checks>summary').click()
                 page.locator('[data-claude-check="guard"]>summary').click()
@@ -273,6 +309,7 @@ def main():
                 page.locator('#start').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
                 expect(page.locator('#solution-plan')).to_contain_text('恢复 Node TLS 证书校验')
+                expect(page.locator('#desktop-handoff')).to_be_hidden()
                 assert cli_file.read_bytes()==code_original, 'automatic preparation must be read-only'
                 expect(page.locator('#verdict-note')).to_contain_text('0 项需要处理或核对的问题')
                 page.locator('#connection-options>summary').click()
@@ -323,7 +360,8 @@ def main():
                                   "plain_check_explanations":14,"symptom_help":"passed","manual_trial_separate_and_reset":"passed",
                                   "advanced_records_collapsed":"passed","open_source_roles":"passed","failed_audit_clears_old_guidance":"passed",
                                   "automatic_solution_preview":"passed","single_setup_confirmation":"passed","setup_without_diagnosed_fault":"passed",
-                                  "fresh_file_receipt":"passed","inline_upkeep_enable_stop":"passed","changed_options_invalidate_preview":"passed"}
+                                  "fresh_file_receipt":"passed","inline_upkeep_enable_stop":"passed","changed_options_invalidate_preview":"passed",
+                                  "desktop_launch_cancel_and_block":"passed","desktop_fresh_launch_and_restart":"passed","code_scope_hides_desktop_handoff":"passed"}
                 context.close()
             browser.close()
     finally:

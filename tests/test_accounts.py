@@ -118,6 +118,46 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(self.events, ["preflight", "launch"])
         self.assert_seed_preserved()
 
+    def test_desktop_launch_and_restart_keep_all_profiles_and_markers(self):
+        self.seed()
+        for restart in (False, True):
+            self.events.clear()
+            result = self.manager.launch_checked(self.preflight, self.manager.launch_app, restart, self.manager.stop_app)
+            self.assertTrue(result["launched"])
+            self.assertFalse(result["profiles_changed"])
+            self.assertEqual(self.events, ["preflight", "stop", "preflight", "launch"] if restart else ["preflight", "launch"])
+            self.assert_seed_preserved()
+
+    def test_restart_requires_confirmed_exit_and_a_second_fresh_measurement(self):
+        self.seed()
+        result = self.manager.launch_checked(self.preflight, self.manager.launch_app, True, lambda: False)
+        self.assertFalse(result["launched"])
+        self.assertFalse(result["stop_confirmed"])
+        self.assertNotIn("launch", self.events)
+        answers = iter([True, False])
+        with self.assertRaises(PreflightError):
+            self.manager.launch_checked(lambda: next(answers), self.manager.launch_app, True, self.manager.stop_app)
+        self.assertNotIn("launch", self.events)
+        self.assert_seed_preserved()
+
+    def test_launch_refuses_pending_missing_live_and_concurrent_account_state(self):
+        self.seed()
+        self.profile(self.data.with_name("Claude.previous"), "unique recovery")
+        with self.assertRaises(RecoveryRequired):
+            self.manager.launch_checked(self.preflight, self.manager.launch_app)
+        self.assertEqual(self.text(self.data.with_name("Claude.previous")), "unique recovery")
+        self.assertNotIn("launch", self.events)
+        # A separate fresh profile fixture covers a missing tracked live tree.
+        other = AccountManager(self.root / "other-state", self.root / "missing")
+        other.state_dir.mkdir()
+        (other.state_dir / "current.txt").write_text("A")
+        self.assertFalse(other.inspect_integrity()["valid"])
+        with self.assertRaises(RecoveryRequired):
+            other.launch_checked(self.preflight, self.manager.launch_app)
+        with self.manager._lock(), self.assertRaises(AccountError):
+            AccountManager(self.state, self.data).launch_checked(self.preflight, self.manager.launch_app)
+        self.assertNotIn("launch", self.events)
+
     def test_false_unknown_and_exception_preflight_do_not_write_or_stop(self):
         for value in (False, None, {}, 1):
             with self.assertRaises(PreflightError):

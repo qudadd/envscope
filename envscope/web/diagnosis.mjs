@@ -34,10 +34,10 @@ export function initDiagnosis({sessionPromise,retest}) {
       const value=await response.json();if(!response.ok)throw new Error(errorText[value.error]||value.error||'本次操作没有完成。');return value;
     }finally{clearTimeout(timer);}
   }
-  async function action(fn){
+  async function action(fn,errorOutput=output){
     if(busy||$('start').disabled)return;
     setBusy(true);
-    try{await fn();}catch(error){output.textContent=error.name==='AbortError'?'等待超时。操作可能仍在进行；查看实际状态后再复检。':error.message;}
+    try{await fn();}catch(error){errorOutput.textContent=error.name==='AbortError'?'等待超时。操作可能仍在进行；查看实际状态后再复检。':error.message;}
     finally{setBusy(false);}
   }
   async function refreshProxies(){
@@ -231,5 +231,5 @@ export function initDiagnosis({sessionPromise,retest}) {
   }
   $('prepare-solution').addEventListener('click',()=>action(()=>prepare(null,true)));
   $('quick-proxy').addEventListener('click',()=>action(proxyTest));
-  return {render,run,prepareWorkflow:()=>action(()=>prepare(null,true)),isBusy:()=>busy||document.documentElement.dataset.operationBusy==='true'};
+  return {render,run,prepareWorkflow:()=>action(()=>prepare(null,true)),operate:(fn,target)=>action(fn,target),isBusy:()=>busy||document.documentElement.dataset.operationBusy==='true'};
 }

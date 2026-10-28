@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.6.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.7.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -51,6 +51,7 @@
       <div id="problems"></div><div id="normal-observations" class="normal-observations"></div>
       <section id="try-claude" class="try-claude" hidden aria-labelledby="try-title">
         <h2 id="try-title">接下来，到自己的 Claude 试一条消息</h2><p class="note">本工具只测试连接，不会替你登录或发送消息。收到实际回复后，才能确认这次使用成功。</p>
+        <div id="desktop-handoff" hidden><p id="desktop-readiness" class="note"></p><div class="actions"><button id="desktop-launch">复检后打开桌面版</button><button id="desktop-restart" class="link">保存后复检并重开</button></div><details id="desktop-conditions"><summary>查看启动条件与处理办法</summary><ul id="desktop-condition-list"></ul></details><p id="desktop-output" class="note" role="status"></p></div>
         <div id="try-instructions"></div><div class="actions"><button id="try-success">我已收到 Claude 的回复</button><button id="try-help" class="link">还是不能用</button><button id="try-upkeep" class="link">设置日常保持</button></div><p id="try-feedback" class="note" aria-live="polite"></p>
       </section>
       <section id="flow-upkeep" class="flow-upkeep" hidden aria-labelledby="flow-upkeep-title"><h2 id="flow-upkeep-title">保持本次设置</h2><p class="note">确认 Claude 能实际回复后，可在这里启用定时复检。关闭界面后继续运行，随时可停用。</p><p id="flow-upkeep-status" class="note" aria-live="polite">尚未启用。</p>

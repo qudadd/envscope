@@ -68,10 +68,13 @@
 
 ## 验证与来源
 
-所有行为测试使用临时目录、合成观测、假系统运行器和 loopback；没有为开发机
-安装任务、修复真实 Claude 配置、改变网络或切换账号。Windows XML 定义对照
-微软官方 XSD 检验了三种间隔。实际 Windows/macOS 的权限、登录、休眠恢复及
-服务生命周期仍需隔离设备验收，不能用结构校验和假运行器替代。
+回归使用临时目录、合成观测、假运行器和 loopback；没有为开发机安装任务、修复
+真实 Claude 配置、改变网络或切换账号。Windows XML 对照微软官方 XSD 检验三种间隔。
+0.7 的冻结包 CI 另用隔离 Windows / macOS 系统，注册真实用户任务，观察两次自动执行
+维护 worker 的无副作用 `--check-runtime` 入口，再移除并独立查询确认。
+该步骤不运行网络巡检或恢复，不读取真实维护状态，仅验证实际调度生命周期。
+脚本需 CI 标记及单独 opt-in，普通本机运行拒绝；证据随 Actions 附件保存。
+当前用户权限、重新登录、休眠恢复和真实网络巡检仍需分别验证。
 
 - [上游 14 项实现](https://github.com/YOURSJEYO/claude-switcher/blob/870c4ca0754234965878ef58144d7a755d965037/core/claude-switch.sh#L770)
 - [上游配置看门狗](https://github.com/YOURSJEYO/claude-switcher/blob/870c4ca0754234965878ef58144d7a755d965037/daemons/tz-watchdog.sh)

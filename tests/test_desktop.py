@@ -155,6 +155,27 @@ class DesktopAPITests(unittest.TestCase):
         self.assertFalse(result["report"]["contains_sensitive"])
         self.assertEqual(len(self.store.history()), 1)
 
+    def test_desktop_handoff_rechecks_native_state_and_returns_actual_blockers(self):
+        from test_readiness import ready_findings
+        from unittest.mock import Mock
+        launch, stop = Mock(return_value=True), Mock(return_value=True)
+        self.operations.launcher, self.operations.restart_stopper = launch, stop
+        self.server.auditor = lambda *a, **k: ready_findings()
+        initial = json.loads(self.post({"snapshot": snapshot()}).read())
+        self.assertTrue(initial["launch"]["ready"])
+        response = self.post({"action": "app-launch", "params": {}, "confirmed": True}, path="/api/action")
+        result = json.loads(response.read())
+        self.assertEqual(result["state"], "started")
+        self.assertNotEqual(result["latest_report"]["report_id"], initial["report_id"])
+        launch.assert_called_once_with()
+        self.server.auditor = fixture_audit
+        result = json.loads(self.post({"action": "app-restart", "params": {}, "confirmed": True}, path="/api/action").read())
+        self.assertEqual(result["state"], "blocked")
+        self.assertTrue(result["reasons"])
+        self.assertFalse(result["latest_report"]["launch"]["ready"])
+        self.assertEqual(launch.call_count, 1)
+        stop.assert_not_called()
+
     def test_teaching_progress_cannot_change_policy_or_authorize_operations(self):
         previous = self.store.settings()
         value = json.loads(self.post({"action": "learning-complete", "params": {"version": 1}, "confirmed": False}, path="/api/action").read())

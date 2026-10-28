@@ -2,7 +2,14 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS Claude environment toolkit. Alpha v0.6.0.
+A minimal Windows/macOS Claude environment toolkit. Alpha v0.7.0.
+
+The main workflow now includes reviewed desktop launch and graceful restart.
+Each launch repeats native checks, including installation, desktop JSON, account
+recovery state and the separate Claude web endpoint. Restart requests a normal
+exit and rechecks again before opening; it never escalates to forced termination
+or exchanges profiles. Readiness is not authentication or a privacy guarantee.
+See the [product acceptance scope](docs/PRODUCT_ACCEPTANCE.md).
 
 One click now checks the environment and automatically prepares a combined setup
 and repair preview. One confirmation backs up, applies and rechecks. Optional Code
@@ -28,8 +35,10 @@ remedy and upkeep plan. Reviewed user-scoped Windows tasks / macOS LaunchAgents
 can run native checks every 5, 15 or 60 minutes. Optional Code config recovery
 preserves unrelated current settings, makes private backups and pauses repeated
 rewrites. Undo verifies hashes across restarts. Browser ICE and account login are
-never inferred from scheduled native checks. Real OS task lifecycle, permissions
-and sleep/resume acceptance remain pending; tests use injected schedulers.
+never inferred from scheduled native checks. Frozen package CI now adds real OS
+registration, two automatic no-side-effect worker executions and removal on
+Windows and both Mac architectures. Evidence is attached to each run; this does
+not certify user permissions, login transitions, sleep/resume or real networking.
 See [the source-mapped checklist and upkeep implementation](docs/CLAUDE_CHECKS.md).
 
 The page explains specific problems, observations, causes and ordered next steps
@@ -69,7 +78,7 @@ pass on Windows, Linux and macOS; browser interaction checks also pass.
 macOS apps are built for Apple Silicon and Intel. Real installation, account
 sessions, maintenance permissions and Safari validation remain pending.
 
-The five minimal pages cover diagnostics, accounts, tools, history and settings.
+The six minimal pages cover diagnostics, upkeep, accounts, tools, history and settings.
 One-click auditing includes 14 baseline categories and 18 additional checks, with
 specific explanations, direct remedies and a before/after repair review.
 Added checks cover system DNS and selected routes, hosts overrides, system/env

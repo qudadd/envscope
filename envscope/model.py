@@ -72,4 +72,6 @@ def make_report(findings, policy, mode="audit", preferences=None):
     report["claude_checks"] = checklist(report, preferences)
     from .guide import usage_guide
     report["guide"] = usage_guide(report)
+    from .readiness import launch_readiness
+    report["launch"] = launch_readiness(report, preferences)
     return report

@@ -20,7 +20,7 @@ function command(text){
   row.append(code,copy,status);return row;
 }
 
-export function initGuide({sessionPromise,run,retest,isBusy}){
+export function initGuide({sessionPromise,run,retest,isBusy,operate,onReport}){
   let step=0,usage='auto',initialized=false,saving=false,previousFocus=null;
   function close(){
     $('learning-panel').hidden=true;$('audit-content').hidden=false;
@@ -87,6 +87,22 @@ export function initGuide({sessionPromise,run,retest,isBusy}){
   });
   $('try-help').addEventListener('click',()=>{$('symptom-help').open=true;$('symptom').focus();$('symptom-help').scrollIntoView({block:'start'});});
   $('try-upkeep').addEventListener('click',()=>document.querySelector('.tab[data-page="upkeep"]')?.click());
+  async function desktopAction(restart){
+    if(isBusy()||$('start').disabled)return;
+    const effects=restart?'请先保存 Claude 中的工作。将先重新检测启动条件，通过后请求 Claude 正常退出，再次复检并重开；未确认退出时不会强制终止。':'将重新检测本机启动条件，通过后提交 Claude 桌面打开请求。';
+    if(!window.confirm(effects+'\n账号资料不会交换，登录与实际回复仍需你在 Claude 中确认。\n\n继续执行？'))return;
+    await operate(async()=>{
+      $('desktop-launch').disabled=true;$('desktop-restart').disabled=true;
+      $('desktop-output').textContent='正在重新检测启动条件，请稍候。';
+      try{
+        const value=await run(restart?'app-restart':'app-launch',{},true);
+        if(value.latest_report)onReport(value.latest_report);
+        $('desktop-output').textContent=[value.reason,...(value.reasons||[])].filter(Boolean).join(' ');
+      }finally{$('desktop-launch').disabled=false;$('desktop-restart').disabled=false;}
+    },$('desktop-output'));
+  }
+  $('desktop-launch').addEventListener('click',()=>desktopAction(false));
+  $('desktop-restart').addEventListener('click',()=>desktopAction(true));
   function render(value){
     const guide=value.guide;$('try-claude').hidden=!guide;
     if(!guide){const row=el('li');row.append(el('span','—','task-number'),el('p','这份旧报告没有使用步骤，请重新检测。'));$('usage-tasks').replaceChildren(row);return;}
@@ -95,12 +111,16 @@ export function initGuide({sessionPromise,run,retest,isBusy}){
     guide.tasks.forEach((task,i)=>{const row=el('li');row.dataset.task=task.id;const text=el('div');text.append(el('h3',task.title),el('p',task.text));row.append(el('span',String(i+1),'task-number'),text,el('span',states[task.state]||'还不能确认','task-state'));tasks.append(row);});
     const area=$('try-instructions');area.replaceChildren();
     const usage=value.usage;
-    if(usage!=='cli')area.append(link('在浏览器打开 Claude','https://claude.ai/'),el('p','使用桌面版时，请回到已经安装的 Claude 窗口确认。这里的网页入口不会交换账号或关闭应用。','note'));
+    $('desktop-handoff').hidden=usage==='cli';
+    const readiness=value.launch;
+    $('desktop-readiness').textContent=readiness?.ready?'本轮所列启动条件已核实。打开前仍会复检，账号登录和实际回复需要你确认。':'下方列出的启动条件还需处理或确认。操作前会复检；未通过时保留资料并列出原因。';
+    $('desktop-condition-list').replaceChildren(...(readiness?.checks||[]).map(item=>el('li',item.title+'：'+item.reason)));
+    if(usage!=='cli')area.append(link('在浏览器打开 Claude','https://claude.ai/'));
     if(['auto','cli','both'].includes(usage)){area.append(el('p','Code 用户：打开平时使用的终端，进入自己的项目，再启动 Claude Code。需要检查实际会话时可运行：','note'),command('/doctor'));}
     $('try-feedback').textContent='尚未由你确认实际回复。';$('try-success').textContent='我已收到 Claude 的回复';$('try-success').disabled=false;
   }
   document.addEventListener('envscope-audit-start',()=>{
-    $('try-claude').hidden=true;$('try-feedback').textContent='';$('beginner-checks').hidden=true;
+    $('try-claude').hidden=true;$('try-feedback').textContent='';$('desktop-output').textContent='';$('beginner-checks').hidden=true;
     const row=el('li'),text=el('div');text.append(el('h3','正在检查连接和设置'),el('p','等待本轮结果。上一次检测的状态不会当作本次证据。'));row.append(el('span','…','task-number'),text);$('usage-tasks').replaceChildren(row);
   });
   document.addEventListener('envscope-audit-end',event=>{

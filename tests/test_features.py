@@ -23,8 +23,13 @@ def report(ip="8.8.8.8", status=Status.PASS):
 
 
 def gate_report():
-    return make_report([Finding(key, key, Status.PASS, "fixture", "test") for key in (
-        "http.egress", "udp.stun", "baseline.proxy", "baseline.tun", "baseline.ipv6", "baseline.guard", "baseline.rules")], Policy())
+    findings = [Finding(key, key, Status.PASS, "fixture", "test") for key in (
+        "http.egress", "udp.stun", "baseline.proxy", "baseline.tun", "baseline.ipv6", "baseline.guard", "baseline.rules")]
+    findings += [Finding("extra.desktop", "desktop", Status.PASS, "fixture", "test", [{"found": True}]),
+                 Finding("extra.config", "config", Status.SKIPPED, "fixture", "test", [{"exists": False}]),
+                 Finding("baseline.reachability", "service", Status.PASS, "fixture", "test", [{"endpoint":"https://claude.ai/", "http_status":200, "tls_verified":True}]),
+                 Finding("extra.account", "accounts", Status.PASS, "fixture", "test", [{"valid": True, "pending": [], "tracked": False}])]
+    return make_report(findings, Policy(), "one-click-desktop")
 
 
 class HistoryTests(unittest.TestCase):

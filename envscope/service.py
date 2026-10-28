@@ -138,11 +138,11 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     self.server.solution_before = {"problems": [{"id": p["id"], "title": p["title"]} for p in self.server.last_raw_report["diagnosis"]["problems"]]}
                 if request["action"] in ("settings-save", "settings-restore", "fix", "install", "update-apply", "set-region", "set-client") or request["action"] in ("solution-apply", "solution-undo") and result.get("state") not in ("confirmation_required", "retest_required"):
                     self.server.last_raw_report = None
-                if request["action"] in ("account-switch", "app-launch", "open-safe") and self.server.last_raw_report:
+                if request["action"] in ("account-switch", "app-launch", "app-restart", "open-safe") and self.server.last_raw_report:
                     result["latest_report"] = redact(self.server.last_raw_report)
                 self.json_response(200, result)
         except PreflightError:
-            value = {"state": "blocked", "reason": "切换前检测未通过，账号文件没有交换。"}
+            value = {"state": "blocked", "reason": "操作前复检未通过，未提交启动请求，账号文件没有交换。"}
             if self.server.last_raw_report:
                 value["latest_report"] = redact(self.server.last_raw_report)
                 value["reasons"] = launch_gate(self.server.last_raw_report, self.server.store.settings())[1]
