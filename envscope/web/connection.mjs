@@ -19,7 +19,7 @@ export function initConnection(sessionPromise){
       if(current.mode!=='desktop'||typeof current.token!=='string')throw new Error('offline');
       if(!session||current.token!==session.token){location.reload();return;}
       document.documentElement.dataset.serviceConnected='true';$('connection-banner').hidden=true;
-      $('connection-status').textContent='本地服务已连接'+(current.version?' · '+current.version:'')+' · 页面打开时保持连接';
+      $('connection-status').textContent='本地服务已连接'+(current.version?' · '+current.version:'')+(current.shell==='native'?' · 独立软件':' · 页面打开时保持连接');
     }catch{disconnected();}finally{checking=false;clearTimeout(timer);}
   }
   void sessionPromise.then(session=>{active=!!session||location.hostname==='127.0.0.1';if(active)void check();else $('connection-status').textContent='浏览器独立模式';});

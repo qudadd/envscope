@@ -186,7 +186,7 @@ def extra_network(transport):
         except (ValueError, TypeError):
             return {}
     def target(url):
-        response = transport.get(url, headers_only=True)
+        response = transport.get(url, headers_only=url == "https://claude.ai/")
         return response_evidence(url, response)
     with ThreadPoolExecutor(max_workers=3) as pool:
         info = pool.submit(metadata)

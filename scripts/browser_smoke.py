@@ -127,7 +127,7 @@ def main():
                 page.get_by_role('button',name='开始第一次检测',exact=True).click()
                 expect(page.locator("#share")).to_be_enabled()
                 expect(page.locator('#apply-solution')).to_be_visible()
-                expect(page.locator("#verdict")).to_contain_text("检测完成，请核对处理方案")
+                expect(page.locator("#verdict")).to_contain_text("环境有不合格项")
                 assert store.learning()['completed'] is True
                 assert not page.locator('#technical-details').evaluate('(node)=>node.open')
                 assert not page.locator('#beginner-checks').evaluate('(node)=>node.open')
@@ -165,11 +165,11 @@ def main():
                 page.screenshot(path=str(ARTIFACTS/f'{label}-plan.png'))
                 page.locator('#apply-solution').click()
                 expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
-                expect(page.locator('#verdict')).to_have_text('连接有回应，下一步试用 Claude')
+                expect(page.locator('#verdict')).to_contain_text('环境尚未验收')
                 assert config_shape(config_file)['valid']
                 page.screenshot(path=str(ARTIFACTS/f'{label}-resolved.png'))
                 page.get_by_role('button',name='撤销 Claude 桌面配置',exact=True).click()
-                expect(page.locator('#verdict')).to_contain_text('先处理这件事')
+                expect(page.locator('#verdict')).to_contain_text('环境有不合格项')
                 assert config_file.read_bytes()==original
                 page.locator('#start').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
@@ -311,7 +311,7 @@ def main():
                 expect(page.locator('#solution-plan')).to_contain_text('恢复 Node TLS 证书校验')
                 expect(page.locator('#desktop-handoff')).to_be_hidden()
                 assert cli_file.read_bytes()==code_original, 'automatic preparation must be read-only'
-                expect(page.locator('#verdict-note')).to_contain_text('0 项需要处理或核对的问题')
+                expect(page.locator('#verdict-note')).to_contain_text('发现问题 0 项')
                 page.locator('#connection-options>summary').click()
                 page.locator('#enhance-cli').uncheck()
                 expect(page.locator('#apply-solution')).to_have_count(0)

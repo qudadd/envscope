@@ -25,7 +25,7 @@ export function initDiagnosis({sessionPromise,retest}) {
   const output=$('solution-output');
   function button(text,fn){const b=el('button',text);b.type='button';b.addEventListener('click',fn);return b;}
   function link(text,url){const a=el('a',text,'link');a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
-  function setBusy(value){busy=value;for(const id of ['start','prepare-solution','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';}
+  function setBusy(value){busy=value;for(const id of ['start','prepare-solution','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;for(const node of document.querySelectorAll('#desktop-preferences button'))node.disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';}
   async function run(action,params={},confirmed=false){
     const session=await sessionPromise;if(!session)throw new Error('请打开本地桌面程序，再使用处理功能。');
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),240000);
@@ -123,7 +123,7 @@ export function initDiagnosis({sessionPromise,retest}) {
       const apply=button(workflow?'确认配置并修复':'确认执行此方案',()=>action(()=>applyPlan(value,key)));apply.id='apply-solution';
       $('solution-plan').append(h,list,el('p','确认后才写入配置或调用维护核心，完成后自动复检。用户配置可被项目或组织设置覆盖，实际会话仍需重开并确认。','note'),apply);
       setFlowStage('review','方案已生成。核对下面的具体改动，确认一次后执行并复检。');
-      if(workflow){$('verdict').textContent='检测完成，请核对处理方案';$('verdict-note').textContent=`本次有 ${report.diagnosis.problems.length} 项需要处理或核对的问题，方案包含 ${value.steps.length} 个执行步骤。确认后处理，完成后重新检查。`;}
+      if(workflow&&!report.assessment){$('verdict').textContent='检测完成，请核对处理方案';$('verdict-note').textContent=`本次有 ${report.diagnosis.problems.length} 项需要处理或核对的问题，方案包含 ${value.steps.length} 个执行步骤。确认后处理，完成后重新检查。`;}
       if(!workflow)$('solution-plan').scrollIntoView({block:'center',behavior:'auto'});
     }else{
       setFlowStage('review',value.state==='retest_required'?'检测已过期，请重新一键检测。':'检测和方案核对已完成；本次没有执行配置写入。');

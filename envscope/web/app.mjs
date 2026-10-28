@@ -3,6 +3,7 @@ import {initDesktopControls} from "./controls.mjs";
 import {initDiagnosis, setFlowStage} from "./diagnosis.mjs";
 import {initGuide} from "./guide.mjs";
 import {initInspection} from "./inspection.mjs";
+import {initDesktopApp} from "./desktop.mjs";
 import {initConnection, disconnected} from "./connection.mjs";
 
 const byId=id=>document.getElementById(id);
@@ -85,6 +86,7 @@ function renderDesktop(report,source='current') {
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
 const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
+initDesktopApp({run:diagnosisUI.run,operate:diagnosisUI.operate});
 const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy,operate:diagnosisUI.operate,
   onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
 

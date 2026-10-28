@@ -80,7 +80,7 @@ def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), b
         v4, v6 = v4_job.result() if v4_job else [], v6_job.result() if v6_job else []
         udp = (udp4_job.result() if udp4_job else []) + (udp6_job.result() if udp6_job else [])
     findings = [
-        Finding("system.inventory", "系统只读信息采集", Status.UNKNOWN if "network_error" in inventory else Status.PASS,
+        Finding("system.inventory", "系统只读信息采集", Status.UNKNOWN if "network_error" in inventory or inventory.get("network", {}).get("errors") else Status.PASS,
                 "系统信息已采集；虚拟网卡和进程存在均不是接管证明", "native-inventory", [inventory]),
         Finding("network.route", "目标流量接管验证", Status.UNKNOWN, "当前只记录路由配置，尚未完成目标进程流量关联",
                 "native-inventory", limitations=["默认路由、TUN 名称或 Fake-IP 不能单独证明目标流量没有旁路。"]),

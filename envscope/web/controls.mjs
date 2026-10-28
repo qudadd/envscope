@@ -27,7 +27,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const response=await fetch("/api/catalog",{signal:controller.signal,headers:{"X-EnvScope-Token":session.token},cache:"no-store"});
     if(!response.ok)throw new Error("无法读取本机功能列表，请刷新状态或重新打开程序。");
     catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderBackups();$('catalog-error').hidden=true;
-    document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{learning:catalog.learning,settings:catalog.settings,maintenance:catalog.maintenance,proxies:catalog.proxies,checks:catalog.checks}}));
+    document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{desktop:catalog.desktop,learning:catalog.learning,settings:catalog.settings,maintenance:catalog.maintenance,proxies:catalog.proxies,checks:catalog.checks}}));
     const options=[el("option","手动填写")];options[0].value="";
     for(const proxy of catalog.proxies||[]){const option=el("option",proxy.url+" · "+proxy.sources.join(" / "));option.value=proxy.url;options.push(option);}
     $("proxy-found").replaceChildren(...options);
@@ -136,7 +136,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     $('upkeep-status').textContent=[value.completed_at?'最近完成：'+new Date(value.completed_at).toLocaleString():'还没有完成记录。',value.enabled?`每 ${value.interval} 分钟复检。`:'',value.has_report?`${value.problem_count} 个待处理问题。`:'',value.auto_restore?(value.restore_note||'配置保持已选择，等待首次执行。'):'配置保持未开启。',value.reason].filter(Boolean).join(' ');
     const e=value.egress_48h||{};$('upkeep-egress').textContent=`48 小时有效出口观测 ${e.observations||0} 次，集合变化 ${e.changes||0} 次；变化本身不判定为账号风险。`;
     $('upkeep-run').disabled=!value.enabled;$('upkeep-stop').disabled=!value.enabled&&!value.scheduler?.present;$('upkeep-report').disabled=!value.has_report;
-    $('quit').textContent=value.enabled?'结束界面，维护继续':'结束本地服务';
+    $('quit').textContent=catalog.desktop?.mode==='native'?(value.enabled?'退出软件，定时维护继续':'退出 EnvScope'):(value.enabled?'结束界面，维护继续':'结束本地服务');
     const [t,body]=table(['时间','发生了什么','操作']);
     for(const event of [...value.events||[]].reverse()){
       const row=el('tr');cell(row,new Date(event.at).toLocaleString());cell(row,event.text);const controls=cell(row,'');

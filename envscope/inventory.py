@@ -90,18 +90,26 @@ def collect():
             script = r"""
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$failures=@{}
+function Read-Part($name, [scriptblock]$read) {
+ try { & $read } catch {
+   $denied=($_.Exception -is [System.UnauthorizedAccessException]) -or ([string]$_.CategoryInfo.Category -eq 'PermissionDenied')
+   $failures[$name]=@{error=$(if($denied){'permission_denied'}else{'unavailable'})}
+ }
+}
 $v=@{
- adapters=@(Get-NetAdapter | Select-Object Name,InterfaceDescription,Status,ifIndex)
- addresses=@(Get-NetIPAddress | Select-Object InterfaceIndex,AddressFamily,IPAddress,PrefixLength)
- dns=@(Get-DnsClientServerAddress | Select-Object InterfaceIndex,AddressFamily,ServerAddresses)
- default_routes=@(Get-NetRoute | Where-Object {$_.DestinationPrefix -in @('0.0.0.0/0','::/0')} | Select-Object InterfaceIndex,DestinationPrefix,NextHop,RouteMetric)
- timezone_id=(Get-TimeZone).Id
- ui_language=(Get-UICulture).Name
- region_locale=(Get-Culture).Name
+ adapters=@(Read-Part 'adapters' {Get-NetAdapter | Select-Object Name,InterfaceDescription,Status,ifIndex})
+ addresses=@(Read-Part 'addresses' {Get-NetIPAddress | Select-Object InterfaceIndex,AddressFamily,IPAddress,PrefixLength})
+ dns=@(Read-Part 'dns' {Get-DnsClientServerAddress | Select-Object InterfaceIndex,AddressFamily,ServerAddresses})
+ default_routes=@(Read-Part 'routes' {Get-NetRoute | Where-Object {$_.DestinationPrefix -in @('0.0.0.0/0','::/0')} | Select-Object InterfaceIndex,DestinationPrefix,NextHop,RouteMetric})
+ timezone_id=(Read-Part 'timezone' {(Get-TimeZone).Id})
+ ui_language=(Read-Part 'language' {(Get-UICulture).Name})
+ region_locale=(Read-Part 'locale' {(Get-Culture).Name})
  ipv6_bindings=@(Get-NetAdapterBinding -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue | Select-Object Name,Enabled)
  known_clients=@(Get-Process -Name 'mihomo','verge-mihomo','sing-box','wireguard','openvpn','tailscaled' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessName -Unique)
  desktop_packages=@(Get-AppxPackage -Name '*Claude*' -ErrorAction SilentlyContinue | Select-Object Name,Version)
 }
+$v.errors=$failures
 ConvertTo-Json -InputObject $v -Depth 6 -Compress
 """
             encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")

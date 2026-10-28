@@ -5,6 +5,17 @@ framework, VPN application, account database, or captured research pages at runt
 Desktop distributions bundle Python through PyInstaller; applicable runtime and
 bundled library notices accompany the generated artifacts.
 
+The independent desktop shell uses pywebview (BSD-3-Clause,
+https://github.com/r0x0r/pywebview), pystray (LGPL-3.0,
+https://github.com/moses-palmer/pystray), and Pillow (HPND,
+https://github.com/python-pillow/Pillow). They are unmodified, optional desktop
+dependencies. Their licenses are copied from the installed distributions into
+desktop packages. pystray's corresponding source is the upstream 0.19.5 release;
+users may replace it and rebuild with `python -m scripts.build_desktop`.
+The shell uses the OS WebView (WebView2 on Windows, WKWebView on macOS); it does
+not bundle a Chromium browser. Python.NET/clr_loader and PyObjC supply platform
+bindings, with their installed license files retained in the package.
+
 The `licenses/` directory supplies the Python/PSF, OpenSSL/Apache-2.0 and
 libffi/MIT notices for bundled runtime components. The builder also retains the
 installed Python license and PyInstaller's complete COPYING notice, including

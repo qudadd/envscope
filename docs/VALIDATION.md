@@ -1,5 +1,7 @@
 # 验证记录
 
+0.8 的独立软件生命周期、更新与权限流程见 [桌面验收矩阵](DESKTOP_ACCEPTANCE.md)。
+
 日期：2026-10-28。版本：0.7.1 Alpha。执行环境：Windows x64，Python 3.13.5、Node.js、PyInstaller 6.22.3。
 
 ## 0.7.1 使用测试

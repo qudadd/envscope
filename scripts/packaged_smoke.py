@@ -40,6 +40,15 @@ def main():
         result = subprocess.run([str(executable), "--maintenance-worker", "--check-runtime"], capture_output=True,
                                 timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         assert result.returncode == 0, "frozen maintenance worker imports failed"
+        desktop_output = Path(directory) / "native.private.json"
+        result = subprocess.run([str(executable), "--desktop-smoke", str(desktop_output)], capture_output=True,
+                                timeout=50, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        assert result.returncode == 0 and desktop_output.exists(), "frozen native window/tray smoke failed"
+        native = json.loads(desktop_output.read_text())
+        assert not native['errors'] and all(native[key] for key in ('native_window', 'tray', 'close_hides', 'reopened', 'quit')), native
+        evidence = Path('artifacts/native-smoke.json')
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text(json.dumps(native, indent=2), encoding='utf-8')
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 

@@ -16,7 +16,7 @@ from .report import redact
 from .state import StateStore
 from .operations import Operations, launch_gate
 from .accounts import AccountError, PreflightError
-from .transport import CurlTransport
+from .transport import CurlTransport, desktop_transport
 from .diagnosis import compare_diagnoses
 from . import __version__
 
@@ -56,7 +56,8 @@ class DesktopHandler(SimpleHTTPRequestHandler):
             return
         self.server.last_activity = time.monotonic()
         if self.path == "/api/session":
-            self.json_response(200, {"token": self.server.session_token, "mode": "desktop", "version": __version__})
+            self.json_response(200, {"token": self.server.session_token, "mode": "desktop", "version": __version__,
+                                     "shell": "native" if getattr(self.server.operations, "desktop_runtime", None) else "browser"})
         elif (self.path == "/api/catalog" and self.headers.get("X-EnvScope-Token", "").isascii()
               and secrets.compare_digest(self.headers.get("X-EnvScope-Token", ""), self.server.session_token)):
             try:
@@ -85,7 +86,11 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                 self.json_response(409, {"error": "audit_running"})
                 return
             self.json_response(200, {"stopped": True})
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            self.server.audit_lock.release()
+            if getattr(self.server, "quit_callback", None):
+                self.server.quit_callback()
+            else:
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
         if self.path not in ("/api/audit", "/api/action"):
             self.json_response(404, {"error": "unknown_endpoint"})
@@ -114,6 +119,10 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                 raise ValueError("invalid fixed action")
         except (ValueError, OSError):
             self.json_response(400, {"error": "invalid_observations"})
+            return
+        # Bringing an existing window forward must also work during a repair.
+        if self.path == "/api/action" and request["action"] == "desktop-show" and not request["params"]:
+            self.json_response(200, self.server.operations.run("desktop-show", {}, confirmed=False))
             return
         if not self.server.audit_lock.acquire(blocking=False):
             self.json_response(409, {"error": "audit_running"})
@@ -159,7 +168,7 @@ class DesktopHandler(SimpleHTTPRequestHandler):
 
 def collect_report(server, snapshot):
     policy = server.store.policy()
-    findings = server.auditor(policy, CurlTransport(), online=True, stun=True, ipv6=True, browser=snapshot,
+    findings = server.auditor(policy, desktop_transport(), online=True, stun=True, ipv6=True, browser=snapshot,
                               baseline_config=server.store.settings())
     changed = server.store.address_change([f.to_dict() for f in findings])
     for finding in findings:

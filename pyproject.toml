@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "envscope"
-version = "0.7.1"
+version = "0.8.0"
 description = "Minimal desktop environment checks, guarded accounts and practical maintenance tools"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,9 @@ classifiers = [
   "Operating System :: MacOS :: MacOS X",
   "Topic :: System :: Networking :: Monitoring",
 ]
+
+[project.optional-dependencies]
+desktop = ["pywebview==6.2.1", "pystray==0.19.5", "Pillow==12.3.0"]
 
 [project.scripts]
 envscope = "envscope.cli:main"

@@ -74,4 +74,6 @@ def make_report(findings, policy, mode="audit", preferences=None):
     report["guide"] = usage_guide(report)
     from .readiness import launch_readiness
     report["launch"] = launch_readiness(report, preferences)
+    from .assessment import assessment
+    report["assessment"] = assessment(report, preferences)
     return report

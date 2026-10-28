@@ -136,7 +136,8 @@ class Operations:
             if entry["id"] in ("cli-info", "fingerprint"):
                 entry.update(supported=True, available=True, requires_confirmation=False, reason="native_read_only")
         legacy["actions"].extend(detailed)
-        return {"legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
+        desktop = getattr(self, "desktop_runtime", None)
+        return {"desktop": desktop.status() if desktop else {"mode": "browser"}, "legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
                 "settings": self.store.settings(), "history": self.store.history(), "maintenance": self.maintenance.status(),
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
@@ -144,6 +145,12 @@ class Operations:
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action in ("desktop-status", "desktop-save", "desktop-show", "desktop-hide", "app-update-check", "app-update-install", "app-update-rollback", "app-update-restart"):
+            desktop = getattr(self, "desktop_runtime", None)
+            return desktop.run(action, params, confirmed) if desktop else {"state": "unavailable", "reason": "此功能需要打开 EnvScope 独立软件。当前是浏览器兼容界面。"}
+        if action == "permission-help":
+            from .permissions import permission_help
+            return permission_help(report, params, self.home, self.accounts.data_dir, confirmed)
         native_parameters = {"account-label": {"slot", "label"}, "account-switch": {"slot"},
                              "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(), "app-restart": set(),
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
@@ -225,7 +232,9 @@ class Operations:
             evidence = []
             for url in ("https://claude.ai/", "https://api.anthropic.com/v1/models"):
                 started = time.monotonic()
-                response = transport.get(url, headers_only=True)
+                # The Models API supports GET, not HEAD. Anonymous 401 is an
+                # expected authentication boundary, not a broken proxy.
+                response = transport.get(url, headers_only=url == "https://claude.ai/")
                 evidence.append({"endpoint": url, "http_status": response.status, "access": application_state(response),
                                  "elapsed_ms": round((time.monotonic() - started) * 1000), "error": response.error,
                                  "timings": response.timings, "tls_verified": response.tls_verified})

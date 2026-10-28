@@ -28,6 +28,7 @@ jobs:
       - run: node --check envscope/web/guide.mjs
       - run: node --check envscope/web/inspection.mjs
       - run: node --check envscope/web/connection.mjs
+      - run: node --check envscope/web/desktop.mjs
       - run: python -m scripts.check_release
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - run: python -m scripts.verify_package dist
@@ -42,3 +43,4 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python -m scripts.browser_smoke
       - run: python -m scripts.usability_smoke
+      - run: python -m scripts.desktop_ui_smoke

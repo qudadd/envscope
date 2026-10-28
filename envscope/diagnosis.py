@@ -48,9 +48,12 @@ def diagnose(report, preferences=None):
                 ["点击“预览可修复内容”，先备份，再移除已确认的多余逗号。", "保存工作并重开对应客户端，再复检。"] if repairable else
                 ["备份并打开此配置文件，按上面的行列位置修正。", "保留现有 MCP、认证和其他设置；保存后重开客户端并复检。"],
                 action="config-" + target, repair="json-" + target if repairable else None, priority=0, source="settings")
-        elif shape.get("error") == "unreadable":
+        elif shape.get("error") == "permission_denied":
             add("config_access." + target, label + "没有读取权限", "操作系统拒绝读取现有配置。", "现在无法判断文件是否有效；重新安装并不能证明可修复权限。",
                 ["在当前用户下检查文件权限；如果由组织管理，联系管理员恢复读取权限。", "恢复读取权限后重新检测。"], action="config-" + target)
+        elif shape.get("error") == "unreadable":
+            add("config_read." + target, label + "暂时无法读取", "读取未完成，系统未明确报告权限拒绝。", "文件可能被占用或所在磁盘暂时不可用。",
+                ["检查文件与磁盘是否可访问，关闭正在改写配置的程序后重新检测。"], certainty="possible")
 
     cli = first("extra.cli_env")
     cli_used = usage in ("cli", "both") or usage == "auto" and bool(cli.get("installation_count") or cli.get("config", {}).get("exists"))

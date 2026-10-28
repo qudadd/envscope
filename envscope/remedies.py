@@ -494,7 +494,7 @@ class SolutionPlans:
             if chosen:
                 kinds.setdefault("cli", set()).add("proxy")
             else:
-                manual.append("尚未验证可用的本机 HTTP / HTTPS 代理；请在代理客户端开启 HTTP / mixed 端口，再检测。本次不改写 Code 代理。")
+                manual.append("本次代理未取得 API 的有效连接证据，暂不改写 Code 代理。查看下面的 HTTP 状态与错误：连接被拒绝时检查端口；403 检查服务访问限制；超时检查线路。不要仅因网页拒绝自动探测而更改端口。")
         else:
             chosen = None
         changes = []

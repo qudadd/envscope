@@ -2,7 +2,7 @@
 
 面向 Windows 和 macOS 的极简桌面环境工具。以 [claude-switcher](https://github.com/YOURSJEYO/claude-switcher) 为功能底座，保留原版维护能力，增加独立检测、事务式账号管理、代理诊断和历史对比。
 
-当前版本 **0.7.1 / Alpha**：修复旧页面断开后无反馈、工具信息显示位置不明显及连续账号操作的忙碌状态。新增可搜索的“全部检查”目录，14 项基础与 18 项扩展在检测前后均可查看。账号页解释当前资料、首次登录和切换存档；Windows / macOS 环境信息原生读取，无需先安装维护核心。[使用测试与修改记录](docs/USABILITY_TESTING.md)。
+当前版本 **0.8.0 / Alpha**：独立桌面窗口、托盘／菜单栏驻留、重复启动唤回窗口，以及官方软件更新检查、校验安装、重启和已保存版本回退。检测结果区分实际问题、权限拒绝、探测未完成、不适用和版本未支持；明确显示基本使用条件是否完成验收。[使用测试与修改记录](docs/DESKTOP_ACCEPTANCE.md)。
 
 首页贯通检测、配置与修复、复检、打开 Claude 和长期保持。桌面打开与正常重开都先重新检测，核对安装、配置、账号恢复及目标连接；未通过时保留资料并说明原因。Code 可主动完善本机连接与证书校验设置。[交付范围与验收依据](docs/PRODUCT_ACCEPTANCE.md)。
 
@@ -16,7 +16,7 @@ Scrapling 仅用于开发前期抓取和核对方案、项目与文档，不属�
 
 ## 一键检测
 
-Windows 桌面包解压后双击 `EnvScope.exe`。macOS 桌面包的入口为 `EnvScope.app`。程序自动打开本地页面：
+Windows 桌面包解压后双击 `EnvScope.exe`。macOS 桌面包的入口为 `EnvScope.app`。程序打开独立窗口，不需要另外启动浏览器或 Python：
 
 [下载 Windows / macOS 桌面包](https://github.com/qudadd/envscope/releases)。macOS 分 Apple Silicon 与 Intel，按处理器选择。Alpha 包未获商业代码签名 / Apple 公证。
 
@@ -31,9 +31,11 @@ Windows 桌面包解压后双击 `EnvScope.exe`。macOS 桌面包的入口为 `E
 
 “看懂 14 项检查”和完整技术记录按需展开，不要求先理解术语。工具页明确区分随附的 claude-switcher、已接入的 Mihomo 只读接口，以及可选外部客户端 Clash Verge Rev 的作用；不会自动安装代理或提供节点。见 [新用户使用说明](docs/USER_GUIDE.md)。
 
-检测不需要终端、管理员权限或手动导入。桌面包自带 Python 运行时。页面中的“结束本地服务”可退出；页面可见时保持连接，无页面活动 15 分钟后退出。断线时重新打开启动器并使用新页面，不使用旧端口。首次安装维护核心与系统修复可能请求管理员授权。
+检测不需要终端或手动导入。桌面包自带 Python 运行时；Windows 使用系统 WebView2，macOS 使用 WKWebView。关闭窗口后默认驻留托盘／菜单栏，从相应菜单可以重新打开或退出。在“设置 → 软件与后台”关闭驻留后，关闭窗口即退出。首次安装维护核心与系统修复可能请求管理员授权；普通读取被拒绝时，只为对应项目提供权限处理入口。
 
-Windows 独立程序已在本机构建并验证 worker 与资源。Windows、Linux、macOS 的自动回归及浏览器交互 CI 已通过；macOS `.app` 按两种架构构建，实际安装及 Safari 仍待独立验收。手机端暂不适配。
+软件默认每日向 GitHub 查询版本，不下载或执行更新。用户确认后，从 `qudadd/envscope` 下载对应架构软件包，同时核对发布校验表与 GitHub SHA256，安装到用户目录中的新版本文件夹，保留旧文件。重启由用户确认；已保存的前一版本可回退。参考开源项目的更新只提示差异，经兼容测试后随 EnvScope 发布，不直接替换正在运行的核心。系统定时巡检独立于窗口驻留；其现有任务继续使用已批准的程序路径，可在维护页重新预览启用来迁移。
+
+Windows 独立程序已在本机构建并通过隔离的真实窗口、托盘和退出测试。Windows、macOS 两种架构由发布 CI 构建并测试，结果以本标签的 Actions 为准；真实账号登录、平台授权弹窗与 Safari 外部浏览器仍需实际设备验收。手机端暂不适配。
 
 ## 功能范围
 
@@ -126,7 +128,7 @@ python -m envscope audit --online --stun --ipv6 --html reports/audit.html
 python -m envscope serve
 ```
 
-也可 `python -m pip install .` 后使用 `envscope` 命令。Windows 和 macOS 的系统适配器读取各自的网卡、路由和 DNS 配置；配置存在不能证明流量已接管。
+命令行可 `python -m pip install .` 后使用 `envscope`。源码运行独立窗口请安装 `python -m pip install '.[desktop]'`；浏览器兼容入口是 `python -m envscope desktop --browser`。Windows 和 macOS 的系统适配器读取各自的网卡、路由和 DNS 配置；配置存在不能证明流量已接管。
 
 退出码仍按选定验证范围：`0` 范围内通过，`1` 明确策略或目标不符，`2` 证据不完整或需要复核，`3` 输入/本地资源错误。连接诊断显示“服务有响应”时，完整隐私范围仍可能返回 `2`；这是覆盖不足，不等于服务不可用。默认离线运行返回 `2`，不是程序崩溃。
 

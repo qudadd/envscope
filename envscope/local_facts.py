@@ -87,6 +87,8 @@ def read_system_proxy(system=None, reader=None):
             return {"available": True, "enabled": bool(endpoints), "endpoints": sorted(set(endpoints)),
                     "pac_configured": fields.get("ProxyAutoConfigEnable") == "1", "auto_detect": fields.get("ProxyAutoDiscoveryEnable") == "1",
                     "bypass": bypass_matches(";".join(patterns))}
+    except PermissionError:
+        return {"available": False, "error": "permission_denied"}
     except (OSError, ValueError, subprocess.TimeoutExpired):
         pass
     return {"available": False}
@@ -139,17 +141,22 @@ def hosts_overrides(path):
                         continue
                     overrides.append({"host": host.lower().rstrip("."), "ip": ip})
         return {"readable": True, "overrides": overrides[:32]}
+    except PermissionError:
+        return {"readable": False, "error": "permission_denied"}
     except OSError:
-        return {"readable": False}
+        return {"readable": False, "error": "unavailable"}
 
 
 def config_shape(path):
     try:
-        if not path.exists():
-            return {"exists": False}
-        if path.is_symlink() or path.stat().st_size > 1048576:
+        size = path.stat().st_size
+        if path.is_symlink() or size > 1048576:
             return {"exists": True, "valid": False, "error": "unsupported_size_or_symlink"}
         return {"exists": True, **inspect_text(path.read_text(encoding="utf-8-sig"))}
+    except FileNotFoundError:
+        return {"exists": False}
+    except PermissionError:
+        return {"exists": True, "valid": None, "error": "permission_denied"}
     except OSError:
         return {"exists": True, "valid": None, "error": "unreadable"}
     except UnicodeError:

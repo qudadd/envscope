@@ -2,7 +2,20 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS Claude environment toolkit. Alpha v0.7.1.
+A minimal Windows/macOS Claude environment toolkit. Alpha v0.8.0.
+
+The desktop package now uses an independent native window and a tray/menu-bar
+entry. Closing can keep it in the background; launching twice activates the
+existing window. Official software updates require confirmation, matching
+release and GitHub SHA256 digests, safe side-by-side installation and a confirmed
+restart. Upstream component changes are reviewed before inclusion, not executed
+automatically. See [desktop acceptance](docs/DESKTOP_ACCEPTANCE.md).
+
+Basic-use assessment distinguishes confirmed problems, explicit permission
+denials, incomplete probes, inapplicable checks and unimplemented capabilities.
+The strict privacy decision and account launch gate are unchanged. The Models
+API probe now uses GET; native HTTP probes respect a discovered system HTTP
+proxy when HTTPS/ALL proxy environment settings are absent.
 
 This usability release adds a searchable, always-visible 32-check catalog,
 inline native information panels, desktop account guidance, visible-page

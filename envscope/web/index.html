@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.7.1 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.8.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -37,6 +37,7 @@
     <section id="audit-results" aria-label="检测结果" aria-busy="false">
       <div class="result-summary" aria-live="polite"><h2 id="verdict">先打开平时使用的连接工具，再检测</h2><span id="coverage-count">14 项基础 · 18 项扩展</span></div>
       <p id="verdict-note" class="note">检测后自动合并处理方案。你确认一次，再写入配置、修复并复检。</p>
+      <div id="qualification" hidden><p id="qualification-counts" class="note"></p><details><summary>哪些关键条件还需要处理</summary><div id="qualification-pending"></div></details><p id="qualification-boundary" class="note"></p></div>
       <button id="show-all-checks" class="link">查看全部 32 项检查与说明</button>
       <details id="connection-options" class="connection-options"><summary>环境设置：自动识别，检测后确认</summary>
         <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option></select></label>
@@ -82,7 +83,7 @@
     <div id="page-checks" class="page" hidden>
       <h1>全部检查</h1><p class="subtle">14 项基础对应 claude-switcher，18 项扩展检查连接、配置和安装。每一项都能查看用途、结果与下一步。</p>
       <p id="all-checks-context" class="note" role="status">尚未检测，下面是完整检查目录。</p>
-      <div class="check-filters"><label>查找项目<input id="check-search" type="search" placeholder="例如：DNS、登录、证书"></label><label>分类<select id="check-group"><option value="all">全部分类</option><option value="baseline">14 项基础</option><option value="extra">18 项扩展</option><option value="measurement">补充测量</option></select></label><label>状态<select id="check-status"><option value="all">全部状态</option><option value="attention">需要处理或复核</option><option value="unknown">未核实或未测量</option><option value="pass">范围内通过</option><option value="not_run">尚未检测</option></select></label></div>
+      <div class="check-filters"><label>查找项目<input id="check-search" type="search" placeholder="例如：DNS、登录、证书"></label><label>分类<select id="check-group"><option value="all">全部分类</option><option value="baseline">14 项基础</option><option value="extra">18 项扩展</option><option value="measurement">补充测量</option></select></label><label>状态<select id="check-status"><option value="all">全部状态</option><option value="attention">需要处理或复核</option><option value="unknown">需要补全</option><option value="excluded">不适用、参考或版本未支持</option><option value="pass">范围内通过</option><option value="not_run">尚未检测</option></select></label></div>
       <p id="check-count" class="note" role="status"></p><div id="all-checks-list"></div>
       <div class="actions"><button id="checks-return" class="link">返回一键检测与修复</button></div>
     </div>
@@ -145,6 +146,20 @@
 
     <div id="page-settings" class="page" hidden>
       <h1>设置</h1><p class="subtle">设置比较目标与启动条件。保存这些偏好不会修改系统网络、时区或语言。</p>
+      <section id="desktop-preferences" class="desktop-preferences">
+        <h2>软件与后台</h2><p id="desktop-mode" class="note">正在读取运行方式…</p>
+        <div id="native-preferences" hidden>
+          <label class="checkbox"><input type="checkbox" id="desktop-keep">关闭窗口后留在托盘／菜单栏</label>
+          <label class="checkbox"><input type="checkbox" id="desktop-update-check">每天自动检查软件更新</label>
+          <label class="checkbox"><input type="checkbox" id="desktop-preview">接收预发布版本</label>
+          <p class="note">自动检查只联系 GitHub，不上传检测报告。后台驻留不会自行修改环境；定时检测与修复在“持续维护”中单独启用。</p>
+          <div class="actions"><button id="desktop-save">保存后台设置</button><button id="desktop-hide" class="link">收起到后台</button></div>
+          <h3>EnvScope 更新</h3><p id="app-update-state" role="status"></p><div id="app-update-details"></div>
+          <div class="actions"><button id="app-update-check">检查更新</button><button id="app-update-install" hidden>下载并安装新版</button><button id="app-update-restart" hidden>重启并使用已安装版本</button><button id="app-update-rollback" class="link" hidden>回退到上一软件版本</button></div>
+          <p id="upstream-update" class="note"></p>
+        </div>
+        <p id="software-output" role="status"></p>
+      </section>
       <form id="settings-form">
         <label>使用范围<select name="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面</option><option value="cli">Claude Code</option><option value="both">桌面与 Code</option></select></label>
         <div class="form-grid"><label>目标国家代码<input name="country" maxlength="2" placeholder="可选，例如 US"></label><label>目标时区<input name="timezone" placeholder="Windows 用系统 ID，macOS 用 IANA ID"></label><label>目标地区格式<input name="locale" placeholder="可选，例如 en-US"></label><label>代理客户端<select name="client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option><option value="other">其他</option></select></label><label>目标代理组<input name="proxy_group" placeholder="留空时从运行规则识别"></label><label>STUN 端口的预期策略<select name="webrtc_policy"><option value="proxy">经代理</option><option value="reject">拒绝</option></select></label></div>

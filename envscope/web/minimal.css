@@ -268,3 +268,9 @@ td .link{margin-left:15px}
 #flow-upkeep-plan ul{font-size:12px;line-height:1.9;padding-left:19px;max-width:83ch}
 #flow-upkeep-plan li{margin:7px 0;overflow-wrap:anywhere}
 #flow-upkeep-plan button{margin:14px 0}
+.desktop-preferences{max-width:760px;padding:0 0 32px;margin:0 0 32px;border-bottom:1px solid var(--line)}
+.desktop-preferences h2{font-size:18px;margin-bottom:12px}
+.desktop-preferences h3{font-size:15px;margin:28px 0 10px}
+#app-update-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.8}
+#qualification{max-width:83ch;margin:15px 0}
+#qualification-pending p{font-size:13px;line-height:1.9;margin:14px 0}

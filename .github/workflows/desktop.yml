@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install 'pyinstaller>=6.10,<7' .
+      - run: python -m pip install 'pyinstaller>=6.10,<7' '.[desktop]'
       - run: python -m unittest discover -s tests -q
       - run: python -m scripts.build_desktop
       - name: Frozen Windows smoke
@@ -32,11 +32,25 @@ jobs:
         env:
           ENVSCOPE_SCHEDULER_ACCEPTANCE: '1'
         run: python -m scripts.scheduler_acceptance dist/desktop/EnvScope/EnvScope.exe
+      - name: Real archive update with isolated native startup
+        run: python -m scripts.update_package_smoke
       - name: Actual macOS user scheduler lifecycle
         if: runner.os == 'macOS'
         env:
           ENVSCOPE_SCHEDULER_ACCEPTANCE: '1'
         run: python -m scripts.scheduler_acceptance dist/desktop/EnvScope.app/Contents/MacOS/EnvScope
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Update-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/update-package-smoke.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Native-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/native-smoke.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
         with:

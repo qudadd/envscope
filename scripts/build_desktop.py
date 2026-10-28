@@ -16,6 +16,7 @@ def main():
         raise SystemExit("Desktop builds target Windows or macOS only.")
     command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--windowed",
                "--name", "EnvScope", "--collect-data", "envscope", "--hidden-import", "envscope._stun_worker",
+               "--collect-all", "webview", "--collect-submodules", "pystray",
                "--add-data", str(root / "envscope/vendor/claude_switcher") + os.pathsep + "envscope/vendor/claude_switcher",
                "--paths", str(root),
                "--distpath", str(root / "dist" / "desktop"), "--workpath", str(root / "build" / "desktop"),
@@ -48,6 +49,18 @@ def main():
     for file in distribution.files or []:
         if str(file).endswith("licenses/COPYING.txt"):
             shutil.copy2(distribution.locate_file(file), licenses / "PYINSTALLER-COPYING.txt")
+    packages = {"pywebview", "pystray", "Pillow", "pythonnet", "clr_loader", "proxy_tools", "typing_extensions", "cffi", "pycparser", "six", "bottle"}
+    packages.update(d.metadata["Name"] for d in importlib.metadata.distributions() if d.metadata["Name"].lower().startswith("pyobjc"))
+    for package in sorted(packages):
+        try:
+            dependency = importlib.metadata.distribution(package)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+        for file in dependency.files or []:
+            if any(part.lower().startswith(("license", "copying")) for part in file.parts) and dependency.locate_file(file).is_file():
+                dest = licenses / package / file.name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(dependency.locate_file(file), dest)
     architecture = {"amd64": "x64", "x86_64": "x64", "arm64": "arm64"}.get(platform.machine().lower(), platform.machine().lower())
     archive = root / "dist" / ("EnvScope-" + ("macOS-" if platform.system() == "Darwin" else "Windows-") + architecture + ".zip")
     if platform.system() == "Darwin":

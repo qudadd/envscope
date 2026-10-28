@@ -16,6 +16,19 @@ MAX_BODY = 131072
 MARKER = "\nENVSCOPE_CURL_METADATA:"
 
 
+def desktop_transport():
+    """Use the user's configured HTTP route, without falling back to direct."""
+    if any(os.environ.get(k) for k in ("https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")):
+        return CurlTransport()
+    from .local_facts import read_system_proxy
+    system = read_system_proxy()
+    if system.get("enabled"):
+        for endpoint in system.get("endpoints", []):
+            if endpoint.startswith(("http://", "https://")):
+                return CurlTransport(endpoint)
+    return CurlTransport()
+
+
 def display_url(url):
     try:
         parts = urlsplit(url)
