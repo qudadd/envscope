@@ -141,9 +141,10 @@ class IsolatedBrowserTests(unittest.TestCase):
 
     def test_proxy_argument_is_explicit_and_does_not_become_shell_code(self):
         with tempfile.TemporaryDirectory() as directory, patch('envscope.isolated_browser.threading.Thread'):
-            exe = Path(directory)/'browser';exe.touch()
+            root = Path(directory).resolve()
+            exe = root/'browser';exe.touch()
             launch = Mock()
-            browser = IsolatedBrowser(directory,finder=lambda:[('Fixture',exe)],launcher=launch)
+            browser = IsolatedBrowser(root,finder=lambda:[('Fixture',exe)],launcher=launch)
             browser.open('https://example.com/?a=$(bad)',{'usage':'web','connection_mode':'http_proxy','target_proxy':'http://127.0.0.1:8000'},lambda:True)
             args = launch.call_args.args[0]
             self.assertIn('--proxy-server=http://127.0.0.1:8000',args)
@@ -159,7 +160,7 @@ class EnvironmentCoverageTests(unittest.TestCase):
         self.assertEqual(guard_finding({**running,'configured_mode':'clash-verge'},{'client':'sing-box'}).status,'fail')
         self.assertEqual(guard_finding({**running,'configured_mode':'sing-box'},{'client':'sing-box'}).status,'pass')
         with tempfile.TemporaryDirectory() as directory:
-            source=Path(directory)/'guard';source.write_text('MODE="sing-box"\n')
+            source=Path(directory).resolve()/'guard';source.write_text('MODE="sing-box"\n')
             self.assertEqual(installed_guard_mode('Darwin',source)['configured_mode'],'sing-box')
             source.write_text('MODE="__PROXY_MODE__"\n')
             self.assertIsNone(installed_guard_mode('Darwin',source)['configured_mode'])
