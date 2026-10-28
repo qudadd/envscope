@@ -134,7 +134,7 @@ class Operations:
                              "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(),
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
                              "history-report": {"id"}, "settings-restore": set(), "learning-complete": {"version"}}
-        native_parameters.update({"solution-plan": {"report_id", "check_id"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"},
+        native_parameters.update({"solution-plan": {"report_id", "check_id", "enhance_cli", "proxy"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"},
                                   "maintenance-plan": {"report_id", "interval", "auto_restore"}, "maintenance-enable": {"plan_id"},
                                   "maintenance-disable": set(), "maintenance-status": set(), "maintenance-run": set(),
                                   "maintenance-report": set(), "maintenance-undo": {"backup_id"}})
@@ -146,7 +146,7 @@ class Operations:
         if action in ("solution-plan", "solution-open", "maintenance-plan") and (not report or params.get("report_id") != report.get("report_id")):
             return {"state": "retest_required", "reason": "当前显示的不是本机最新检测，请重新检测后处理，不使用历史报告执行修复。"}
         if action == "solution-plan":
-            return self.solutions.prepare(report, params.get("check_id"))
+            return self.solutions.prepare(report, params.get("check_id"), params.get("enhance_cli", False), params.get("proxy"))
         if action == "maintenance-plan":
             return self.maintenance.prepare(report, params.get("interval", 15), params.get("auto_restore", False))
         if action == "maintenance-enable":

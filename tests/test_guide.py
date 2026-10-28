@@ -51,6 +51,13 @@ class UsageGuideTests(unittest.TestCase):
         self.assertEqual(self.task(value, "setup")["state"], "unverified")
         self.assertEqual(self.task({"usage": "auto"}, "setup")["state"], "unverified")
 
+    def test_public_api_response_does_not_verify_custom_or_cloud_code_endpoint(self):
+        for field in ('custom_endpoint', 'bedrock', 'vertex', 'foundry'):
+            value=report('cli');value['findings'][0]['evidence'][0][field]=True
+            task=self.task(value,'connection')
+            self.assertEqual(task['state'],'unverified')
+            self.assertIn('没有验证你的自定义接口或云平台',task['text'])
+
     def test_protection_requirement_does_not_overwrite_connection_response(self):
         problem = {"id": "startup.tun", "title": "账号启动条件", "repair": None}
         value = report(problems=[problem])

@@ -217,6 +217,7 @@ def cli_facts(home, environ):
             "api_key_present": bool(environ.get("ANTHROPIC_API_KEY")), "auth_token_present": bool(environ.get("ANTHROPIC_AUTH_TOKEN")),
             "custom_endpoint": bool(base), "endpoint_valid": url_valid, "endpoint_https_or_local": not base or bool(parsed and parsed.scheme == "https") or local,
             "bedrock": environ.get("CLAUDE_CODE_USE_BEDROCK") == "1", "vertex": environ.get("CLAUDE_CODE_USE_VERTEX") == "1",
+            "foundry": environ.get("CLAUDE_CODE_USE_FOUNDRY") == "1",
             "proxy_configured": bool(proxy_value), "proxy_valid": not proxy_value or bool(proxy),
             "proxy_scheme": urlsplit(proxy).scheme if proxy else None,
             "proxy_bypass": bypass_matches(environ.get("no_proxy") or environ.get("NO_PROXY", "")),

@@ -1,6 +1,6 @@
 import {STATUS_TEXT, normalizeIP, isPublicIP, parseCandidate, assessHTTP, assessICE, sharingSnapshot} from "./logic.mjs";
 import {initDesktopControls} from "./controls.mjs";
-import {initDiagnosis} from "./diagnosis.mjs";
+import {initDiagnosis, setFlowStage} from "./diagnosis.mjs";
 import {initGuide} from "./guide.mjs";
 
 const byId=id=>document.getElementById(id);
@@ -13,7 +13,7 @@ const sessionPromise=(async()=>{
     if(!response.ok)return null;
     const value=await response.json();
     if(value.mode!=="desktop"||typeof value.token!=="string")return null;
-    byId("mode-note").textContent="检查连接与配置，给出处理步骤，再帮你保持已经验证的设置。";
+    byId("mode-note").textContent="检测连接，合并配置与修复方案；确认后自动处理并复检。";
     nodes.quit.hidden=false;
     return value;
   } catch {return null;} finally {clearTimeout(timer);}
@@ -79,8 +79,8 @@ function renderDesktop(report) {
   guideUI.render(report);
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
-const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit()});
-const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit(),isBusy:diagnosisUI.isBusy});
+const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
+const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy});
 
 async function nativeAudit(session,snapshot) {
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);
@@ -94,8 +94,11 @@ async function nativeAudit(session,snapshot) {
   } finally {clearTimeout(timer);}
 }
 
-async function runAudit(){
+async function runAudit({oneStop=false,phase='check'}={}){
+  setFlowStage(phase==='recheck'?'repair':'check',phase==='recheck'?'正在重新检测配置与连接，写入成功不代替复检结果。':'正在检查连接和环境设置，尚未写入任何配置。');
   document.dispatchEvent(new CustomEvent('envscope-audit-start'));
+  byId('connection-options').open=false;
+  for(const id of ['usage','enhance-cli','workflow-proxy','workflow-proxy-url'])byId(id).disabled=true;
   nodes.start.disabled=true;nodes.share.disabled=true;lastSnapshot=null;lastReport=null;
   nodes.start.textContent="检测中…";byId("audit-results").setAttribute("aria-busy","true");
   byId("workspace").dataset.state="running";
@@ -123,9 +126,10 @@ async function runAudit(){
     }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
     nodes.share.disabled=false;
   } catch {byId("verdict").textContent="检测没有完成";byId("verdict-note").textContent="本地服务或浏览器探测没有返回有效结果。请重新检测；仍失败时重新打开本地程序。缺失观测不会判定为通过。";byId("session-state").textContent="需要重新检测";}
-  finally {nodes.start.disabled=false;nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");document.dispatchEvent(new CustomEvent('envscope-audit-end',{detail:{has_report:!!lastReport}}));}
+  finally {nodes.start.disabled=false;for(const id of ['usage','enhance-cli','workflow-proxy','workflow-proxy-url'])byId(id).disabled=diagnosisUI.isBusy();nodes.start.textContent="重新检测与修复";byId("audit-results").setAttribute("aria-busy","false");document.dispatchEvent(new CustomEvent('envscope-audit-end',{detail:{has_report:!!lastReport}}));if(!lastReport)setFlowStage(phase==='recheck'?'repair':'check','本次检测未完成，没有据此写入配置。请重新检测。');}
+  if(oneStop&&lastReport)await diagnosisUI.prepareWorkflow();
 }
-nodes.start.addEventListener("click",()=>{if(!diagnosisUI.isBusy())void runAudit();});
+nodes.start.addEventListener("click",()=>{if(!diagnosisUI.isBusy())void runAudit({oneStop:true});});
 
 function download(value,suffix) {
   const blob=new Blob([JSON.stringify(value,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);

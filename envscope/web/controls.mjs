@@ -23,7 +23,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const response=await fetch("/api/catalog",{headers:{"X-EnvScope-Token":session.token},cache:"no-store"});
     if(!response.ok)throw new Error("无法读取本机功能列表");
     catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderBackups();
-    document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{learning:catalog.learning,settings:catalog.settings}}));
+    document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{learning:catalog.learning,settings:catalog.settings,maintenance:catalog.maintenance,proxies:catalog.proxies}}));
     const options=[el("option","手动填写")];options[0].value="";
     for(const proxy of catalog.proxies||[]){const option=el("option",proxy.url+" · "+proxy.sources.join(" / "));option.value=proxy.url;options.push(option);}
     $("proxy-found").replaceChildren(...options);
@@ -31,13 +31,13 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     if(options.some(o=>o.value===$("proxy-url").value))$("proxy-found").value=$("proxy-url").value;
   }
   async function action(id,params={},output="tool-output",confirmation=null){
-    if(document.documentElement.dataset.operationBusy==='true'){$(output).textContent="正在执行处理方案，请等待完成。";return null;}
+    if(document.documentElement.dataset.operationBusy==='true'||$('start').disabled){$(output).textContent="正在检测或处理，请等待本次完成。";return null;}
     if(busy){$(output).textContent="已有操作进行中，请稍候。";return null;}
     const descriptor=catalog?.legacy.actions.find(a=>a.id===id);
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
-    busy=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
+    busy=true;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),240000);
     try {
       const response=await fetch("/api/action",{method:"POST",signal:controller.signal,headers:{"Content-Type":"application/json","X-EnvScope-Token":session.token},
@@ -58,7 +58,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(result.bundle)download(result.bundle,"support");
       await refresh();return result;
     }catch(error){$(output).textContent=error.name==="AbortError"?"等待已超时。操作可能仍在后台执行；请查看实际状态，避免重复执行。":String(error.message);return null;}
-    finally{clearTimeout(timer);busy=false;}
+    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;}
   }
   function renderAccounts(){
     const value=catalog.accounts;
@@ -189,11 +189,12 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   });
   $("settings-restore").addEventListener("click",()=>action("settings-restore",{},"settings-output"));
   document.addEventListener("envscope-audit-complete",event=>{lastReportId=event.detail?.report_id||null;void refresh().catch(()=>{});});
+  document.addEventListener('envscope-maintenance-change',()=>{void refresh().catch(()=>{});});
   setInterval(async()=>{
-    if(document.hidden||$('page-upkeep').hidden||busy||document.documentElement.dataset.operationBusy==='true')return;
+    if(document.hidden||($('page-upkeep').hidden&&($('page-audit').hidden||!catalog?.maintenance?.enabled))||busy||$('start').disabled||document.documentElement.dataset.operationBusy==='true')return;
     try{
       const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'maintenance-status',params:{},confirmed:false})});
-      if(response.ok){const value=await response.json();renderUpkeep(value.maintenance);}
+      if(response.ok){const value=await response.json();renderUpkeep(value.maintenance);document.dispatchEvent(new CustomEvent('envscope-maintenance-status',{detail:value.maintenance}));}
     }catch{/* Keep the explicit last completion time; never fabricate a new heartbeat. */}
   },15000);
   try{await refresh();}catch(error){$("backend-note").textContent=error.message;document.dispatchEvent(new CustomEvent('envscope-catalog-error'));}

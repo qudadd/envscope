@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.5.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.6.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -27,25 +27,35 @@
     </section>
     <div id="audit-content" hidden>
     <section class="introduction">
-      <div class="intro-heading"><h1>让 Claude 稳定可用</h1><div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div></div>
+      <div class="intro-heading"><h1>让 Claude 稳定可用</h1><div class="actions"><button id="start">一键检测与修复</button><span id="session-state" aria-live="polite">未开始</span></div></div>
       <p id="mode-note">检查当前浏览器的 HTTP 出口和 WebRTC 候选地址。</p>
       <details class="network-note"><summary>只读检测，探测会联系外部服务</summary><p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p></details>
     </section>
 
     <section id="audit-results" aria-label="检测结果" aria-busy="false">
       <div class="result-summary" aria-live="polite"><h2 id="verdict">先打开平时使用的连接工具，再检测</h2><span id="coverage-count">14 项基础 · 18 项扩展</span></div>
-      <p id="verdict-note" class="note">先判断影响使用的问题，处理后再试用，最后按需要开启日常保持。</p>
-      <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option></select></label>
-      <ol id="usage-tasks" class="usage-tasks" aria-label="使用步骤"><li><span class="task-number">1</span><div><h3>检查连接和设置</h3><p>自动识别已有软件与连接，先找影响使用的原因。</p></div></li><li><span class="task-number">2</span><div><h3>处理后，实际试用</h3><p>看清改动再修复，到自己的 Claude 发一条消息。</p></div></li><li><span class="task-number">3</span><div><h3>按需要持续保持</h3><p>定时复检和配置保持均由你选择启用。</p></div></li></ol>
+      <p id="verdict-note" class="note">检测后自动合并处理方案。你确认一次，再写入配置、修复并复检。</p>
+      <details id="connection-options" class="connection-options"><summary>环境设置：自动识别，检测后确认</summary>
+        <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option></select></label>
+        <label class="checkbox"><input id="enhance-cli" type="checkbox" checked>识别到 Code 时，同时完善连接设置</label>
+        <p class="note">先验证本机 HTTP 代理，再生成固定连接和开启证书校验的方案。已有自定义接口、云平台或远程代理会单独核对。桌面版使用现有连接与原版维护能力。</p>
+        <label>Code 使用的本机连接<select id="workflow-proxy"><option value="auto">自动核对现有连接</option><option value="manual">手动填写本机 HTTP 地址</option></select></label>
+        <label id="workflow-proxy-manual" hidden>本机 HTTP / HTTPS 代理<input id="workflow-proxy-url" type="url" maxlength="2048" autocomplete="off" placeholder="http://127.0.0.1:7897"></label>
+      </details>
+      <ol id="flow-progress" class="flow-progress" aria-label="一条龙处理进度"><li data-flow-step="check">1 检测</li><li data-flow-step="review">2 核对方案</li><li data-flow-step="repair">3 修复复检</li><li data-flow-step="keep">4 日常保持</li></ol><p id="flow-state" class="note" role="status">先检测，所有配置修改都会列入待确认的方案。</p>
       <p id="resolution" class="resolution" aria-live="polite" hidden></p>
       <section id="solution-tools" class="solution-tools" hidden>
-        <div class="actions"><button id="prepare-solution" hidden>预览可修复内容</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy">测试已发现代理</button></div>
+        <div class="actions"><button id="prepare-solution" class="link" hidden>重新生成处理方案</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy" class="link">单独测试已有代理</button></div>
         <div id="solution-plan"></div><div id="solution-output" class="solution-output" aria-live="polite"></div><div id="solution-backups" class="actions"></div>
       </section>
       <div id="problems"></div><div id="normal-observations" class="normal-observations"></div>
       <section id="try-claude" class="try-claude" hidden aria-labelledby="try-title">
         <h2 id="try-title">接下来，到自己的 Claude 试一条消息</h2><p class="note">本工具只测试连接，不会替你登录或发送消息。收到实际回复后，才能确认这次使用成功。</p>
         <div id="try-instructions"></div><div class="actions"><button id="try-success">我已收到 Claude 的回复</button><button id="try-help" class="link">还是不能用</button><button id="try-upkeep" class="link">设置日常保持</button></div><p id="try-feedback" class="note" aria-live="polite"></p>
+      </section>
+      <section id="flow-upkeep" class="flow-upkeep" hidden aria-labelledby="flow-upkeep-title"><h2 id="flow-upkeep-title">保持本次设置</h2><p class="note">确认 Claude 能实际回复后，可在这里启用定时复检。关闭界面后继续运行，随时可停用。</p><p id="flow-upkeep-status" class="note" aria-live="polite">尚未启用。</p>
+        <div class="inline-upkeep-options"><label>复检间隔<select id="flow-upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label><label class="checkbox"><input id="flow-upkeep-restore" type="checkbox">同时保持已经验证的 Code 配置</label></div>
+        <p class="note">配置保持仅恢复已审核字段，恢复前先备份；反复变化会暂停。更换代理前先停用，再生成新方案。</p><div class="actions"><button id="flow-upkeep-prepare">预览长期保持方案</button><button id="flow-upkeep-stop" class="link" hidden>停用定时复检与配置保持</button></div><div id="flow-upkeep-plan"></div><p id="flow-upkeep-output" class="solution-output" role="status"></p>
       </section>
       <details id="symptom-help" class="help-section"><summary>Claude 仍不能用？按现象排查</summary><label>我遇到的情况<select id="symptom"><option value="connect">一直转圈，或提示无法连接</option><option value="login">打不开登录，或反复要求登录</option><option value="interrupt">原来能用，后来经常中断</option><option value="certificate">提示证书或安全连接错误</option><option value="code">Claude Code 命令找不到或设置不生效</option><option value="mcp">Claude 能回复，但某个 MCP 工具不能用</option></select></label><div id="symptom-advice"></div></details>
       <details id="beginner-checks" class="help-section" hidden><summary>看懂 14 项检查：查什么、怎样处理、怎样保持</summary>
@@ -54,6 +64,7 @@
       </section>
       </details>
       <details id="technical-details" class="help-section"><summary>技术记录与检测范围（完整保留）</summary>
+      <ol id="usage-tasks" class="usage-tasks" aria-label="系统检测分项"><li><span class="task-number">1</span><div><h3>等待本次检测</h3><p>检测后分别说明软件与设置、连接及保护条件。</p></div></li></ol>
       <div class="result-toolbar"><h2 id="checks-title" hidden>本次检查记录</h2><button id="share" class="link" disabled>导出结果</button></div>
       <div id="checks"></div>
       <p class="note export-note">导出结果隐藏地址。环境信息仍可能识别设备，分享前请检查。</p>

@@ -177,6 +177,8 @@ def collect_report(server, snapshot):
     raw = make_report(findings, policy, "one-click-desktop", server.store.settings())
     if getattr(server, "solution_before", None) is not None:
         raw["resolution"] = compare_diagnoses(server.solution_before, raw["diagnosis"])
+        raw["resolution"]["configuration"] = server.operations.config_remedies.verify_receipts(server.solution_before.get("configuration", []))
+        raw["resolution"]["configuration_pending"] = server.solution_before.get("configuration_pending", [])
         selected = server.solution_before.get("check")
         if selected:
             current = next((item for item in raw["claude_checks"]["items"] if item["id"] == selected["id"]), None)

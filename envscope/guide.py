@@ -72,11 +72,14 @@ def usage_guide(report):
     # Desktop and web need their own response; API success alone is insufficient.
     network_usage = "both" if len(selected) == 2 else selected[0] if selected else usage
     network_known = (api if network_usage == "cli" else web and api if network_usage == "both" else web if network_usage == "desktop" else api or web)
+    custom_service = "cli" in selected and any(cli.get(key) for key in ("custom_endpoint", "bedrock", "vertex", "foundry"))
+    if custom_service:
+        network_known = False
     tasks = [
         {"id": "setup", "title": "软件和设置", "state": "attention" if setup_problems else "checked" if installation_known and config_known else "unverified",
          "text": "先修正下面列出的安装或配置问题。" if setup_problems else "已在所列位置找到软件，所选配置格式未发现问题；仍需在实际会话中确认生效。" if installation_known and config_known else "还没有完整确认所选软件和配置；未创建可选配置文件不算故障。", "problem_ids": [p["id"] for p in setup_problems]},
         {"id": "connection", "title": "连接 Claude", "state": "attention" if network_problems else "responding" if network_known else "unverified",
-         "text": "按下方提示先解决连接问题。" if network_problems else "所选服务已回应；还没有验证登录和模型权限。" if network_known else "所选服务的回应还不完整。可先测试已有连接，再到实际客户端确认。", "problem_ids": [p["id"] for p in network_problems]},
+         "text": "本次公共端点探测没有验证你的自定义接口或云平台；请在实际会话中确认。" if custom_service else "按下方提示先解决连接问题。" if network_problems else "所选服务已回应；还没有验证登录和模型权限。" if network_known else "所选服务的回应还不完整。可先测试已有连接，再到实际客户端确认。", "problem_ids": [p["id"] for p in network_problems]},
         {"id": "protection", "title": "日常保持", "state": "attention" if protection_problems else "optional",
          "text": "有保护或启动条件需要核对；不把这些条件直接当成连接故障。" if protection_problems else "连接正常后可选择定时复检；是否已启用以持续维护页的系统任务状态为准。", "problem_ids": [p["id"] for p in protection_problems]},
     ]

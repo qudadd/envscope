@@ -5,6 +5,7 @@ network edits or repairs inferred from an untrusted imported report.
 """
 from datetime import datetime, timezone
 from contextlib import contextmanager
+from copy import deepcopy
 import hashlib
 import json
 import os
@@ -186,6 +187,7 @@ class ConfigRemedies:
             raise ValueError("配置仍存在其他语法或结构问题，未自动改写")
         if set(kinds) & {"proxy", "tls"}:
             data = json.loads(text)
+            before_values = deepcopy(data)
             env = data.setdefault("env", {})
             if "proxy" in kinds:
                 chosen = safe_local_proxy(proxy)
@@ -202,14 +204,50 @@ class ConfigRemedies:
             if "tls" in kinds:
                 env["NODE_TLS_REJECT_UNAUTHORIZED"] = "1"
                 effects.append("在 Claude Code 用户配置中恢复 Node TLS 证书校验")
+            if data == before_values and "trailing_comma" not in kinds:
+                return None
             text = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
         after = (b"\xef\xbb\xbf" if original and original.startswith(b"\xef\xbb\xbf") else b"") + text.encode("utf-8")
         if len(after) > MAX_CONFIG:
             raise ValueError("修改后的配置超过大小上限，未执行写入")
         if original == after:
             return None
-        return {"target": target, "label": LABELS[target], "before": original, "after": after,
+        fields = (["JSON 格式"] if "trailing_comma" in kinds else []) + (["HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"] if "proxy" in kinds else []) + (["NODE_TLS_REJECT_UNAUTHORIZED"] if "tls" in kinds else [])
+        return {"target": target, "label": LABELS[target], "before": original, "after": after, "fields": fields,
                 "before_hash": digest(original) if original is not None else None, "after_hash": digest(after), "effects": effects}
+
+    def connection_context(self, repair_json=False):
+        """Inspect the current fixed Code file without returning credentials."""
+        original = _read(self.paths["cli"])
+        text = original.decode("utf-8-sig") if original is not None else "{}"
+        if repair_json:
+            text = remove_trailing_commas(text) or text
+        if inspect_text(text).get("valid") is not True:
+            raise ValueError("请先修正 Code 配置格式，再完善连接设置")
+        env = {**self.environ, **load_object(text).get("env", {})}
+        value = next((env.get(k) for k in ("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY") if env.get(k)), "")
+        inherited_keys = ("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY", "no_proxy", "NO_PROXY",
+                          "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "NODE_EXTRA_CA_CERTS")
+        return {"custom_provider": bool(env.get("ANTHROPIC_BASE_URL")) or any(env.get(k) == "1" for k in
+                    ("CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")),
+                "proxy_configured": bool(value), "local_proxy": safe_local_proxy(value) if value else None,
+                "environment_hash": digest(json.dumps({k: self.environ.get(k) for k in inherited_keys}, sort_keys=True).encode())}
+
+    def verify_receipts(self, receipts):
+        """Read after the audit; publish scoped confirmation, never file hashes."""
+        result = []
+        for receipt in receipts:
+            target = receipt.get("target")
+            if target not in self.paths:
+                raise ValueError("未知配置核对目标")
+            try:
+                current = _read(self.paths[target])
+                state = "verified" if current is not None and digest(current) == receipt["after_hash"] else "changed"
+            except (ValueError, OSError):
+                state = "unverified"
+            result.append({"target": target, "label": LABELS[target], "state": state,
+                           "fields": receipt.get("fields", []), "scope": "user-config-file-only"})
+        return result
 
     def apply(self, changes):
         with self._lock():
@@ -390,7 +428,23 @@ class SolutionPlans:
         except (ValueError, KeyError, TypeError):
             return False
 
-    def prepare(self, report, check_id=None):
+    @staticmethod
+    def _proxy_verified(result):
+        if not isinstance(result, dict) or not isinstance(result.get("evidence"), list):
+            return False
+        return any(isinstance(e, dict) and e.get("endpoint") == "https://api.anthropic.com/v1/models"
+                   and type(e.get("http_status")) is int and e["http_status"] in (200, 401)
+                   and e.get("tls_verified") is True and not e.get("error") for e in result["evidence"])
+
+    def prepare(self, report, check_id=None, enhance_cli=False, proxy=None):
+        if type(enhance_cli) is not bool:
+            raise ValueError("完善 Code 配置需要明确的布尔选项")
+        if proxy is not None and (not isinstance(proxy, str) or not safe_local_proxy(proxy) or not proxy.startswith(("http://", "https://"))):
+            raise ValueError("仅可选用不含凭据的本机 HTTP / HTTPS 代理")
+        if check_id is not None and (enhance_cli or proxy is not None):
+            raise ValueError("逐项处理不能混用额外配置选项")
+        if proxy is not None and not enhance_cli:
+            raise ValueError("先选择完善 Code 连接设置，再指定代理")
         if not self._current(report):
             return {"state": "retest_required", "reason": "请先完成一次新的本机一键检测，再生成处理方案。"}
         problems = report["diagnosis"]["problems"]
@@ -399,27 +453,48 @@ class SolutionPlans:
             if check_id not in CHECK_PROBLEMS:
                 raise ValueError("未知逐项检查")
             problems = [p for p in problems if any(p["id"].startswith(prefix) for prefix in CHECK_PROBLEMS[check_id])]
-        tasks, effects, manual, kinds = [], [], [], {}
+        tasks, effects, manual, kinds, connections = [], [], [], {}, []
+        cli_finding = next((f for f in report.get("findings", []) if f["id"] == "extra.cli_env"), {})
+        cli = next((v for v in cli_finding.get("evidence", []) if isinstance(v, dict)), {})
+        cli_used = report.get("usage") in ("cli", "both") or report.get("usage") == "auto" and bool(cli.get("installation_count") or cli.get("config", {}).get("exists"))
+        enhance_cli = enhance_cli and cli_used
         for problem in problems:
             repair = problem.get("repair")
             if repair in ("json-desktop", "json-cli"):
                 kinds.setdefault(repair.split("-")[1], set()).add("trailing_comma")
             elif repair == "cli-tls":
                 kinds.setdefault("cli", set()).add("tls")
-        if any(p.get("repair") == "cli-proxy" for p in problems):
-            candidates = [p["url"] for p in self.discoverer() if safe_local_proxy(p.get("url")) and p["url"].startswith(("http://", "https://"))]
+        if enhance_cli:
+            kinds.setdefault("cli", set()).add("tls")
+        proxy_needed = any(p.get("repair") == "cli-proxy" for p in problems)
+        context = {}
+        if proxy_needed or enhance_cli:
+            try:
+                context = self.config.connection_context("trailing_comma" in kinds.get("cli", set()))
+            except (ValueError, OSError, UnicodeError):
+                manual.append("Code 配置无法安全读取；本次不设置新的连接，先按具体行列位置修正。")
+            if context.get("custom_provider"):
+                manual.append("当前使用自定义接口或云平台。本次不替换其代理路径；请按服务提供方核对连接。证书校验可单独恢复。")
+            elif context.get("proxy_configured") and not context.get("local_proxy") and not proxy_needed and proxy is None:
+                manual.append("当前 Code 使用的代理不是可自动接管的本机地址。本次保留其连接；需要更换时请明确选择本机 HTTP 代理。")
+        can_choose_proxy = bool(context) and not context.get("custom_provider") and (proxy_needed or enhance_cli and (proxy is not None or not context.get("proxy_configured") or bool(context.get("local_proxy"))))
+        if can_choose_proxy:
+            candidates = [proxy] if proxy else ([context["local_proxy"]] if context.get("local_proxy", "") and context["local_proxy"].startswith(("http://", "https://")) else [])
+            if not proxy:
+                candidates += [p["url"] for p in self.discoverer() if safe_local_proxy(p.get("url")) and p["url"].startswith(("http://", "https://"))]
             chosen = None
-            for candidate in list(dict.fromkeys(candidates))[:2]:
+            for candidate in list(dict.fromkeys(candidates))[:3]:
                 result = self.proxy_tester(candidate)
-                # Do not send credentials; API 401 is expected for this probe.
-                api = next((e for e in result.get("evidence", []) if e.get("endpoint") == "https://api.anthropic.com/v1/models"), {})
-                if api.get("http_status") in (200, 401) and api.get("tls_verified") is True and not api.get("error"):
+                verified = self._proxy_verified(result)
+                connections.append({"proxy": candidate, "verified": verified,
+                                    "evidence": result.get("evidence", []) if isinstance(result, dict) else []})
+                if verified:
                     chosen = candidate
                     break
             if chosen:
                 kinds.setdefault("cli", set()).add("proxy")
             else:
-                manual.append("尚未验证可用的本机 HTTP / HTTPS 代理；请在代理客户端开启 HTTP / mixed 端口，再测试。没有改写 Claude Code 代理。")
+                manual.append("尚未验证可用的本机 HTTP / HTTPS 代理；请在代理客户端开启 HTTP / mixed 端口，再检测。本次不改写 Code 代理。")
         else:
             chosen = None
         changes = []
@@ -453,16 +528,23 @@ class SolutionPlans:
                 manual.append("安装器是交互流程，完成后点击继续复检，以实际安装与运行状态为准。")
             else:
                 manual.append("当前平台或已安装维护核心不支持自动修复，按问题列出的步骤处理后复检。")
+        manual_items = [{"id": p["id"], "title": p["title"]} for p in problems if not p.get("repair")]
         if not tasks:
-            return {"state": "guided", "effects": [], "manual": manual, "reason": "本次没有可安全自动执行的修改。请按已定位问题的具体步骤处理，再复检。"}
+            return {"state": "guided", "effects": [], "manual": manual, "manual_items": manual_items, "connections": connections,
+                    "reason": "本次仅提供处理步骤，没有可安全执行的写入。" if manual or manual_items else "本次无需写入配置；仍需在自己的 Claude 中确认实际使用。"}
         token = secrets.token_urlsafe(20)
         before = {"problems": [{"id": p["id"], "title": p["title"]} for p in problems]}
         if selected:
             before["check"] = {"id": selected["id"], "title": selected["title"], "status": selected["status"]}
+        before["configuration"] = [{"target": c["target"], "after_hash": c["after_hash"], "fields": c.get("fields", [])} for c in changes]
+        before["configuration_pending"] = list(manual)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"], "changes": changes,
                               "tasks": tasks, "problems": [p["id"] for p in problems],
-                              "before": before}}
+                              "before": before, "proxy": chosen if changes and any("HTTPS_PROXY" in c.get("fields", []) for c in changes) else None,
+                              "context": context, "repair_json": "trailing_comma" in kinds.get("cli", set())}}
         return {"state": "planned", "plan_id": token, "effects": effects, "manual": manual,
+                "manual_items": manual_items, "connections": connections,
+                "configuration_count": len(changes), "enhance_cli": enhance_cli,
                 "steps": ["备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
                 "reason": "确认后执行；配置写入不等于故障已解决，随后自动复检。"}
 
@@ -476,6 +558,14 @@ class SolutionPlans:
             return {"state": "retest_required", "reason": "本机检测已变化，请重新生成方案，不执行旧方案。"}
         del self.plans[token]
         outputs, backups = [], []
+        if plan.get("proxy"):
+            if self.config.connection_context(plan["repair_json"]) != plan["context"]:
+                return {"state": "retest_required", "reason": "Code 的连接来源在预览后发生变化，尚未写入，请重新检测。"}
+            if not self._proxy_verified(self.proxy_tester(plan["proxy"])):
+                return {"state": "blocked", "backups": [], "before": plan["before"], "needs_retest": True,
+                        "reason": "确认前的代理连接现已无法验证，本次没有写入配置。重新检测后再生成方案，不回退直连。"}
+            if time.monotonic() > plan["deadline"] or not self._current(report):
+                return {"state": "retest_required", "reason": "重新验证期间方案已过期，尚未写入，请重新检测。"}
         if plan["changes"]:
             value = self.config.apply(plan["changes"])
             outputs.append({"step": "config", "state": value["state"], "reason": value.get("reason", "配置已写入，尚待复检")})

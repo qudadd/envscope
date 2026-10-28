@@ -380,6 +380,38 @@ class SolutionAPITests(unittest.TestCase):
         self.ops.remedy_opener.assert_not_called()
         self.assertEqual(self.file.read_bytes(),self.original)
 
+    def test_one_stop_setup_api_reports_current_file_receipt_without_private_hashes(self):
+        self.ops.config_remedies.environ={}
+        self.ops.solutions.proxy_tester=Mock(return_value={'evidence':[response()]})
+        self.store.save_settings({'usage':'cli'})
+        cli_file=self.ops.config_remedies.paths['cli']
+        def auditor(*args,**kwargs):
+            return [finding('extra.cli_env','pass',[{'installation_count':1,'config':config_shape(cli_file)}]),
+                    finding('extra.config','pass',[{'exists':False},config_shape(cli_file)]),
+                    finding('baseline.reachability','pass',[response()])]
+        self.server.auditor=auditor
+        before=self.audit();self.assertFalse(before['diagnosis']['problems'])
+        plan=self.action('solution-plan',{'enhance_cli':True})
+        self.assertFalse(cli_file.exists())
+        result=self.action('solution-apply',{'plan_id':plan['plan_id']},True)
+        self.assertNotIn('before',result)
+        after=self.audit()
+        self.assertFalse(after['resolution']['resolved'])
+        self.assertEqual(after['resolution']['configuration'][0]['state'],'verified')
+        self.assertEqual(after['resolution']['configuration'][0]['scope'],'user-config-file-only')
+        self.assertNotIn('after_hash',json.dumps(after))
+        self.assertNotEqual(after['decision']['verdict'],'clear_in_scope')
+
+    def test_setup_flags_cannot_be_nonboolean_or_supply_remote_proxy(self):
+        from urllib.error import HTTPError
+        self.audit()
+        for params in ({'enhance_cli':'yes'},{'enhance_cli':True,'proxy':'http://proxy.example:8080'},
+                       {'enhance_cli':True,'proxy':'http://user:PRIVATE@127.0.0.1:7897'}):
+            with self.assertRaises(HTTPError) as caught:
+                self.action('solution-plan',params)
+            self.assertEqual(caught.exception.code,400)
+        self.assertEqual(self.file.read_bytes(),self.original)
+
 
 class ProxyHeaderTests(unittest.TestCase):
     def test_connect_407_is_kept_when_curl_returns_receive_error(self):

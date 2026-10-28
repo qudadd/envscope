@@ -122,7 +122,7 @@ td .link{margin-left:15px}
 .normal-observations p{margin:13px 0}
 .solution-tools{border-top:1px solid var(--line);padding-top:6px;margin-top:3px}
 .solution-tools .actions{margin:18px 0;gap:12px}
-#prepare-solution{background:var(--ink);color:white;border-color:var(--ink)}
+#apply-solution{background:var(--ink);color:#fff;border-color:var(--ink);padding:10px 20px;margin:18px 0 12px}
 #quick-proxy-select{width:280px;margin:0}
 #solution-plan h3{font-size:15px;margin:20px 0 10px}
 #solution-plan ul{font-size:13px;padding-left:18px;line-height:1.9;max-width:82ch}
@@ -231,3 +231,25 @@ td .link{margin-left:15px}
 .opensource-option>.note{grid-column:1;grid-row:2;font-size:11px;margin-top:4px}
 .opensource-option>p{grid-column:2;grid-row:1 / span 2;font-size:13px;color:var(--muted);margin-bottom:10px}
 .opensource-option>a{grid-column:2;justify-self:start}
+.connection-options{margin:23px 0 26px;max-width:78ch}
+.connection-options>summary{font-size:12px;color:var(--ink)}
+.connection-options>label{max-width:510px}
+.connection-options>.usage-selector{margin:20px 0}
+.flow-progress{display:flex;list-style:none;gap:0;padding:0;margin:24px 0 11px;border-bottom:1px solid var(--line)}
+.flow-progress li{font-size:12px;color:var(--muted);flex:1;padding:10px 0 12px}
+.flow-progress li[data-active=true]{color:var(--ink);font-weight:600;border-bottom:2px solid var(--ink);margin-bottom:-1px}
+#flow-state{margin-bottom:24px;max-width:85ch}
+.solution-tools[data-workflow=true]>.actions:first-child{display:none}
+#solution-plan .connection-evidence{padding:10px 0;border-bottom:1px solid var(--line)}
+#solution-plan .connection-evidence p{font-size:12px;line-height:1.85;max-width:83ch;margin:12px 0}
+.manual-items{margin:18px 0}
+.manual-items button{display:block;border:0;padding:5px 0;text-decoration:underline;text-underline-offset:4px;white-space:normal;text-align:left}
+.flow-upkeep{border-top:1px solid var(--line);margin-top:28px;padding-top:23px}
+.flow-upkeep h2{font-size:16px;margin-bottom:10px}
+.inline-upkeep-options{display:flex;align-items:center;gap:28px;flex-wrap:wrap}
+.inline-upkeep-options>label:first-child{width:160px}
+.flow-upkeep .actions{margin-top:15px}
+#flow-upkeep-plan h3{font-size:15px;margin:18px 0 11px}
+#flow-upkeep-plan ul{font-size:12px;line-height:1.9;padding-left:19px;max-width:83ch}
+#flow-upkeep-plan li{margin:7px 0;overflow-wrap:anywhere}
+#flow-upkeep-plan button{margin:14px 0}

@@ -12,7 +12,7 @@ from envscope.extended import extended_checks
 from envscope.operations import Operations
 from envscope.state import StateStore
 from envscope.legacy import LegacyBridge
-from envscope.local_facts import config_shape
+from envscope.local_facts import config_shape, cli_facts
 from envscope.maintenance import Maintenance
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,18 +51,20 @@ def main():
         baseline[-1] = Finding("baseline.reachability", "服务连接", Status.PASS, "离线响应夹具", "test-fixture",
                                [{"endpoint":"https://api.anthropic.com/v1/models","http_status":401,"error":"","tls_verified":True}])
         return (findings + baseline + extended_checks({}, {"dns": [], "routes": []},
-                {"desktop_config":config_shape(config_file),"cli":{"config":config_shape(cli_file)}}, {}))
+                {"desktop_config":config_shape(config_file),"cli":{**cli_facts(Path(directory.name), {}),"installation_count":1}}, {}))
     directory = tempfile.TemporaryDirectory()
     store = StateStore(memory=True)
     class FixtureOperations(Operations):
+        valid_proxy = False
         def run(self, action, params, **kwargs):
             if action == "proxy-diagnose":
-                return {"state": "completed", "evidence": [{"http_status": 403, "access": "access_denied"}], "boundary": "offline fixture"}
+                return {"state": "completed", "evidence": [{"endpoint":"https://api.anthropic.com/v1/models", "http_status":401 if self.valid_proxy else 403,"tls_verified":True,"error":""}], "boundary": "offline fixture"}
             return super().run(action, params, **kwargs)
     def never_run(*args, **kwargs):
         raise AssertionError("Smoke test must never execute the original backend")
     operations = FixtureOperations(store, directory.name, legacy=LegacyBridge(platform_name='Windows', home=directory.name, runner=never_run),
                                    discoverer=lambda: [{"url": "http://127.0.0.1:7897", "sources": ["离线夹具"], "connection_verified": False}])
+    operations.config_remedies.environ = {}
     config_file=operations.config_remedies.paths['desktop']
     cli_file=operations.config_remedies.paths['cli']
     cli_file.parent.mkdir(parents=True,exist_ok=True)
@@ -78,6 +80,7 @@ def main():
         with sync_playwright() as runtime:
             browser = runtime.chromium.launch(headless=True)
             for label, width, height in (("desktop-small", 1024, 800), ("desktop", 1280, 1000), ("desktop-wide", 1440, 1000)):
+                operations.valid_proxy = False
                 store._learning = {"version": 0, "completed": False}
                 store.save_settings({"usage": "auto", "country": ""})
                 config_file.write_bytes(original)
@@ -111,11 +114,12 @@ def main():
                 assert not operations.maintenance._config().get('enabled'), 'reading must not install a job'
                 page.get_by_role('button',name='开始第一次检测',exact=True).click()
                 expect(page.locator("#share")).to_be_enabled()
-                expect(page.locator("#verdict")).to_contain_text("先处理这件事")
+                expect(page.locator('#apply-solution')).to_be_visible()
+                expect(page.locator("#verdict")).to_contain_text("检测完成，请核对处理方案")
                 assert store.learning()['completed'] is True
                 assert not page.locator('#technical-details').evaluate('(node)=>node.open')
                 assert not page.locator('#beginner-checks').evaluate('(node)=>node.open')
-                expect(page.locator('#usage-tasks')).to_contain_text('软件和设置')
+                expect(page.locator('#flow-state')).to_contain_text('确认一次后执行并复检')
                 assert page.locator('#checks tr[data-check^="baseline."]').count()==14
                 assert page.locator('#checks tr[data-check^="extra."]').count()==18
                 assert page.locator('#claude-check-rows [data-claude-check]').count()==14
@@ -144,11 +148,10 @@ def main():
                 expect(page.locator('[data-claude-check="dns"]')).to_contain_text('怎样长期保持')
                 page.locator('#claude-checklist').screenshot(path=str(ARTIFACTS/f'{label}-checklist.png'))
                 page.locator('#beginner-checks>summary').click()
-                page.get_by_role('button',name='预览可修复内容',exact=True).click()
-                expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
+                expect(page.locator('#solution-plan')).to_contain_text('确认后完成这些设置和修复')
                 assert config_file.read_bytes()==original, 'preview must not edit'
                 page.screenshot(path=str(ARTIFACTS/f'{label}-plan.png'))
-                page.get_by_role('button',name='确认执行此方案',exact=True).click()
+                page.locator('#apply-solution').click()
                 expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
                 expect(page.locator('#verdict')).to_have_text('连接有回应，下一步试用 Claude')
                 assert config_shape(config_file)['valid']
@@ -156,9 +159,9 @@ def main():
                 page.get_by_role('button',name='撤销 Claude 桌面配置',exact=True).click()
                 expect(page.locator('#verdict')).to_contain_text('先处理这件事')
                 assert config_file.read_bytes()==original
-                page.get_by_role('button',name='预览可修复内容',exact=True).click()
-                expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
-                page.get_by_role('button',name='确认执行此方案',exact=True).click()
+                page.locator('#start').click()
+                expect(page.locator('#apply-solution')).to_be_visible()
+                page.locator('#apply-solution').click()
                 expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
                 # A fresh page has no in-memory undo buttons. Its per-item plan
                 # must still be visible, and persistent backups must be listed.
@@ -168,8 +171,9 @@ def main():
                 expect(page.locator('#learning-panel')).to_be_visible()
                 page.get_by_role('button',name='稍后学习',exact=True).click()
                 expect(page.locator('#learning-panel')).to_be_hidden()
-                page.get_by_role('button',name='一键检测',exact=True).click()
+                page.locator('#start').click()
                 expect(page.locator('#share')).to_be_enabled()
+                expect(page.locator('#start')).to_be_enabled()
                 page.locator('#try-success').click()
                 expect(page.locator('#try-feedback')).to_contain_text('不会改变技术检测结论')
                 page.locator('#try-help').click()
@@ -179,7 +183,7 @@ def main():
                 expect(page.locator('#symptom-advice')).to_contain_text('/mcp')
                 page.screenshot(path=str(ARTIFACTS/f'{label}-symptoms.png'))
                 page.locator('#symptom-help>summary').click()
-                expect(page.locator('#solution-tools')).to_be_hidden()
+                expect(page.locator('#apply-solution')).to_have_count(0)
                 page.locator('#beginner-checks>summary').click()
                 page.locator('[data-claude-check="guard"]>summary').click()
                 page.locator('[data-claude-check="guard"]').get_by_role('button',name='审核本项处理方案',exact=True).click()
@@ -258,6 +262,56 @@ def main():
                 expect(page.locator('#try-claude')).to_be_hidden()
                 expect(page.locator('#beginner-checks')).to_be_hidden()
                 page.unroute('**/api/audit')
+                # A complete setup can be offered without a diagnosed fault.
+                # It stays a preview until the single explicit confirmation.
+                operations.valid_proxy = True
+                code_original=json.dumps({'permissions':{'deny':['Read(.env)']},'mcpServers':{'fixture':{'command':'PRIVATE_MCP'}},'env':{'OTHER':'PRIVATE_SETTING'}}).encode()
+                cli_file.write_bytes(code_original)
+                page.locator('#connection-options>summary').click()
+                page.locator('#usage').select_option('cli')
+                page.locator('#enhance-cli').check()
+                page.locator('#start').click()
+                expect(page.locator('#apply-solution')).to_be_visible()
+                expect(page.locator('#solution-plan')).to_contain_text('恢复 Node TLS 证书校验')
+                assert cli_file.read_bytes()==code_original, 'automatic preparation must be read-only'
+                expect(page.locator('#verdict-note')).to_contain_text('0 项需要处理或核对的问题')
+                page.locator('#connection-options>summary').click()
+                page.locator('#enhance-cli').uncheck()
+                expect(page.locator('#apply-solution')).to_have_count(0)
+                assert cli_file.read_bytes()==code_original, 'editing options invalidates pending confirmation'
+                page.locator('#enhance-cli').check()
+                page.locator('#start').click()
+                expect(page.locator('#apply-solution')).to_be_visible()
+                page.locator('#beginner-checks').evaluate('(node)=>node.open=false')
+                page.evaluate('window.scrollTo(0,0)')
+                page.screenshot(path=str(ARTIFACTS/f'{label}-setup-preview.png'),full_page=True)
+                page.locator('#apply-solution').click()
+                expect(page.locator('#resolution')).to_contain_text('配置文件核对：1 / 1')
+                configured=json.loads(cli_file.read_text(encoding='utf-8'))
+                assert configured['env']['HTTPS_PROXY']=='http://127.0.0.1:7897'
+                assert configured['env']['NODE_TLS_REJECT_UNAUTHORIZED']=='1'
+                assert configured['env']['OTHER']=='PRIVATE_SETTING'
+                assert configured['permissions']=={'deny':['Read(.env)']}
+                assert configured['mcpServers']=={'fixture':{'command':'PRIVATE_MCP'}}
+                assert 'PRIVATE_SETTING' not in page.locator('body').inner_text()
+                assert page.locator('.tab[data-page="audit"]').get_attribute('aria-current')=='page'
+                page.locator('#flow-upkeep-restore').check()
+                page.locator('#flow-upkeep-prepare').click()
+                expect(page.locator('#flow-upkeep-plan')).to_contain_text('确认启用长期保持')
+                assert not operations.maintenance._config().get('enabled')
+                page.get_by_role('button',name='确认启用长期保持',exact=True).click()
+                expect(page.locator('#flow-upkeep-status')).to_contain_text('等待首次巡检')
+                page.evaluate('window.scrollTo(0,0)')
+                page.screenshot(path=str(ARTIFACTS/f'{label}-inline-upkeep.png'),full_page=True)
+                page.locator('#flow-upkeep-stop').click()
+                expect(page.locator('#flow-upkeep-status')).to_contain_text('尚未启用')
+                assert not operations.maintenance._config().get('enabled')
+                page.locator('#technical-details>summary').click()
+                with page.expect_download() as configured_download:
+                    page.locator('#share').click()
+                safe=Path(configured_download.value.path()).read_text(encoding='utf-8')
+                assert 'after_hash' not in safe and 'PRIVATE_SETTING' not in safe and 'PRIVATE_MCP' not in safe
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 assert not errors, errors
                 summary[label] = {"page_errors": 0, "horizontal_overflow": False,
                                   "baseline_categories": 14, "extended_checks": 18, "one_stop_repair": "passed", "recheck":"passed", "undo":"passed", "no_raw_details":True, "share_download": "passed", "account_labels": "passed",
@@ -267,7 +321,9 @@ def main():
                                   "per_item_plan_visible_without_problems":"passed","persistent_backup_list":"passed",
                                   "first_launch_teaching":"passed","teaching_back_and_replay":"passed","teaching_persistence":"passed",
                                   "plain_check_explanations":14,"symptom_help":"passed","manual_trial_separate_and_reset":"passed",
-                                  "advanced_records_collapsed":"passed","open_source_roles":"passed","failed_audit_clears_old_guidance":"passed"}
+                                  "advanced_records_collapsed":"passed","open_source_roles":"passed","failed_audit_clears_old_guidance":"passed",
+                                  "automatic_solution_preview":"passed","single_setup_confirmation":"passed","setup_without_diagnosed_fault":"passed",
+                                  "fresh_file_receipt":"passed","inline_upkeep_enable_stop":"passed","changed_options_invalidate_preview":"passed"}
                 context.close()
             browser.close()
     finally:

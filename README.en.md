@@ -2,7 +2,16 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS Claude environment toolkit. Alpha v0.5.0.
+A minimal Windows/macOS Claude environment toolkit. Alpha v0.6.0.
+
+One click now checks the environment and automatically prepares a combined setup
+and repair preview. One confirmation backs up, applies and rechecks. Optional Code
+setup works even without a diagnosed fault: verified local HTTP(S) proxy, target
+bypass cleanup and TLS verification. The selected proxy is tested again before
+any file write. Custom/cloud providers and unselected remote proxies are not
+rerouted. File receipts are freshly read, never treated as process or account
+proof. Identical values are not rewritten for formatting. Upkeep preview, enable
+and stop are available on the same page.
 
 First launch offers a skippable three-step lesson, persisted locally across
 restarts and replayable from the sidebar. Results prioritize one actionable
