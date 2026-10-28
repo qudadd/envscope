@@ -5,6 +5,7 @@ import {initGuide} from "./guide.mjs";
 import {initInspection} from "./inspection.mjs";
 import {initDesktopApp} from "./desktop.mjs";
 import {initConnection, disconnected} from "./connection.mjs";
+import {initTargetEnvironment} from './target.mjs';
 
 const byId=id=>document.getElementById(id);
 const nodes={start:byId("start"),share:byId("share"),checks:byId("checks"),quit:byId("quit")};
@@ -86,6 +87,8 @@ function renderDesktop(report,source='current') {
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
 const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
+const targetUI=initTargetEnvironment({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy});
+document.addEventListener('envscope-target-changed',()=>{lastReport=null;lastSnapshot=null;nodes.share.disabled=true;byId('qualification').hidden=true;byId('verdict').textContent='目标已更新，等待本轮检测';});
 initDesktopApp({run:diagnosisUI.run,operate:diagnosisUI.operate});
 const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy,operate:diagnosisUI.operate,
   onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
@@ -103,6 +106,7 @@ async function nativeAudit(session,snapshot) {
 }
 
 async function runAudit({oneStop=false,phase='check'}={}){
+  if(!await targetUI.ensure())return;
   setFlowStage(phase==='recheck'?'repair':'check',phase==='recheck'?'正在重新检测配置与连接，写入成功不代替复检结果。':'正在检查连接和环境设置，尚未写入任何配置。');
   document.dispatchEvent(new CustomEvent('envscope-audit-start'));
   byId('connection-options').open=false;
@@ -115,7 +119,6 @@ async function runAudit({oneStop=false,phase='check'}={}){
   byId("coverage-count").textContent="正在检测";byId("verdict-note").textContent="正在采集本次观测并分析问题。请保持本地页面打开。";
   byId("session-state").textContent="正在收集证据";byId("verdict").textContent="观测中…";
   try {
-    if(await sessionPromise)await diagnosisUI.run("settings-save",{usage:byId("usage").value});
     const [http,ice]=await Promise.all([
       Promise.all([request("https://api4.ipify.org?format=json","json","ipify-v4",4),request("https://www.cloudflare.com/cdn-cgi/trace","trace","cloudflare-v4",4),request("https://api6.ipify.org?format=json","json","ipify-v6",6)]),
       gatherICE()

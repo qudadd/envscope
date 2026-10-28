@@ -89,12 +89,16 @@ def checklist(report, preferences=None):
         status = primary.get("status", "unknown")
         scope = primary.get("scope", "not-measured")
         summary = primary.get("summary", "本次尚未取得该项的有效观测。")
-        target = {"country": "country", "timezone": "timezone", "locale": "locale", "language": "locale"}.get(key)
+        target = {"country": "country", "timezone": "timezone", "locale": "locale", "language": "language" if preferences.get('environment_confirmed') else "locale"}.get(key)
         if target and not preferences.get(target):
             status, summary = "not_configured", "未设置比较目标；当前观测仅供核对。"
         if key == "asn" and primary.get("status") == "pass":
             status = "info"
         related = [p["id"] for p in problems if any(p["id"].startswith(prefix) for prefix in CHECK_PROBLEMS[key])]
+        if report.get('environment'):
+            note = next((r for r in report['assessment']['items'] if r['id'] == ids[0]), {})
+            if note.get('state') in ('not_applicable', 'informational'):
+                status, summary = 'info', note['reason']
         rows.append({"id": key, "number": index, "title": title, "status": status,
                      "summary": summary, "scope": scope, "measurement": measurement,
                      "observations": [{"id": f["id"], "title": f["title"], "status": f["status"], "summary": f["summary"]} for f in observed],

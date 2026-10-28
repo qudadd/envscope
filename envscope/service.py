@@ -135,10 +135,13 @@ class DesktopHandler(SimpleHTTPRequestHandler):
             return
         try:
             if self.path == "/api/audit":
+                if not self.server.store.settings().get('environment_confirmed'):
+                    self.json_response(409, {'error': 'target_environment_required'})
+                    return
                 self.json_response(200, collect_report(self.server, snapshot))
             else:
                 def preflight():
-                    if not self.server.last_browser:
+                    if not self.server.last_browser or not self.server.store.settings().get('environment_confirmed'):
                         return False
                     try:
                         fresh_browser = validate_snapshot(self.server.last_browser)
@@ -152,7 +155,7 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     self.server.solution_before = result.pop("before")
                 elif request["action"] in ("solution-open", "solution-undo") and result.get("state") in ("opened", "completed") and self.server.last_raw_report:
                     self.server.solution_before = {"problems": [{"id": p["id"], "title": p["title"]} for p in self.server.last_raw_report["diagnosis"]["problems"]]}
-                if request["action"] in ("settings-save", "settings-restore", "fix", "install", "update-apply", "set-region", "set-client") or request["action"] in ("solution-apply", "solution-undo") and result.get("state") not in ("confirmation_required", "retest_required"):
+                if request["action"] in ("environment-confirm", "settings-save", "settings-restore", "fix", "install", "update-apply", "set-region", "set-client") or request["action"] in ("solution-apply", "solution-undo") and result.get("state") not in ("confirmation_required", "retest_required"):
                     self.server.last_raw_report = None
                 if request["action"] in ("account-switch", "app-launch", "app-restart", "open-safe") and self.server.last_raw_report:
                     result["latest_report"] = redact(self.server.last_raw_report)
@@ -174,7 +177,7 @@ class DesktopHandler(SimpleHTTPRequestHandler):
 
 def collect_report(server, snapshot):
     policy = server.store.policy()
-    findings = server.auditor(policy, desktop_transport(), online=True, stun=True, ipv6=True, browser=snapshot,
+    findings = server.auditor(policy, desktop_transport(server.store.settings()), online=True, stun=True, ipv6=True, browser=snapshot,
                               baseline_config=server.store.settings())
     changed = server.store.address_change([f.to_dict() for f in findings])
     for finding in findings:

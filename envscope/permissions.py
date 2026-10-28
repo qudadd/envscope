@@ -16,6 +16,7 @@ def permission_help(report, params, home, profile, confirmed=False, runner=subpr
     system = system or platform.system()
     scopes = {"extra.hosts": ("读取 hosts 中与 Claude 有关的记录", Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/drivers/etc/hosts"),
               "extra.config": ("读取 Claude / Code 用户配置的格式", profile),
+              "target.config": ("读取所选 Claude / Code 用户配置的格式", home / '.claude' if report.get('usage') == 'cli' else profile),
               "extra.cli_env": ("读取 Code 用户配置的格式与环境项存在性", home / ".claude"),
               "extra.proxy_layers": ("读取当前用户的系统代理设置", None)}
     if finding["id"] not in scopes:

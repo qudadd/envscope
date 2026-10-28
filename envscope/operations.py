@@ -15,6 +15,7 @@ from .maintenance import Maintenance
 from .readiness import launch_readiness
 from .check_catalog import check_catalog
 from .environment_info import cli_information, device_information
+from .target_environment import FIELDS as TARGET_FIELDS, summary as environment_summary, suggest as environment_suggest, fingerprint
 
 
 def _process(command, timeout=8):
@@ -77,8 +78,9 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None):
         self.store = store
+        self.environment_reader = environment_reader
         # Resolve only the trusted home alias (macOS /var temp paths or a
         # relocated home); account/configuration children remain link-checked.
         self.home = (Path(home) if home is not None else Path.home()).resolve()
@@ -138,13 +140,24 @@ class Operations:
         legacy["actions"].extend(detailed)
         desktop = getattr(self, "desktop_runtime", None)
         return {"desktop": desktop.status() if desktop else {"mode": "browser"}, "legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
-                "settings": self.store.settings(), "history": self.store.history(), "maintenance": self.maintenance.status(),
+                "settings": self.store.settings(), "environment": environment_summary(self.store.settings()), "history": self.store.history(), "maintenance": self.maintenance.status(),
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action == 'environment-suggest':
+            if params:
+                raise ValueError('unexpected action parameters')
+            from .inventory import collect
+            from .local_facts import cli_facts
+            return environment_suggest(self.store.settings(), (self.environment_reader or collect)(), cli_facts(self.home, self.config_remedies.environ), self.discoverer())
+        if action == 'environment-confirm':
+            if not {'usage', 'connection_mode'} <= set(params) or set(params) - (TARGET_FIELDS - {'environment_confirmed'}):
+                raise ValueError('invalid target environment fields')
+            value = self.store.save_settings(params, confirm_environment=True)
+            return {'state': 'completed', 'settings': value, 'environment': environment_summary(value)}
         if action in ("desktop-status", "desktop-save", "desktop-show", "desktop-hide", "app-update-check", "app-update-install", "app-update-rollback", "app-update-restart"):
             desktop = getattr(self, "desktop_runtime", None)
             return desktop.run(action, params, confirmed) if desktop else {"state": "unavailable", "reason": "此功能需要打开 EnvScope 独立软件。当前是浏览器兼容界面。"}
@@ -161,6 +174,12 @@ class Operations:
                                   "maintenance-report": set(), "maintenance-undo": {"backup_id"}})
         if action in native_parameters and set(params) - native_parameters[action]:
             raise ValueError("unexpected action parameters")
+        target_action = action in ('solution-plan', 'maintenance-plan') or action in ('solution-apply', 'maintenance-enable') and confirmed is True
+        if target_action and not self.store.settings().get('environment_confirmed'):
+            return {'state': 'retest_required', 'reason': '请先确认使用目标并完成本轮检测。'}
+        if (target_action or action == 'solution-open') and report and report.get('environment'):
+            if not self.store.settings().get('environment_confirmed') or report['environment']['fingerprint'] != fingerprint(self.store.settings()):
+                return {'state': 'retest_required', 'reason': '目标环境已改变，请确认目标并重新检测；旧方案不再执行。'}
         gate = preflight or (lambda: launch_gate(report, self.store.settings())[0])
         if action in ("legacy-cli-info", "legacy-fingerprint"):
             return self.legacy.run(action.removeprefix("legacy-"), params, confirmed=confirmed, preflight=gate)

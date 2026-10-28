@@ -43,6 +43,10 @@ class Finding:
 
 def make_report(findings, policy, mode="audit", preferences=None):
     from .policy import decide
+    from .target_environment import build_findings, plan, summary, scoped_preferences, FIELDS
+
+    preferences = preferences or {}
+    findings = list(findings) + build_findings(findings, preferences)
 
     ids = [f.id for f in findings]
     if len(ids) != len(set(ids)):
@@ -66,14 +70,18 @@ def make_report(findings, policy, mode="audit", preferences=None):
         "findings": [f.to_dict() for f in findings],
         "boundary": "只读诊断；结论仅覆盖本次观测与配置范围，不证明零泄漏或防火墙保护。",
     }
+    target_plan = plan(preferences)
+    if target_plan:
+        report['environment'] = {**summary(preferences), **target_plan,
+                                 'targets': {k: preferences.get(k) for k in sorted(FIELDS)}}
+    from .assessment import assessment
+    report["assessment"] = assessment(report, preferences)
     from .diagnosis import diagnose
-    report["diagnosis"] = diagnose(report, preferences)
+    report["diagnosis"] = diagnose(report, scoped_preferences(preferences))
     from .claude_checks import checklist
     report["claude_checks"] = checklist(report, preferences)
     from .guide import usage_guide
     report["guide"] = usage_guide(report)
     from .readiness import launch_readiness
     report["launch"] = launch_readiness(report, preferences)
-    from .assessment import assessment
-    report["assessment"] = assessment(report, preferences)
     return report

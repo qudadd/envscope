@@ -3,7 +3,7 @@ from urllib.parse import urlsplit
 
 
 LESSON_VERSION = 1
-USAGES = ("auto", "desktop", "cli", "both")
+USAGES = ("auto", "desktop", "cli", "both", "web")
 
 # These explanations accompany, rather than replace, the pinned 14-item protocol.
 EXPLANATIONS = {
@@ -75,6 +75,11 @@ def usage_guide(report):
     custom_service = "cli" in selected and any(cli.get(key) for key in ("custom_endpoint", "bedrock", "vertex", "foundry"))
     if custom_service:
         network_known = False
+    if usage == 'web':
+        installation_known = config_known = True
+        network_known = web
+    if report.get('environment'):
+        network_known = findings.get('target.service', {}).get('status') == 'pass'
     tasks = [
         {"id": "setup", "title": "软件和设置", "state": "attention" if setup_problems else "checked" if installation_known and config_known else "unverified",
          "text": "先修正下面列出的安装或配置问题。" if setup_problems else "已在所列位置找到软件，所选配置格式未发现问题；仍需在实际会话中确认生效。" if installation_known and config_known else "还没有完整确认所选软件和配置；未创建可选配置文件不算故障。", "problem_ids": [p["id"] for p in setup_problems]},

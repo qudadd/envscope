@@ -30,6 +30,8 @@ def http_observations(transport, family):
         response = transport.get(url, family)
         result = {"source": name, "endpoint": display_url(url), "family": family,
                   "path": transport.path, "observed_at": utc_now(), "http_status": response.status}
+        if getattr(transport, 'proxy', None):
+            result['proxy_endpoint'] = display_url(transport.proxy)
         try:
             result["ip"] = parse_ip_response(response, parser, family)
             if parser == "trace":

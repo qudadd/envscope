@@ -2,7 +2,13 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS Claude environment toolkit. Alpha v0.8.0.
+A minimal Windows/macOS Claude environment toolkit. Alpha v0.9.0.
+
+Confirm the intended application, connection mode and comparison targets once,
+then run a scoped check, review repairs and recheck automatically. Timezone and
+locale default to the computer's current values. Original measurements remain
+visible; unrelated checks no longer block the selected use case. See the
+[target environment and simulation coverage](docs/TARGET_ENVIRONMENT.md).
 
 The desktop package now uses an independent native window and a tray/menu-bar
 entry. Closing can keep it in the background; launching twice activates the
@@ -13,7 +19,8 @@ automatically. See [desktop acceptance](docs/DESKTOP_ACCEPTANCE.md).
 
 Basic-use assessment distinguishes confirmed problems, explicit permission
 denials, incomplete probes, inapplicable checks and unimplemented capabilities.
-The strict privacy decision and account launch gate are unchanged. The Models
+The privacy verdict remains separate. Desktop handoff rechecks the confirmed
+target, including extra gates when strict TUN protection is selected. The Models
 API probe now uses GET; native HTTP probes respect a discovered system HTTP
 proxy when HTTPS/ALL proxy environment settings are absent.
 

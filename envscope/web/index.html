@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.8.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.9.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -34,13 +34,41 @@
       <details class="network-note"><summary>只读检测，探测会联系外部服务</summary><p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p></details>
     </section>
 
+    <section id="target-environment" class="target-environment" aria-label="目标环境">
+      <div class="target-heading"><div><h2>本次按什么目标检查</h2><p id="target-summary" class="note">首次检测前，确认一次使用方式和连接方式。</p></div><button id="target-edit" class="link">设置目标</button></div>
+      <form id="target-form" hidden>
+        <p id="target-observed" class="note" role="status">正在读取电脑当前设置…</p>
+        <div class="form-grid">
+          <label>使用方式<select name="usage" required><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版与 Code</option><option value="web">Claude 网页</option></select></label>
+          <label>连接方式<select name="connection_mode" required><option value="direct">直连</option><option value="http_proxy">HTTP / 系统代理</option><option value="tun">TUN / VPN</option></select></label>
+          <label>比较时区<input name="timezone" maxlength="100" placeholder="默认保留电脑当前值"></label>
+          <label>比较地区格式<input name="locale" maxlength="100" placeholder="默认保留电脑当前值"></label>
+        </div>
+        <p class="note">时区与地区格式默认保留当前值，留空则仅记录。无需与出口国家相同。系统时钟是否准确会单独检测。</p>
+        <div id="target-code-fields" class="form-grid" hidden>
+          <label>Code 接口<select name="provider"><option value="anthropic">Anthropic 官方</option><option value="custom">自定义接口</option><option value="bedrock">Amazon Bedrock</option><option value="vertex">Google Vertex</option><option value="foundry">Microsoft Foundry</option></select></label>
+          <label>认证方式<select name="auth_mode"><option value="existing">保留现有登录</option><option value="subscription">Claude 订阅登录</option><option value="api_key">API Key</option><option value="managed">云平台 / 组织管理</option></select></label>
+        </div>
+        <label id="target-proxy-field" hidden>本机 HTTP / HTTPS 代理<input name="target_proxy" type="url" maxlength="2048" placeholder="留空则读取现有环境或系统代理"><span class="note">不填写密码。Code 修改前验证连接；桌面版和网页还会核对系统代理是否一致。</span></label>
+        <details><summary>其他目标与保护要求</summary><div class="form-grid">
+          <label>比较出口国家<input name="country" maxlength="2" placeholder="可选，例如 US"></label>
+          <label>比较应用语言<input name="language" maxlength="30" placeholder="可选，例如 zh-CN"></label>
+          <label>IPv6 要求<select name="ipv6_mode"><option value="observe">仅观察，不限制</option><option value="disabled">要求已关闭</option><option value="allowlist">要求出口在指定网段内</option></select></label>
+          <label>IPv6 允许网段<textarea name="allowed_ipv6" rows="2" placeholder="选择指定网段时必填，每行一个"></textarea></label>
+          <label>检查要求<select name="protection"><option value="standard">标准使用条件</option><option value="guarded">严格 TUN 保护条件</option></select></label>
+        </div><p class="note">标准检查验证所选用途的连接与配置；严格模式还要求 TUN、UDP、IPv6 和已选守护 / 规则。两者都不等于完整隐私保证。应用语言与自定义云端权限可能需要在 Claude 中核对。</p></details>
+        <p class="note">确认只保存 EnvScope 的检测目标。系统、账号与 Code 配置修改会在检测后另列方案，由你确认后执行。</p>
+        <p id="target-output" role="status" class="note"></p><div class="actions"><button id="target-confirm" type="submit" class="primary">确认目标并检测</button><button id="target-cancel" type="button" class="link">取消调整</button></div>
+      </form>
+    </section>
+
     <section id="audit-results" aria-label="检测结果" aria-busy="false">
       <div class="result-summary" aria-live="polite"><h2 id="verdict">先打开平时使用的连接工具，再检测</h2><span id="coverage-count">14 项基础 · 18 项扩展</span></div>
       <p id="verdict-note" class="note">检测后自动合并处理方案。你确认一次，再写入配置、修复并复检。</p>
       <div id="qualification" hidden><p id="qualification-counts" class="note"></p><details><summary>哪些关键条件还需要处理</summary><div id="qualification-pending"></div></details><p id="qualification-boundary" class="note"></p></div>
-      <button id="show-all-checks" class="link">查看全部 32 项检查与说明</button>
+      <button id="show-all-checks" class="link">查看全部检查与证据</button>
       <details id="connection-options" class="connection-options"><summary>环境设置：自动识别，检测后确认</summary>
-        <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option></select></label>
+        <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option><option value="web">Claude 网页</option></select></label>
         <label class="checkbox"><input id="enhance-cli" type="checkbox" checked>识别到 Code 时，同时完善连接设置</label>
         <p class="note">先验证本机 HTTP 代理，再生成固定连接和开启证书校验的方案。已有自定义接口、云平台或远程代理会单独核对。桌面版使用现有连接与原版维护能力。</p>
         <label>Code 使用的本机连接<select id="workflow-proxy"><option value="auto">自动核对现有连接</option><option value="manual">手动填写本机 HTTP 地址</option></select></label>
@@ -83,7 +111,7 @@
     <div id="page-checks" class="page" hidden>
       <h1>全部检查</h1><p class="subtle">14 项基础对应 claude-switcher，18 项扩展检查连接、配置和安装。每一项都能查看用途、结果与下一步。</p>
       <p id="all-checks-context" class="note" role="status">尚未检测，下面是完整检查目录。</p>
-      <div class="check-filters"><label>查找项目<input id="check-search" type="search" placeholder="例如：DNS、登录、证书"></label><label>分类<select id="check-group"><option value="all">全部分类</option><option value="baseline">14 项基础</option><option value="extra">18 项扩展</option><option value="measurement">补充测量</option></select></label><label>状态<select id="check-status"><option value="all">全部状态</option><option value="attention">需要处理或复核</option><option value="unknown">需要补全</option><option value="excluded">不适用、参考或版本未支持</option><option value="pass">范围内通过</option><option value="not_run">尚未检测</option></select></label></div>
+      <div class="check-filters"><label>查找项目<input id="check-search" type="search" placeholder="例如：DNS、登录、证书"></label><label>分类<select id="check-group"><option value="all">全部分类</option><option value="target">目标验收</option><option value="baseline">14 项基础</option><option value="extra">18 项扩展</option><option value="measurement">补充测量</option></select></label><label>状态<select id="check-status"><option value="all">全部状态</option><option value="required">本次必需</option><option value="attention">需要处理或复核</option><option value="unknown">需要补全</option><option value="excluded">不适用、参考或版本未支持</option><option value="pass">范围内通过</option><option value="not_run">尚未检测</option></select></label></div>
       <p id="check-count" class="note" role="status"></p><div id="all-checks-list"></div>
       <div class="actions"><button id="checks-return" class="link">返回一键检测与修复</button></div>
     </div>
@@ -161,7 +189,7 @@
         <p id="software-output" role="status"></p>
       </section>
       <form id="settings-form">
-        <label>使用范围<select name="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面</option><option value="cli">Claude Code</option><option value="both">桌面与 Code</option></select></label>
+        <label>使用范围<select name="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面</option><option value="cli">Claude Code</option><option value="both">桌面与 Code</option><option value="web">Claude 网页</option></select></label>
         <div class="form-grid"><label>目标国家代码<input name="country" maxlength="2" placeholder="可选，例如 US"></label><label>目标时区<input name="timezone" placeholder="Windows 用系统 ID，macOS 用 IANA ID"></label><label>目标地区格式<input name="locale" placeholder="可选，例如 en-US"></label><label>代理客户端<select name="client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option><option value="other">其他</option></select></label><label>目标代理组<input name="proxy_group" placeholder="留空时从运行规则识别"></label><label>STUN 端口的预期策略<select name="webrtc_policy"><option value="proxy">经代理</option><option value="reject">拒绝</option></select></label></div>
         <details><summary>允许的出口与启动条件</summary><p class="note">只有明确填写允许范围后，超出范围的地址才判为策略违反。留空不代表允许任何路径，也不证明安全。</p><div class="form-grid"><label>IPv4 地址或 CIDR，每行一个<textarea name="allowed_ipv4" rows="3"></textarea></label><label>IPv6 地址或 CIDR，每行一个<textarea name="allowed_ipv6" rows="3"></textarea></label></div>
           <label class="checkbox"><input type="checkbox" name="require_guard">启动前要求守护任务已注册</label><label class="checkbox"><input type="checkbox" name="require_rules">启动前要求代理运行规则通过核对</label><p class="note">启动仍要求有效出口、UDP、代理客户端、隧道网卡及 IPv6 配置证据；所有失败项都会阻止启动。此条件不等于完整隐私证明。</p>

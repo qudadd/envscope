@@ -9,6 +9,8 @@ def denied(value):
 
 def assessment(report, preferences=None):
     preferences = preferences or {}
+    if report.get('environment', {}).get('confirmed'):
+        return target_assessment(report)
     findings = report.get("findings", [])
     by_id = {f["id"]: f for f in findings}
     usage = report.get("usage", "auto")
@@ -69,3 +71,47 @@ def assessment(report, preferences=None):
             "summary": f"通过 {counts['passed']} 项，发现问题 {counts['problem']} 项，需复核 {counts['review']} 项；关键待处理 {len(pending)} 项。",
             "counts": counts, "items": details,
             "boundary": "结论仅覆盖列出的使用条件；真实登录、订阅权限及回复仍需在 Claude 中确认。进程接管和权威 DNS 出口未验证，不代表完整隐私合格。"}
+
+
+def target_assessment(report):
+    env = report['environment']
+    required, excluded = set(env['required']), env['excluded']
+    details = []
+    for f in report.get('findings', []):
+        key, status = f['id'], f['status']
+        state = {'pass': 'passed', 'fail': 'problem', 'warn': 'review', 'skipped': 'unavailable'}.get(status, 'unavailable')
+        reason, step, action = f['summary'], f.get('suggestion', ''), None
+        if denied(f.get('evidence', [])):
+            state, action = 'permission', 'permission-help'
+            step = '系统明确拒绝读取；只为本项开放所需权限后复检。'
+        elif key == 'extra.cli_paths' and status == 'skipped':
+            state, reason = 'problem', '所选用途需要 Code，但 PATH 中未找到入口。'
+        elif key == 'extra.cli_env' and status == 'skipped':
+            state, reason = 'passed', '已检查所列环境变量，没有可选自定义配置；登录另行确认。'
+        elif key in ('extra.desktop', 'extra.profile') and any(v.get('found', v.get('exists')) is False for v in f.get('evidence', []) if isinstance(v, dict)):
+            state = 'problem'
+        elif key == 'extra.cli_env' and status == 'warn':
+            state = 'problem'
+        if key in excluded:
+            state, reason = 'not_applicable', excluded[key]
+        elif key in ('network.route', 'dns.leak'):
+            state = 'unsupported'
+            reason = '本版没有相应测量能力，保留为未验证；不作为所选基础使用目标的验收项。'
+        elif key not in required and state != 'permission':
+            state = 'informational'
+            reason = '参考记录，不作为本次目标的验收条件。' + reason
+        details.append({'id': key, 'state': state, 'reason': reason, 'next_step': step,
+                        'action': action, 'required': key in required, 'measured_status': status})
+    for key in sorted(required - {f['id'] for f in report.get('findings', [])}):
+        details.append({'id': key, 'state': 'unavailable', 'reason': '本轮未返回该目标必需的证据。',
+                        'next_step': '重新检测；缺少证据不能判为通过。', 'action': None, 'required': True, 'measured_status': 'unknown'})
+    active = [d for d in details if d['required']]
+    pending = [d for d in active if d['state'] != 'passed']
+    blockers = [d for d in active if d['state'] == 'problem']
+    verdict = 'needs_fix' if blockers else 'incomplete' if pending else 'qualified_in_scope'
+    states = ('passed', 'problem', 'review', 'permission', 'probe_incomplete', 'unavailable', 'unsupported', 'not_applicable', 'informational')
+    counts = {s: sum(d['state'] == s for d in details) for s in states}
+    return {'verdict': verdict, 'headline': {'needs_fix': '目标环境有不合格项', 'incomplete': '目标环境仍有待完成的检查', 'qualified_in_scope': '所选目标的环境检查合格'}[verdict],
+            'summary': f"必需检查 {len(active)} 项：通过 {len(active)-len(pending)} 项，不合格 {len(blockers)} 项，待完成 {len(pending)-len(blockers)} 项。",
+            'counts': counts, 'items': details, 'target_summary': env['summary'],
+            'boundary': '合格仅指所选目标与已测条件；请在实际 Claude 中完成登录并确认回复。参考项保留原始结果，完整隐私保护、进程接管和权威 DNS 出口不据此判为通过。'}

@@ -274,3 +274,14 @@ td .link{margin-left:15px}
 #app-update-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.8}
 #qualification{max-width:83ch;margin:15px 0}
 #qualification-pending p{font-size:13px;line-height:1.9;margin:14px 0}
+.target-environment{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:22px 0;margin:4px 0 28px}
+.target-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.target-heading h2{font-size:16px;margin:0 0 8px}
+.target-heading .note{margin:0;max-width:74ch}
+#target-form{max-width:860px;margin-top:24px}
+#target-form .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 24px}
+#target-form details{margin:22px 0}
+#target-form details .form-grid{margin-top:20px}
+#target-form>label{max-width:620px;margin-top:20px}
+#target-form .actions{margin-top:18px}
+#target-output:empty{display:none}

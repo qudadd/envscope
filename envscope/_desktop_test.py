@@ -20,7 +20,8 @@ def main(output=None):
     with tempfile.TemporaryDirectory(prefix='envscope-native-test-') as directory:
         store = StateStore(Path(directory) / 'state')
         store._write('desktop-preferences.private.json', {'check_updates': False})
-        operations = Operations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))))
+        operations = Operations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),
+                                environment_reader=lambda: {'platform':platform.system(),'locale':'en-US','network':{'timezone_id':'UTC'}})
         assert operations.legacy._vendor_integrity()['verified'], 'Bundled upstream bytes and filenames must survive installation'
         server = make_server(store=store, operations=operations, auditor=Mock(side_effect=AssertionError('No public probes')))
         window = webview.create_window('EnvScope isolated test', 'http://127.0.0.1:' + str(server.server_port), width=1040, height=760, hidden=True)

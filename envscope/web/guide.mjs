@@ -56,7 +56,7 @@ export function initGuide({sessionPromise,run,retest,isBusy,operate,onReport}){
     if(saving)return;saving=true;$('learning-next').disabled=true;$('learning-skip').disabled=true;$('learning-back').disabled=true;
     try{
       if(await sessionPromise){
-        if(start)await run('settings-save',{usage});
+        if(start)document.dispatchEvent(new CustomEvent('envscope-target-review',{detail:{usage}}));
         await run('learning-complete',{version:1});
       }
       if(start)$('usage').value=usage;
@@ -111,7 +111,7 @@ export function initGuide({sessionPromise,run,retest,isBusy,operate,onReport}){
     guide.tasks.forEach((task,i)=>{const row=el('li');row.dataset.task=task.id;const text=el('div');text.append(el('h3',task.title),el('p',task.text));row.append(el('span',String(i+1),'task-number'),text,el('span',states[task.state]||'还不能确认','task-state'));tasks.append(row);});
     const area=$('try-instructions');area.replaceChildren();
     const usage=value.usage;
-    $('desktop-handoff').hidden=usage==='cli';
+    $('desktop-handoff').hidden=['cli','web'].includes(usage);
     const readiness=value.launch;
     $('desktop-readiness').textContent=readiness?.ready?'本轮所列启动条件已核实。打开前仍会复检，账号登录和实际回复需要你确认。':'下方列出的启动条件还需处理或确认。操作前会复检；未通过时保留资料并列出原因。';
     $('desktop-condition-list').replaceChildren(...(readiness?.checks||[]).map(item=>el('li',item.title+'：'+item.reason)));

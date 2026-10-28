@@ -17,6 +17,7 @@ from envscope.service import make_server
 from envscope.state import StateStore
 from envscope.maintenance import Maintenance
 from scripts.browser_smoke import OfflineScheduler
+from scripts.environment_fixtures import fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'artifacts' / 'usability'
@@ -29,6 +30,7 @@ def main():
         home = Path(temporary).resolve()
         events = []
         store = StateStore(memory=True)
+        store.save_settings({'usage':'desktop','connection_mode':'direct'}, confirm_environment=True)
         manager = AccountManager(home / '.claude-switcher', home / 'profile',
                                  stop_app=lambda: events.append('stop') or True,
                                  launch_app=lambda: events.append('launch') or True)
@@ -41,7 +43,7 @@ def main():
                                 launcher=lambda: events.append('launch') or True)
         operations.config_remedies.environ = {}
         def audit(*args, **kwargs):
-            rows = [Finding(r['id'], r['title'], Status.UNKNOWN, '离线测试：未测量', 'offline-fixture') for r in check_catalog()]
+            rows = fixture(home, store.settings())
             data = {f.id: f for f in rows}
             for key in ('proxy', 'tun', 'ipv6', 'guard', 'rules'):
                 data['baseline.' + key].status = Status.PASS
@@ -50,7 +52,7 @@ def main():
             data['extra.desktop'].evidence = [{'found': True}]
             data['extra.config'].evidence = [{'exists': False}]
             data['extra.account'].evidence = [manager.inspect_integrity()]
-            return rows + [Finding(k, k, Status.PASS, '离线测试回应', 'offline-fixture') for k in ('http.egress', 'udp.stun')]
+            return rows
         operations.maintenance = Maintenance(store, remedies=operations.config_remedies, scheduler=OfflineScheduler(), auditor=audit, home=home)
         server = make_server(auditor=audit, store=store, operations=operations)
         thread = threading.Thread(target=server.serve_forever, daemon=True)

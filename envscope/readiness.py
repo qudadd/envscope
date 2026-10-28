@@ -21,6 +21,20 @@ def launch_readiness(report, preferences=None):
     except (KeyError, ValueError, TypeError, OverflowError):
         pass
     add("fresh", "本机最新检测", fresh, "操作前仍会重新检测。" if fresh else "先完成本机检测；历史或过期报告不能用于启动。")
+    if report.get('environment') or preferences.get('environment_confirmed'):
+        from .target_environment import fingerprint
+        from .assessment import assessment
+        matching = preferences.get('environment_confirmed') and report.get('environment', {}).get('fingerprint') == fingerprint(preferences)
+        add('target', '目标环境一致', matching, '按已确认目标复检。' if matching else '目标已变化，请先确认目标并复检。')
+        desktop_used = preferences.get('usage') in ('desktop', 'both')
+        add('usage', '桌面使用范围', desktop_used, '已选择桌面用途。' if desktop_used else '当前目标未选择桌面用途；打开桌面或切换账号前请调整目标并复检。')
+        for item in assessment(report, preferences)['items']:
+            if item['required']:
+                title = next((f['title'] for f in report.get('findings', []) if f['id'] == item['id']), item['id'])
+                add(item['id'], title, item['state'] == 'passed', item['reason'])
+        reasons = [c['reason'] for c in checks if c['state'] != 'ready']
+        return {'ready': not reasons, 'checks': checks, 'reasons': reasons,
+                'scope': '按明确选择的目标检查启动条件；标准连接不提供严格 TUN 保护。真实登录、回复及隐私覆盖仍需分别验证。'}
     findings = report.get("findings", [])
     findings = [f for f in findings if isinstance(f, dict)] if isinstance(findings, list) else []
     by_id = {f.get("id"): f for f in findings if isinstance(f.get("id"), str)}

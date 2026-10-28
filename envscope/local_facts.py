@@ -66,6 +66,13 @@ def read_system_proxy(system=None, reader=None):
             return {"available": False}
         endpoints = []
         if system == "Windows" and isinstance(raw, dict):
+            automatic = {}
+            if not reader:
+                try:
+                    from .windows_proxy import automatic_proxy_flags
+                    automatic = automatic_proxy_flags()
+                except (OSError, AttributeError):
+                    pass
             if raw.get("ProxyEnable") == 1:
                 for entry in str(raw.get("ProxyServer", "")).split(";"):
                     kind, sep, value = entry.partition("=")
@@ -73,7 +80,8 @@ def read_system_proxy(system=None, reader=None):
                     if url:
                         endpoints.append(url)
             return {"available": True, "enabled": raw.get("ProxyEnable") == 1, "endpoints": sorted(set(endpoints)),
-                    "pac_configured": bool(raw.get("AutoConfigURL")), "auto_detect": raw.get("AutoDetect") == 1 if "AutoDetect" in raw else None,
+                    "pac_configured": automatic.get('pac_configured') if automatic.get('pac_configured') is not None else bool(raw.get("AutoConfigURL")),
+                    "auto_detect": automatic.get('auto_detect') if automatic.get('auto_detect') is not None else raw.get("AutoDetect") == 1 if "AutoDetect" in raw else None,
                     "bypass": bypass_matches(raw.get("ProxyOverride", ""))}
         if system == "Darwin" and isinstance(raw, str):
             fields = dict(re.findall(r"^\s*(\w+)\s*:\s*(\S+)", raw, re.M))
@@ -227,6 +235,7 @@ def cli_facts(home, environ):
             "foundry": environ.get("CLAUDE_CODE_USE_FOUNDRY") == "1",
             "proxy_configured": bool(proxy_value), "proxy_valid": not proxy_value or bool(proxy),
             "proxy_scheme": urlsplit(proxy).scheme if proxy else None,
+            "proxy_endpoint": proxy,
             "proxy_bypass": bypass_matches(environ.get("no_proxy") or environ.get("NO_PROXY", "")),
             "tls_verification_disabled": environ.get("NODE_TLS_REJECT_UNAUTHORIZED") == "0",
             "extra_ca_configured": bool(extra_ca), "extra_ca_exists": ca_exists,

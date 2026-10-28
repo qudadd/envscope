@@ -35,7 +35,7 @@ def diagnose(report, preferences=None):
 
     config = evidence("extra.config")
     for index, target, label in ((0, "desktop", "Claude 桌面配置"), (1, "cli", "Claude Code 用户配置")):
-        if target == "cli" and usage == "desktop" or target == "desktop" and usage == "cli":
+        if usage == 'web' or target == "cli" and usage == "desktop" or target == "desktop" and usage == "cli":
             continue
         shape = config[index] if index < len(config) else {}
         key = "config." + target
@@ -100,6 +100,9 @@ def diagnose(report, preferences=None):
     responses = evidence("baseline.reachability")
     if not responses:
         responses = [r for r in evidence("extra.tls") if urlsplit(r.get("endpoint", "")).hostname in ("claude.ai", "api.anthropic.com")]
+    if preferences.get('environment_confirmed'):
+        from .target_environment import selected_hosts
+        responses = [r for r in responses if urlsplit(r.get('endpoint', '')).hostname in selected_hosts(preferences)]
     errors = {r.get("error") for r in responses if r.get("error")}
     for key in ("http.egress", "browser.http_v4"):
         errors.update(r.get("error") for r in evidence(key) if r.get("error"))
@@ -112,7 +115,7 @@ def diagnose(report, preferences=None):
     if clock_bad:
         add("clock.offset", "系统时间与网络时间相差过大", f"多个 HTTPS 日期给出的中位偏差约 {abs(round(skew))} 秒。", "时间偏差可能影响证书有效期与登录；这来自 HTTP 日期比较，并非可信 NTP 校时。",
             ["打开系统日期与时间设置，启用自动设置时间并执行同步。", "时间同步后重新检测；若证书仍失败，再处理证书链。"], "clock-settings", priority=0, source="network")
-    tls_bad = status("extra.tls") == "fail" or any(code(n) for n in (51, 60, 77, 83))
+    tls_bad = status("target.tls" if preferences.get('environment_confirmed') else "extra.tls") == "fail" or any(code(n) for n in (51, 60, 77, 83))
     verification["network.certificate"] = "problem" if tls_bad else "clear" if status("extra.tls") == "pass" else "unverified"
     if tls_bad and not clock_bad:
         add("network.certificate", "HTTPS 证书校验失败", "探测收到证书验证错误" + ("（curl 77：CA 文件读取失败）。" if code(77) else "（curl 51 / 60 / 83 或证书校验未通过）。"),
@@ -202,13 +205,13 @@ def diagnose(report, preferences=None):
             key = f"service.{host}.{number}"
             verification[key] = "clear" if healthy else "unverified"
     verification["account.integrity"] = "clear" if account.get("valid") is True and not account.get("pending") else "unverified"
-    if account.get("valid") is False or account.get("pending"):
+    if (not preferences.get('environment_confirmed') or desktop_used) and (account.get("valid") is False or account.get("pending")):
         add("account.integrity", "账号资料处于需要恢复的状态", "账号标记不一致。" if account.get("valid") is False else "发现上次交换遗留的事务或副本。",
             "继续交换可能覆盖可恢复的资料，当前已保留副本。",
             ["停止账号切换，保留 .new / .previous 目录和事务日志。", "从账号页核对当前槽位与存档；导出诊断包后再按副本恢复，不运行清理或强制覆盖。"], "accounts", priority=0)
     space = first("extra.storage").get("free_bytes")
     verification["storage.low"] = "clear" if isinstance(space, int) and space >= 512 * 1024 ** 2 else "unverified"
-    if isinstance(space, int) and space < 512 * 1024 ** 2:
+    if usage != 'web' and isinstance(space, int) and space < 512 * 1024 ** 2:
         add("storage.low", "资料磁盘可用空间不足", f"当前约剩余 {round(space / 1024 ** 2)} MiB，低于 512 MiB 提示下限。", "账号备份和事务复制需要额外空间，当前可能无法完成。",
             ["打开系统存储设置，清理已确认不再需要的其他文件。", "保留 Claude 账号目录、备份及事务副本；腾出空间后复检。"], "storage-settings", priority=0)
     hosts = first("extra.hosts")
@@ -258,7 +261,7 @@ def diagnose(report, preferences=None):
             "没有自动识别出唯一的目标代理组；不是发现了节点泄漏。" if group_missing else "这会阻止账号启动，但不单独说明当前连接有故障。可能是控制接口未开启、需要认证，或客户端不兼容。",
             ["在设置页的“目标代理组”填写客户端中实际使用的组名，然后复检。" if group_missing else "在代理客户端核对本机控制接口与认证设置，再复检。",
              "如果实际客户端不提供兼容接口，请在设置中明确调整“启动前要求代理运行规则通过核对”，不要把未检测当成通过。"], "settings", certainty="review")
-    if account_used and status("baseline.tun") != "pass":
+    if account_used and status("baseline.tun") != "pass" and (not preferences.get('environment_confirmed') or preferences.get('connection_mode') == 'tun'):
         add("startup.tun", "账号启动策略要求 TUN，目前没有确认", "本次未确认符合当前账号启动策略的 TUN 接口。",
             "网页或 CLI 可以经系统代理连接；账号交换仍按当前严格启动条件检查 TUN。",
             ["如果使用账号切换，在代理客户端启用所需 TUN / 服务模式并完成系统授权。", "随后重新检测；普通网页和 CLI 使用不需要为此交换账号。"], "proxy-settings", certainty="review")
@@ -293,6 +296,23 @@ def diagnose(report, preferences=None):
         elif key == "baseline.language" and f["status"] == "unknown":
             text, state = "未读取到应用语言偏好；无需因此修改系统语言。", "reference"
         checks.append({"id": key, "title": f["title"], "state": state, "text": text})
+    if preferences.get('environment_confirmed'):
+        required = set(report['environment']['required'])
+        for f in findings:
+            if not f['id'].startswith('target.') or f['id'] not in required:
+                continue
+            verification[f['id']] = 'clear' if f['status'] == 'pass' else 'unverified'
+            if f['status'] == 'pass':
+                continue
+            key = f['id'].split('.', 1)[1]
+            repair = ('cli-direct' if preferences['connection_mode'] in ('direct', 'tun') else 'cli-proxy') if key == 'cli_path' else None
+            action = 'config-cli' if key in ('cli_path', 'provider', 'auth') else 'proxy-settings' if key in ('path', 'ipv6') else 'clock-settings' if key == 'clock' else 'retest'
+            if key == 'config' and any(p['id'].startswith(('config.', 'config_access.', 'config_read.')) for p in problems):
+                continue
+            if key == 'service' and any(p['id'].startswith('service.') for p in problems):
+                continue
+            add(f['id'], f['title'], f['summary'], '此项属于已确认目标，必须有相应证据才能完成验收。', [f.get('suggestion') or '补全对应配置并重新检测。'], action, repair,
+                certainty='confirmed' if f['status'] == 'fail' else 'review')
     problems.sort(key=lambda p: (p["priority"], p["id"]))
     if problems:
         headline = f"发现 {len(problems)} 个需要处理的问题"

@@ -11,9 +11,10 @@ import tempfile
 
 from .policy import Policy, public_ip
 from .report import diff_reports, redact, validate_report
+from .target_environment import DEFAULTS as ENVIRONMENT_DEFAULTS, validate as validate_environment, FIELDS as ENVIRONMENT_FIELDS
 
 DEFAULTS = {"country": "", "timezone": "", "locale": "", "client": "auto", "proxy_group": "", "webrtc_policy": "proxy",
-            "allowed_ipv4": [], "allowed_ipv6": [], "require_guard": True, "require_rules": True, "usage": "auto"}
+            "allowed_ipv4": [], "allowed_ipv6": [], "require_guard": True, "require_rules": True, "usage": "auto", **ENVIRONMENT_DEFAULTS}
 
 
 def validate_settings(value):
@@ -30,7 +31,7 @@ def validate_settings(value):
         raise ValueError("invalid client")
     if proposed["webrtc_policy"] not in ("proxy", "reject"):
         raise ValueError("invalid WebRTC policy")
-    if proposed["usage"] not in ("auto", "desktop", "cli", "both"):
+    if proposed["usage"] not in ("auto", "desktop", "cli", "both", "web"):
         raise ValueError("invalid usage")
     for field, version in (("allowed_ipv4", 4), ("allowed_ipv6", 6)):
         if (not isinstance(proposed[field], list) or len(proposed[field]) > 32
@@ -42,6 +43,7 @@ def validate_settings(value):
         proposed[field] = [str(n) for n in networks]
     if any(type(proposed[f]) is not bool for f in ("require_guard", "require_rules")):
         raise ValueError("invalid boolean setting")
+    validate_environment(proposed)
     return proposed
 
 
@@ -110,11 +112,18 @@ class StateStore:
         self._learning = value
         return dict(value)
 
-    def save_settings(self, value):
+    def save_settings(self, value, confirm_environment=False, invalidate_environment=False):
         if not isinstance(value, dict):
             raise ValueError("invalid settings")
-        proposed = validate_settings({**self.settings(), **value})
         previous = self.settings()
+        if 'environment_confirmed' in value:
+            raise ValueError('请使用目标环境确认入口')
+        merged = {**previous, **value}
+        if invalidate_environment or any(k in ENVIRONMENT_FIELDS and previous.get(k) != v for k, v in value.items()):
+            merged['environment_confirmed'] = False
+        if confirm_environment:
+            merged['environment_confirmed'] = True
+        proposed = validate_settings(merged)
         if proposed == previous:
             return proposed
         self._write("settings.previous.private.json", previous)
@@ -127,7 +136,10 @@ class StateStore:
         previous = self._previous_settings if self.memory else self._read("settings.previous.private.json", None)
         if previous is None:
             raise ValueError("no previous settings")
-        return self.save_settings(validate_settings(previous))
+        previous = validate_settings(previous)
+        # A restored profile must be reviewed before it can authorize a new plan.
+        previous.pop('environment_confirmed', None)
+        return self.save_settings(previous, invalidate_environment=True)
 
     def policy(self):
         p = self.settings()

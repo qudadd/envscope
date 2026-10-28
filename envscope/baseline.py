@@ -224,7 +224,7 @@ def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences,
     policy_matches = bool(valid_v6 and allowed) and all(any(normalize_ip(o["ip"]) in n for n in allowed) for o in valid_v6)
     ipv6_status = Status.PASS if disabled or policy_matches else Status.UNKNOWN if not valid_v6 else Status.WARN
     language = inventory.get("client_language", {})
-    language_result = (setting("language", "客户端语言", language.get("value"), preferences.get("locale"))
+    language_result = (setting("language", "客户端语言", language.get("value"), preferences.get("language") if preferences.get('environment_confirmed') else preferences.get("locale"))
                        if language.get("source") == "application-preference" else baseline_finding("language", "客户端语言", Status.UNKNOWN,
                        "未取得客户端专用语言设置", [{"system_ui_language": language.get("value")}], ["系统语言不能代替 Claude 的实际语言偏好。分享时可不包含此项。 "]))
     rtc_states = {udp_result.status, browser_result.status}

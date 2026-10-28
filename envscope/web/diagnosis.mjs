@@ -25,7 +25,7 @@ export function initDiagnosis({sessionPromise,retest}) {
   const output=$('solution-output');
   function button(text,fn){const b=el('button',text);b.type='button';b.addEventListener('click',fn);return b;}
   function link(text,url){const a=el('a',text,'link');a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
-  function setBusy(value){busy=value;for(const id of ['start','prepare-solution','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;for(const node of document.querySelectorAll('#desktop-preferences button'))node.disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';}
+  function setBusy(value){busy=value;for(const id of ['start','target-edit','target-confirm','target-cancel','prepare-solution','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;for(const node of document.querySelectorAll('#desktop-preferences button'))node.disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';}
   async function run(action,params={},confirmed=false){
     const session=await sessionPromise;if(!session)throw new Error('请打开本地桌面程序，再使用处理功能。');
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),240000);
@@ -154,6 +154,8 @@ export function initDiagnosis({sessionPromise,retest}) {
   document.addEventListener('envscope-catalog',event=>{renderInlineUpkeep(event.detail.maintenance);renderProxyOptions(event.detail.proxies);});
   document.addEventListener('envscope-maintenance-status',event=>renderInlineUpkeep(event.detail));
   document.addEventListener('envscope-audit-start',()=>{report=null;$('flow-upkeep').hidden=true;$('flow-upkeep-plan').replaceChildren();$('solution-plan').replaceChildren();});
+  document.addEventListener('envscope-target-changed',()=>{report=null;$('flow-upkeep').hidden=true;$('flow-upkeep-plan').replaceChildren();$('solution-plan').replaceChildren();$('solution-tools').hidden=true;$('try-claude').hidden=true;});
+  document.addEventListener('envscope-target-editing',()=>{$('solution-plan').replaceChildren();$('flow-upkeep-plan').replaceChildren();});
   for(const id of ['usage','enhance-cli','workflow-proxy','workflow-proxy-url'])$(id).addEventListener('change',()=>{
     updateOptionsLabel();
     $('workflow-proxy-manual').hidden=$('workflow-proxy').value!=='manual';

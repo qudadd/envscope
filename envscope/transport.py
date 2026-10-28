@@ -16,8 +16,19 @@ MAX_BODY = 131072
 MARKER = "\nENVSCOPE_CURL_METADATA:"
 
 
-def desktop_transport():
+def desktop_transport(settings=None):
     """Use the user's configured HTTP route, without falling back to direct."""
+    if settings and settings.get('environment_confirmed'):
+        if settings['connection_mode'] in ('direct', 'tun'):
+            return CurlTransport(direct=True)
+        if settings.get('target_proxy'):
+            return CurlTransport(settings['target_proxy'])
+        proxy = next((os.environ[k] for k in ('https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY') if os.environ.get(k)), None)
+        if proxy:
+            try:
+                return CurlTransport(proxy)
+            except ValueError:
+                return CurlTransport()  # Preserve the failed route; do not retry direct.
     if any(os.environ.get(k) for k in ("https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")):
         return CurlTransport()
     from .local_facts import read_system_proxy
@@ -67,11 +78,14 @@ class Response:
 
 
 class CurlTransport:
-    def __init__(self, proxy=None, timeout=4, runner=subprocess.run):
+    def __init__(self, proxy=None, timeout=4, runner=subprocess.run, direct=False):
         self.timeout = timeout
         self.runner = runner
         self.executable = shutil.which("curl.exe" if os.name == "nt" else "curl")
         self.proxy = proxy
+        self.direct = direct
+        if direct and proxy:
+            raise ValueError('a route cannot be both direct and explicitly proxied')
         if proxy is not None and not isinstance(proxy, str):
             raise ValueError("proxy URL must be a string")
         if proxy:
@@ -85,7 +99,7 @@ class CurlTransport:
 
     @property
     def path(self):
-        return "curl-explicit-proxy" if self.proxy else "curl-environment-and-os-routing"
+        return "curl-os-routing-no-http-proxy" if self.direct else "curl-explicit-proxy" if self.proxy else "curl-environment-and-os-routing"
 
     def get(self, url, family=0, headers_only=False):
         validate_url(url)
@@ -99,6 +113,8 @@ class CurlTransport:
         if headers_only:
             command.extend(["--head", "--output", os.devnull])
         proxy_config = None
+        if self.direct:
+            command.extend(['--proxy', '', '--noproxy', '*'])
         if self.proxy:
             # Credentials stay in stdin, not process arguments or reports.
             escaped = self.proxy.replace("\\", "\\\\").replace('"', '\\"')

@@ -33,6 +33,7 @@ class DesktopAPITests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.store = StateStore(memory=True)
+        self.store.save_settings({'usage':'desktop','connection_mode':'direct'}, confirm_environment=True)
         self.operations = Operations(self.store, self.directory.name, discoverer=lambda: [])
         self.server = make_server(auditor=fixture_audit, store=self.store, operations=self.operations)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -78,6 +79,7 @@ class DesktopAPITests(unittest.TestCase):
             self.server.audit_lock.release()
 
     def test_selected_item_resolution_requires_current_evidence(self):
+        self.store.save_settings({'usage':'desktop','connection_mode':'tun','protection':'guarded','ipv6_mode':'disabled'}, confirm_environment=True)
         for verified in (False, True):
             with self.subTest(verified=verified):
                 self.server.solution_before = {"problems": [], "check": {"id":"guard","title":"进程守护","status":"unknown"}}
@@ -158,17 +160,18 @@ class DesktopAPITests(unittest.TestCase):
     def test_settings_and_history_use_server_owned_reports(self):
         response = self.post({"action": "settings-save", "params": {"country": "us"}, "confirmed": False}, path="/api/action")
         self.assertEqual(json.loads(response.read())["settings"]["country"], "US")
+        self.post({'action':'environment-confirm','params':{'usage':'desktop','connection_mode':'direct'},'confirmed':False}, path='/api/action').close()
         current = json.loads(self.post({"snapshot": snapshot()}).read())
         result = json.loads(self.post({"action": "history-report", "params": {"id": current["report_id"]}, "confirmed": False}, path="/api/action").read())
         self.assertFalse(result["report"]["contains_sensitive"])
         self.assertEqual(len(self.store.history()), 1)
 
     def test_desktop_handoff_rechecks_native_state_and_returns_actual_blockers(self):
-        from test_readiness import ready_findings
+        from scripts.environment_fixtures import fixture
         from unittest.mock import Mock
         launch, stop = Mock(return_value=True), Mock(return_value=True)
         self.operations.launcher, self.operations.restart_stopper = launch, stop
-        self.server.auditor = lambda *a, **k: ready_findings()
+        self.server.auditor = lambda *a, **k: fixture(self.directory.name, self.store.settings())
         initial = json.loads(self.post({"snapshot": snapshot()}).read())
         self.assertTrue(initial["launch"]["ready"])
         response = self.post({"action": "app-launch", "params": {}, "confirmed": True}, path="/api/action")

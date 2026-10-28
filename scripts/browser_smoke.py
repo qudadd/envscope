@@ -14,6 +14,7 @@ from envscope.state import StateStore
 from envscope.legacy import LegacyBridge
 from envscope.local_facts import config_shape, cli_facts
 from envscope.maintenance import Maintenance
+from scripts.environment_fixtures import PROXY
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts"
@@ -55,16 +56,22 @@ def main():
             for finding in baseline:
                 if finding.id in ("baseline.proxy", "baseline.tun", "baseline.ipv6", "baseline.guard", "baseline.rules"):
                     finding.status = Status.PASS
-            findings += [Finding(key, key, Status.PASS, "offline handoff fixture", "test-fixture") for key in ("http.egress", "udp.stun")]
-        return (findings + baseline + extended_checks({}, {"dns": [], "routes": []},
+            findings += [Finding(key, key, Status.PASS, "offline handoff fixture", "test-fixture",
+                                 [{'ip':'8.8.8.8','path':'curl-explicit-proxy','proxy_endpoint':PROXY}]) for key in ("http.egress", "udp.stun")]
+        return (findings + baseline + extended_checks({}, {"dns": [{'host':h,'addresses':['8.8.8.8'],'complete':True} for h in ('claude.ai','api.anthropic.com')], "routes": []},
                 {"installed":operations.desktop_ready,"account":operations.accounts.inspect_integrity(),
-                 "desktop_config":config_shape(config_file),"cli":{**cli_facts(Path(directory.name), {}),"installation_count":1}}, {}))
+                 'profile_exists':True,'storage':{'free_bytes':1024**3},
+                 'proxy':{'system':{'available':True,'enabled':True,'endpoints':[PROXY],'auto_detect':False,'pac_configured':False}},
+                 "desktop_config":config_shape(config_file),"cli":{**cli_facts(Path(directory.name), {}),"installation_count":1}},
+                 {'responses':[{'endpoint':u,'tls_verified':True,'clock_offset_seconds':2} for u in ('https://claude.ai/','https://api.anthropic.com/')]}))
     directory = tempfile.TemporaryDirectory()
     store = StateStore(memory=True)
     class FixtureOperations(Operations):
         valid_proxy = False
         desktop_ready = False
         def run(self, action, params, **kwargs):
+            if action == 'environment-suggest':
+                return {'proposed':{**self.store.settings(),'usage':'both','connection_mode':'http_proxy','timezone':'','locale':''},'observed':{'system':'offline fixture'}}
             if action == "proxy-diagnose":
                 return {"state": "completed", "evidence": [{"endpoint":"https://api.anthropic.com/v1/models", "http_status":401 if self.valid_proxy else 403,"tls_verified":True,"error":""}], "boundary": "offline fixture"}
             return super().run(action, params, **kwargs)
@@ -125,9 +132,11 @@ def main():
                 assert store.settings()==before_learning_settings, 'reading the lesson must not save network preferences'
                 assert not operations.maintenance._config().get('enabled'), 'reading must not install a job'
                 page.get_by_role('button',name='开始第一次检测',exact=True).click()
+                expect(page.locator('#target-form')).to_be_visible()
+                page.locator('#target-confirm').click()
                 expect(page.locator("#share")).to_be_enabled()
                 expect(page.locator('#apply-solution')).to_be_visible()
-                expect(page.locator("#verdict")).to_contain_text("环境有不合格项")
+                expect(page.locator("#verdict")).to_contain_text("目标环境有不合格项")
                 assert store.learning()['completed'] is True
                 assert not page.locator('#technical-details').evaluate('(node)=>node.open')
                 assert not page.locator('#beginner-checks').evaluate('(node)=>node.open')
@@ -165,11 +174,12 @@ def main():
                 page.screenshot(path=str(ARTIFACTS/f'{label}-plan.png'))
                 page.locator('#apply-solution').click()
                 expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
-                expect(page.locator('#verdict')).to_contain_text('环境尚未验收')
+                expect(page.locator('#verdict')).to_contain_text('目标环境')
                 assert config_shape(config_file)['valid']
                 page.screenshot(path=str(ARTIFACTS/f'{label}-resolved.png'))
                 page.get_by_role('button',name='撤销 Claude 桌面配置',exact=True).click()
-                expect(page.locator('#verdict')).to_contain_text('环境有不合格项')
+                expect(page.locator('#solution-output')).to_contain_text('已恢复原配置')
+                expect(page.locator('#verdict')).to_contain_text('目标环境有不合格项')
                 assert config_file.read_bytes()==original
                 page.locator('#start').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
@@ -222,9 +232,8 @@ def main():
                 expect(page.locator('#apply-solution')).to_have_count(0)
                 page.locator('#beginner-checks>summary').click()
                 page.locator('[data-claude-check="guard"]>summary').click()
-                page.locator('[data-claude-check="guard"]').get_by_role('button',name='审核本项处理方案',exact=True).click()
-                expect(page.locator('#solution-tools')).to_be_visible()
-                expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
+                expect(page.locator('[data-claude-check="guard"]')).to_contain_text('不要求 TUN')
+                expect(page.locator('[data-claude-check="guard"]').get_by_role('button',name='审核本项处理方案',exact=True)).to_have_count(0)
                 page.get_by_role('button',name='工具',exact=True).click()
                 expect(page.locator('#config-backups')).to_contain_text('Claude 桌面配置')
                 assert 'PRIVATE_FIXTURE' not in page.locator('#config-backups').inner_text()
@@ -275,12 +284,16 @@ def main():
                 expect(page.locator("#maintenance-run")).to_be_disabled()
                 page.screenshot(path=str(ARTIFACTS / f"{label}-tools.png"), full_page=True)
                 page.get_by_role("button", name="设置", exact=True).click()
-                page.locator("input[name=country]").fill("US")
+                page.locator("#settings-form input[name=country]").fill("US")
                 page.get_by_role("button", name="保存", exact=True).click()
                 expect(page.locator("#settings-output")).to_contain_text("已保存")
                 page.screenshot(path=str(ARTIFACTS / f"{label}-settings.png"), full_page=True)
                 page.get_by_role("button", name="检测", exact=True).click()
                 page.locator('#start').click()
+                expect(page.locator('#target-form')).to_be_visible()
+                page.locator('#target-form details>summary').click()
+                page.locator('#target-form [name=country]').fill('')
+                page.locator('#target-confirm').click()
                 expect(page.locator("#share")).to_be_enabled()
                 page.get_by_role("button", name="历史", exact=True).click()
                 page.get_by_role("button", name="比较", exact=True).click()
@@ -303,21 +316,20 @@ def main():
                 operations.valid_proxy = True
                 code_original=json.dumps({'permissions':{'deny':['Read(.env)']},'mcpServers':{'fixture':{'command':'PRIVATE_MCP'}},'env':{'OTHER':'PRIVATE_SETTING'}}).encode()
                 cli_file.write_bytes(code_original)
-                page.locator('#connection-options>summary').click()
-                page.locator('#usage').select_option('cli')
-                page.locator('#enhance-cli').check()
-                page.locator('#start').click()
+                page.locator('#target-edit').click()
+                expect(page.locator('#target-confirm')).to_be_enabled()
+                page.locator('#target-form [name=usage]').select_option('cli')
+                page.locator('#target-confirm').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
                 expect(page.locator('#solution-plan')).to_contain_text('恢复 Node TLS 证书校验')
                 expect(page.locator('#desktop-handoff')).to_be_hidden()
                 assert cli_file.read_bytes()==code_original, 'automatic preparation must be read-only'
-                expect(page.locator('#verdict-note')).to_contain_text('发现问题 0 项')
-                page.locator('#connection-options>summary').click()
-                page.locator('#enhance-cli').uncheck()
-                expect(page.locator('#apply-solution')).to_have_count(0)
+                expect(page.locator('#verdict-note')).to_contain_text('不合格')
+                page.locator('#target-edit').click()
+                expect(page.locator('#target-confirm')).to_be_enabled()
                 assert cli_file.read_bytes()==code_original, 'editing options invalidates pending confirmation'
-                page.locator('#enhance-cli').check()
-                page.locator('#start').click()
+                page.locator('#target-form [name=usage]').select_option('cli')
+                page.locator('#target-confirm').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
                 page.locator('#beginner-checks').evaluate('(node)=>node.open=false')
                 page.evaluate('window.scrollTo(0,0)')
@@ -355,11 +367,11 @@ def main():
                                   "proxy_diagnostics": "passed", "preferences": "passed", "history_compare": "passed",
                                   "source_mapped_checklist":14,"maintenance_preview_enable":"passed","config_drift_restore":"passed",
                                   "unrelated_settings_preserved":"passed","maintenance_stop_and_undo":"passed",
-                                  "per_item_plan_visible_without_problems":"passed","persistent_backup_list":"passed",
+                                  "irrelevant_guard_no_repair_offered":"passed","persistent_backup_list":"passed",
                                   "first_launch_teaching":"passed","teaching_back_and_replay":"passed","teaching_persistence":"passed",
                                   "plain_check_explanations":14,"symptom_help":"passed","manual_trial_separate_and_reset":"passed",
                                   "advanced_records_collapsed":"passed","open_source_roles":"passed","failed_audit_clears_old_guidance":"passed",
-                                  "automatic_solution_preview":"passed","single_setup_confirmation":"passed","setup_without_diagnosed_fault":"passed",
+                                  "automatic_solution_preview":"passed","single_setup_confirmation":"passed","target_connection_setup":"passed",
                                   "fresh_file_receipt":"passed","inline_upkeep_enable_stop":"passed","changed_options_invalidate_preview":"passed",
                                   "desktop_launch_cancel_and_block":"passed","desktop_fresh_launch_and_restart":"passed","code_scope_hides_desktop_handoff":"passed"}
                 context.close()

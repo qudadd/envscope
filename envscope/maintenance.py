@@ -36,7 +36,7 @@ def fingerprint(settings):
 
 
 def proxy_works(proxy):
-    response = CurlTransport(proxy).get("https://api.anthropic.com/v1/models", headers_only=True)
+    response = CurlTransport(proxy).get("https://api.anthropic.com/v1/models")
     return response.status in (200, 401) and response.tls_verified is True and not response.error
 
 
@@ -307,7 +307,8 @@ class Maintenance:
                 self._restore(config, stats)
                 preferences = self.store.settings()
                 policy = self.store.policy()
-                findings = (self.auditor or audit)(policy, CurlTransport(), online=True, stun=True, ipv6=True,
+                from .transport import desktop_transport
+                findings = (self.auditor or audit)(policy, desktop_transport(preferences), online=True, stun=True, ipv6=True,
                                                    browser=None, baseline_config=preferences)
                 signature, key = self.data._signature([f.to_dict() for f in findings])
                 self.data._write("history-key.private.json", key)

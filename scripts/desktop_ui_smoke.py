@@ -48,6 +48,7 @@ def main():
     summary = {}
     with tempfile.TemporaryDirectory() as directory, sync_playwright() as runtime:
         store = StateStore(Path(directory) / 'state')
+        store.save_settings({'usage':'desktop','connection_mode':'direct'}, confirm_environment=True)
         opener = Mock()
         class FixtureOperations(Operations):
             def run(self, action, params, **kwargs):
@@ -106,8 +107,6 @@ def main():
                 expect(page.locator('#software-output')).to_contain_text('已完成')
                 page.screenshot(path=str(out / f'{width}-settings.png'), full_page=True)
                 page.locator('[data-page="audit"]').click()
-                page.locator('#connection-options>summary').click()
-                page.locator('#usage').select_option('desktop')
                 page.locator('#start').click()
                 expect(page.locator('#qualification')).to_be_visible()
                 expect(page.locator('#qualification-counts')).to_contain_text('需要读取权限 1 项')

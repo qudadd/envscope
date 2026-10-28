@@ -318,6 +318,7 @@ class PlanTests(ConfigurationRepairFixture):
 class SolutionAPITests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.home=Path(self.temp.name);self.store=StateStore(memory=True)
+        self.store.save_settings({'usage':'desktop','connection_mode':'http_proxy'}, confirm_environment=True)
         self.ops=Operations(self.store,self.home,discoverer=lambda:[],remedy_opener=Mock(return_value=True))
         self.file=self.ops.config_remedies.paths['desktop'];self.file.parent.mkdir(parents=True)
         self.original=b'{"mcpServers":{},"fixture":"PRIVATE_FIXTURE",}'
@@ -383,14 +384,14 @@ class SolutionAPITests(unittest.TestCase):
     def test_one_stop_setup_api_reports_current_file_receipt_without_private_hashes(self):
         self.ops.config_remedies.environ={}
         self.ops.solutions.proxy_tester=Mock(return_value={'evidence':[response()]})
-        self.store.save_settings({'usage':'cli'})
+        self.store.save_settings({'usage':'cli'}, confirm_environment=True)
         cli_file=self.ops.config_remedies.paths['cli']
         def auditor(*args,**kwargs):
             return [finding('extra.cli_env','pass',[{'installation_count':1,'config':config_shape(cli_file)}]),
                     finding('extra.config','pass',[{'exists':False},config_shape(cli_file)]),
                     finding('baseline.reachability','pass',[response()])]
         self.server.auditor=auditor
-        before=self.audit();self.assertFalse(before['diagnosis']['problems'])
+        before=self.audit();self.assertTrue(any(p['id']=='target.cli_path' for p in before['diagnosis']['problems']))
         plan=self.action('solution-plan',{'enhance_cli':True})
         self.assertFalse(cli_file.exists())
         result=self.action('solution-apply',{'plan_id':plan['plan_id']},True)

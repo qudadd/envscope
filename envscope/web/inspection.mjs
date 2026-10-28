@@ -13,17 +13,18 @@ export function initInspection(){
   function render(){
     const found=new Map((report?.findings||[]).map(f=>[f.id,f]));
     const known=new Set(catalog.map(c=>c.id));
-    const items=[...catalog,...(report?.findings||[]).filter(f=>!known.has(f.id)).map(f=>({id:f.id,title:f.title,label:f.title,group:'measurement',why:'独立记录测量来源和范围，不重复计入 32 项检查。'}))];
+    const items=[...catalog,...(report?.findings||[]).filter(f=>!known.has(f.id)).map(f=>({id:f.id,title:f.title,label:f.title,group:f.id.startsWith('target.')?'target':'measurement',why:f.id.startsWith('target.')?'按已确认的用途和连接方式，核对本次证据是否达到目标。':'独立记录测量来源和范围，不重复计入 32 项检查。'}))];
     const annotations=new Map((report?.assessment?.items||[]).map(i=>[i.id,i]));
     const rows=items.map(c=>({...c,annotation:annotations.get(c.id),finding:found.get(c.id),status:report?(found.get(c.id)?.status||'skipped'):phase==='not_run'?'not_run':'unknown'}));
+    rows.sort((a,b)=>Number(!!b.annotation?.required)-Number(!!a.annotation?.required)||Number(b.group==='target')-Number(a.group==='target'));
     const query=$('check-search').value.trim().toLowerCase(),group=$('check-group').value,state=$('check-status').value;
-    const selected=rows.filter(c=>(group==='all'||group===c.group)&&(!query||[c.label,c.title,c.id,c.why,c.finding?.summary].join(' ').toLowerCase().includes(query))&&(state==='all'||state==='attention'&&(c.annotation?['problem','review'].includes(c.annotation.state):['warn','fail'].includes(c.status))||state==='unknown'&&(c.annotation?['permission','probe_incomplete','unavailable'].includes(c.annotation.state):['unknown','skipped','not_configured'].includes(c.status))||state==='excluded'&&['unsupported','not_applicable','informational'].includes(c.annotation?.state)||state==='pass'&&(c.annotation?c.annotation.state==='passed':c.status==='pass')||state==='not_run'&&c.status==='not_run'));
+    const selected=rows.filter(c=>(group==='all'||group===c.group)&&(!query||[c.label,c.title,c.id,c.why,c.finding?.summary].join(' ').toLowerCase().includes(query))&&(state==='all'||state==='required'&&c.annotation?.required||state==='attention'&&(c.annotation?['problem','review'].includes(c.annotation.state):['warn','fail'].includes(c.status))||state==='unknown'&&(c.annotation?['permission','probe_incomplete','unavailable'].includes(c.annotation.state):['unknown','skipped','not_configured'].includes(c.status))||state==='excluded'&&['unsupported','not_applicable','informational'].includes(c.annotation?.state)||state==='pass'&&(c.annotation?c.annotation.state==='passed':c.status==='pass')||state==='not_run'&&c.status==='not_run'));
     const basics=rows.filter(r=>r.group==='baseline').length,extras=rows.filter(r=>r.group==='extra').length;
     $('check-count').textContent=`显示 ${selected.length} / ${rows.length} 项。基础 ${basics} 项，扩展 ${extras} 项${rows.length>basics+extras?`，补充测量 ${rows.length-basics-extras} 项`:''}。`;
     const nodes=selected.map(c=>{
       const row=el('details',undefined,'inspection-row');row.dataset.inspection=c.id;
       const summary=el('summary'),name=el('span'),state=el('span',undefined,'inspection-state'),disclosure=el('small','查看说明');
-      name.append(el('strong',c.label),el('small',c.title+' · '+({baseline:'基础',extra:'扩展',measurement:'补充测量'})[c.group]));state.append(el('span',explained[c.annotation?.state]||states[c.status]||'未取得结果'),disclosure);summary.append(name,state);row.append(summary);
+      name.append(el('strong',c.label),el('small',c.title+' · '+({baseline:'基础',extra:'扩展',measurement:'补充测量',target:'目标验收'})[c.group]+(c.annotation?.required?' · 本次必需':'')));state.append(el('span',explained[c.annotation?.state]||states[c.status]||'未取得结果'),disclosure);summary.append(name,state);row.append(summary);
       row.addEventListener('toggle',()=>{disclosure.textContent=row.open?'收起说明':'查看说明';});
       row.append(el('h3','查什么'),el('p',c.why),el('h3','当前结果'),el('p',c.finding?.summary||(phase==='running'?'正在检测，等待本轮证据。':phase==='failed'?'本轮没有完成，请重新检测；未沿用上轮结论。':report?'这份报告未包含该项目。':'尚未测量。点击首页的一键检测后，这里会逐项显示结果。')));
       if(c.annotation)row.append(el('p',c.annotation.reason));

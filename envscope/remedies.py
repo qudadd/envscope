@@ -169,8 +169,10 @@ class ConfigRemedies:
         return self.paths[target]
 
     def preview(self, target, kinds, proxy=None):
-        if target not in self.paths or set(kinds) - {"trailing_comma", "proxy", "tls"}:
+        if target not in self.paths or set(kinds) - {"trailing_comma", "proxy", "tls", "direct"}:
             raise ValueError("未知配置修复")
+        if 'direct' in kinds and 'proxy' in kinds:
+            raise ValueError('连接方式不能同时设置为代理与系统路由')
         if target != "cli" and set(kinds) - {"trailing_comma"}:
             raise ValueError("此修复只适用于 Claude Code")
         path = self.paths[target]
@@ -185,10 +187,14 @@ class ConfigRemedies:
             effects.append("移除 " + LABELS[target] + " 结尾多余的逗号，保留原有值")
         if inspect_text(text).get("valid") is not True:
             raise ValueError("配置仍存在其他语法或结构问题，未自动改写")
-        if set(kinds) & {"proxy", "tls"}:
+        if set(kinds) & {"proxy", "tls", "direct"}:
             data = json.loads(text)
             before_values = deepcopy(data)
-            env = data.setdefault("env", {})
+            env = data.setdefault("env", {}) if set(kinds) & {'proxy', 'tls'} else data.get('env', {})
+            if 'direct' in kinds:
+                for key in ('HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'):
+                    env.pop(key, None)
+                effects.append('移除 Code 用户配置中的 HTTP(S)_PROXY / ALL_PROXY 大小写字段，以使用系统路由；终端及系统变量不变')
             if "proxy" in kinds:
                 chosen = safe_local_proxy(proxy)
                 if not chosen or not chosen.startswith(("http://", "https://")):
@@ -213,6 +219,8 @@ class ConfigRemedies:
         if original == after:
             return None
         fields = (["JSON 格式"] if "trailing_comma" in kinds else []) + (["HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy"] if "proxy" in kinds else []) + (["NODE_TLS_REJECT_UNAUTHORIZED"] if "tls" in kinds else [])
+        if 'direct' in kinds:
+            fields += ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']
         return {"target": target, "label": LABELS[target], "before": original, "after": after, "fields": fields,
                 "before_hash": digest(original) if original is not None else None, "after_hash": digest(after), "effects": effects}
 
@@ -231,6 +239,7 @@ class ConfigRemedies:
         return {"custom_provider": bool(env.get("ANTHROPIC_BASE_URL")) or any(env.get(k) == "1" for k in
                     ("CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")),
                 "proxy_configured": bool(value), "local_proxy": safe_local_proxy(value) if value else None,
+                "inherited_proxy_configured": any(self.environ.get(k) for k in ('https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY')),
                 "environment_hash": digest(json.dumps({k: self.environ.get(k) for k in inherited_keys}, sort_keys=True).encode())}
 
     def verify_receipts(self, receipts):
@@ -458,17 +467,30 @@ class SolutionPlans:
         cli = next((v for v in cli_finding.get("evidence", []) if isinstance(v, dict)), {})
         cli_used = report.get("usage") in ("cli", "both") or report.get("usage") == "auto" and bool(cli.get("installation_count") or cli.get("config", {}).get("exists"))
         enhance_cli = enhance_cli and cli_used
+        target = report.get('environment', {}).get('targets', {})
+        system_route = bool(target) and target.get('connection_mode') in ('direct', 'tun')
+        if system_route and proxy is not None:
+            raise ValueError('当前目标通过系统路由连接，请先调整目标再选择 HTTP 代理')
+        if target.get('target_proxy') and enhance_cli:
+            if proxy is not None and proxy != target['target_proxy']:
+                raise ValueError('所选代理与已确认目标不同，请先调整目标')
+            proxy = target['target_proxy']
+        elif target.get('connection_mode') == 'http_proxy' and enhance_cli and proxy is None:
+            route = next((f for f in report.get('findings', []) if f['id'] == 'http.egress'), {})
+            proxy = next((safe_local_proxy(r.get('proxy_endpoint')) for r in route.get('evidence', []) if safe_local_proxy(r.get('proxy_endpoint'))), None)
         for problem in problems:
             repair = problem.get("repair")
             if repair in ("json-desktop", "json-cli"):
                 kinds.setdefault(repair.split("-")[1], set()).add("trailing_comma")
             elif repair == "cli-tls":
                 kinds.setdefault("cli", set()).add("tls")
+            elif repair == 'cli-direct' and system_route:
+                kinds.setdefault('cli', set()).add('direct')
         if enhance_cli:
             kinds.setdefault("cli", set()).add("tls")
         proxy_needed = any(p.get("repair") == "cli-proxy" for p in problems)
         context = {}
-        if proxy_needed or enhance_cli:
+        if proxy_needed or enhance_cli or 'direct' in kinds.get('cli', set()):
             try:
                 context = self.config.connection_context("trailing_comma" in kinds.get("cli", set()))
             except (ValueError, OSError, UnicodeError):
@@ -477,7 +499,12 @@ class SolutionPlans:
                 manual.append("当前使用自定义接口或云平台。本次不替换其代理路径；请按服务提供方核对连接。证书校验可单独恢复。")
             elif context.get("proxy_configured") and not context.get("local_proxy") and not proxy_needed and proxy is None:
                 manual.append("当前 Code 使用的代理不是可自动接管的本机地址。本次保留其连接；需要更换时请明确选择本机 HTTP 代理。")
-        can_choose_proxy = bool(context) and not context.get("custom_provider") and (proxy_needed or enhance_cli and (proxy is not None or not context.get("proxy_configured") or bool(context.get("local_proxy"))))
+        if system_route:
+            if cli_used and context and (proxy_needed or enhance_cli or 'direct' in kinds.get('cli', set())):
+                kinds.setdefault('cli', set()).add('direct')
+                if context.get('inherited_proxy_configured'):
+                    manual.append('当前终端仍继承 HTTP 代理，需在设置它的位置移除并重开 Code；不会改写系统或终端的环境变量。')
+        can_choose_proxy = not system_route and bool(context) and not context.get("custom_provider") and (proxy_needed or enhance_cli and (proxy is not None or not context.get("proxy_configured") or bool(context.get("local_proxy"))))
         if can_choose_proxy:
             candidates = [proxy] if proxy else ([context["local_proxy"]] if context.get("local_proxy", "") and context["local_proxy"].startswith(("http://", "https://")) else [])
             if not proxy:
@@ -558,9 +585,9 @@ class SolutionPlans:
             return {"state": "retest_required", "reason": "本机检测已变化，请重新生成方案，不执行旧方案。"}
         del self.plans[token]
         outputs, backups = [], []
+        if plan.get('context') and self.config.connection_context(plan['repair_json']) != plan['context']:
+            return {'state': 'retest_required', 'reason': 'Code 的连接来源在预览后发生变化，尚未写入，请重新检测。'}
         if plan.get("proxy"):
-            if self.config.connection_context(plan["repair_json"]) != plan["context"]:
-                return {"state": "retest_required", "reason": "Code 的连接来源在预览后发生变化，尚未写入，请重新检测。"}
             if not self._proxy_verified(self.proxy_tester(plan["proxy"])):
                 return {"state": "blocked", "backups": [], "before": plan["before"], "needs_retest": True,
                         "reason": "确认前的代理连接现已无法验证，本次没有写入配置。重新检测后再生成方案，不回退直连。"}
