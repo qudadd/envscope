@@ -47,4 +47,17 @@ def check_catalog():
         {'id':'browser.environment','group':'measurement','title':'当前浏览器环境资料','label':'当前窗口向网页提供哪些信息',
          'why':'记录时区、语言、屏幕和可取得的图形资料；不代表其他浏览器或 Claude 桌面版。','next_step':'在实际浏览器复查；受限字段不判为故障。','upkeep':'浏览器更新或使用方式变化后复查。'}
     ])
+    from .inspection import TARGETS, MEASUREMENTS
+    known = {r['id'] for r in rows}
+    for key, (title, _) in TARGETS.items():
+        if key not in known:
+            rows.append({'id': key, 'group': 'target', 'title': title, 'label': title,
+                         'why': '按已经确认的用途与连接方式检查；自动包含需要的依赖测量。',
+                         'next_step': '按本次证据处理；必要条件未测量时，环境不能判为合格。',
+                         'upkeep': '用途、连接或配置改变后重新检测；持续维护记录差异，不自动修改检测目标。'})
+    for key, title in MEASUREMENTS.items():
+        rows.append({'id': key, 'group': 'measurement', 'title': title, 'label': title,
+                     'why': '独立保留本次测量来源和适用范围。',
+                     'next_step': '查看本项证据与限制，按实际连接工具处理后复检。',
+                     'upkeep': '网络或使用方式变化后重新测量；浏览器证据需在当前窗口重新取得。'})
     return rows

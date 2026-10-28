@@ -242,7 +242,7 @@ def cli_facts(home, environ):
             "settings_scope": "current-process-and-user-settings"}
 
 
-def local_snapshot(inventory, home=None, environ=None, system=None, system_reader=None, listener=probe_listeners, hosts_path=None):
+def local_snapshot(inventory, home=None, environ=None, system=None, system_reader=None, listener=probe_listeners, hosts_path=None, listeners_enabled=True):
     home = (Path(home) if home is not None else Path.home()).resolve()
     env, system = os.environ if environ is None else environ, system or platform.system()
     profile = (Path(env.get("APPDATA") or home / "AppData/Roaming") / "Claude" if system == "Windows" else home / "Library/Application Support/Claude")
@@ -275,7 +275,7 @@ def local_snapshot(inventory, home=None, environ=None, system=None, system_reade
             controller = {"found": True, "wildcard_bind": match[1].startswith(("0.0.0.0:", "[::]:", "*:")), "loopback_bind": loopback_bind,
                           "secret_configured": bool(re.search(r"^secret:\s*[\"']?[^\s\"'#]+", doc, re.M))}
     return {"proxy": proxy_layers(env, read_system_proxy(system, system_reader)),
-            "listeners": listener(discover_proxies(home, system, env, system_reader=system_reader)),
+            "listeners": listener(discover_proxies(home, system, env, system_reader=system_reader)) if listeners_enabled else [],
             "hosts": hosts_overrides(Path(hostfile)), "installed": installed,
             "profile_exists": profile.is_dir(), "desktop_config": config_shape(profile / "claude_desktop_config.json"),
             "cli": cli_facts(home, env), "storage": storage, "account": account_markers(home / ".claude-switcher", profile),

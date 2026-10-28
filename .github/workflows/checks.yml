@@ -49,3 +49,4 @@ jobs:
       - run: python -m scripts.desktop_ui_smoke
       - run: python -m scripts.target_environment_smoke
       - run: python -m scripts.coverage_smoke
+      - run: python -m scripts.selection_smoke

@@ -64,8 +64,8 @@ def main():
                         assert denied.status == 409 and not calls
                         page.locator('#target-form [name=usage]').select_option('cli')
                         page.locator('#target-form [name=connection_mode]').select_option('direct')
-                        expect(page.locator('#target-form [name=timezone]')).to_have_value('China Standard Time')
-                        expect(page.locator('#target-form [name=locale]')).to_have_value('zh-CN')
+                        expect(page.locator('#target-form [name=timezone]')).to_have_value('')
+                        expect(page.locator('#target-form [name=locale]')).to_have_value('')
                         expect(page.locator('#target-form [name=usage_country]')).to_have_value('')
                         page.locator('#target-form [name=usage_country]').fill('CN')
                         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')

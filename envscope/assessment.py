@@ -100,6 +100,8 @@ def target_assessment(report):
         elif key not in required and state != 'permission':
             state = 'informational'
             reason = '参考记录，不作为本次目标的验收条件。' + reason
+        if f.get('scope') == 'not-selected':
+            state, reason, step, action = 'unavailable', '本次未勾选，未取得本项结论。', '勾选此项后重新检测。', None
         details.append({'id': key, 'state': state, 'reason': reason, 'next_step': step,
                         'action': action, 'required': key in required, 'measured_status': status})
     for key in sorted(required - {f['id'] for f in report.get('findings', [])}):

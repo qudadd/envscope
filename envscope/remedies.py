@@ -445,7 +445,7 @@ class SolutionPlans:
                    and type(e.get("http_status")) is int and e["http_status"] in (200, 401)
                    and e.get("tls_verified") is True and not e.get("error") for e in result["evidence"])
 
-    def prepare(self, report, check_id=None, enhance_cli=False, proxy=None):
+    def prepare(self, report, check_id=None, enhance_cli=False, proxy=None, check_ids=None):
         if type(enhance_cli) is not bool:
             raise ValueError("完善 Code 配置需要明确的布尔选项")
         if proxy is not None and (not isinstance(proxy, str) or not safe_local_proxy(proxy) or not proxy.startswith(("http://", "https://"))):
@@ -462,6 +462,13 @@ class SolutionPlans:
                     'manual_items':[{'id':'target.region','title':'先核对官方地区支持'}],
                     'reason':'地区条件不合格，无法通过自动配置修复；本次不生成网络或账号修改方案。'}
         problems = report["diagnosis"]["problems"]
+        if check_ids is not None:
+            from .inspection import validate_selection, problem_prefixes
+            checks = validate_selection(check_ids)
+            if check_id is not None or enhance_cli or proxy is not None:
+                raise ValueError('勾选处理不能混用其他修改范围')
+            prefixes = problem_prefixes(checks)
+            problems = [p for p in problems if p['id'].startswith(prefixes)]
         if check_id is not None:
             from .claude_checks import CHECK_PROBLEMS
             if check_id not in CHECK_PROBLEMS:

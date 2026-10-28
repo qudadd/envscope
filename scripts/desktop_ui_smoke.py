@@ -58,7 +58,7 @@ def main():
         operations = FixtureOperations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))))
         operations.desktop_runtime = DesktopFixture()
         def audit(*args, **kwargs):
-            findings = [Finding(c['id'], c['title'], Status.PASS, '离线测试观测', 'test-fixture') for c in check_catalog() if c['id']!='target.region']
+            findings = [Finding(c['id'], c['title'], Status.PASS, '离线测试观测', 'test-fixture') for c in check_catalog() if c['group'] in ('baseline', 'extra')]
             by_id = {f.id: f for f in findings}
             by_id['baseline.country'].evidence = [{'actual':'JP'}]
             by_id['extra.hosts'].status = Status.UNKNOWN

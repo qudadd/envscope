@@ -67,6 +67,8 @@ def main(output=None):
                     result['page_state'] = read_js("({ready:document.readyState, text:document.body.innerText.slice(0,1500), scripts:[...document.scripts].map(s=>s.src)})")
                     raise AssertionError('Native UI did not connect to the fixture server')
                 result['native_window'] = True
+                result['select_all_control'] = read_js("document.getElementById('checks-select-all')?.textContent === '全选' && !!document.getElementById('checks-repair') && !!document.getElementById('target-region-profile')")
+                assert result['select_all_control'], 'Selective checks and region presets must ship in the native UI'
                 assert runtime.ready.wait(5), 'Tray did not initialize'
                 result['tray'] = True
                 ids = read_js("[...document.querySelectorAll('[id]')].map(n=>n.id)")

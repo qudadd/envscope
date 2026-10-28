@@ -117,9 +117,11 @@ class DesktopHandler(SimpleHTTPRequestHandler):
             if not isinstance(request, dict):
                 raise ValueError("JSON object required")
             if self.path == "/api/audit":
-                if set(request) != {"snapshot"}:
-                    raise ValueError("only browser observations are accepted")
+                if 'snapshot' not in request or set(request) - {'snapshot', 'checks'}:
+                    raise ValueError("only browser observations and check IDs are accepted")
                 snapshot = validate_snapshot(request["snapshot"])
+                from .inspection import validate_selection
+                selected = validate_selection(request.get('checks'))
             elif (set(request) != {"action", "params", "confirmed"} or not isinstance(request["action"], str)
                     or len(request["action"]) > 40 or not isinstance(request["params"], dict) or type(request["confirmed"]) is not bool):
                 raise ValueError("invalid fixed action")
@@ -138,7 +140,7 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                 if not self.server.store.settings().get('environment_confirmed'):
                     self.json_response(409, {'error': 'target_environment_required'})
                     return
-                self.json_response(200, collect_report(self.server, snapshot))
+                self.json_response(200, collect_report(self.server, snapshot, selected))
             else:
                 def preflight():
                     if not self.server.last_browser or not self.server.store.settings().get('environment_confirmed'):
@@ -160,6 +162,8 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     self.server.solution_before = {"problems": [{"id": p["id"], "title": p["title"]} for p in self.server.last_raw_report["diagnosis"]["problems"]]}
                 if request["action"] in ("environment-confirm", "settings-save", "settings-restore", "fix", "install", "update-apply", "set-region", "set-client") or request["action"] in ("solution-apply", "solution-undo") and result.get("state") not in ("confirmation_required", "retest_required"):
                     self.server.last_raw_report = None
+                if request['action'] in ('inspection-apply', 'region-undo') and result.get('needs_retest'):
+                    self.server.last_raw_report = None
                 if request["action"] in ("account-switch", "app-launch", "app-restart", "open-safe") and self.server.last_raw_report:
                     result["latest_report"] = redact(self.server.last_raw_report)
                 self.json_response(200, result)
@@ -178,10 +182,11 @@ class DesktopHandler(SimpleHTTPRequestHandler):
             self.server.last_activity = time.monotonic()
 
 
-def collect_report(server, snapshot):
+def collect_report(server, snapshot, selected_checks=None):
     policy = server.store.policy()
+    options = {'selected_checks': selected_checks} if selected_checks is not None else {}
     findings = server.auditor(policy, desktop_transport(server.store.settings()), online=True, stun=True, ipv6=True, browser=snapshot,
-                              baseline_config=server.store.settings())
+                              baseline_config=server.store.settings(), **options)
     changed = server.store.address_change([f.to_dict() for f in findings])
     for finding in findings:
         if finding.id == "browser.webrtc":
@@ -196,7 +201,9 @@ def collect_report(server, snapshot):
         finding.id = "browser.http_v" + str(family)
         finding.title = "浏览器 HTTP IPv" + str(family)
         findings.append(finding)
-    raw = make_report(findings, policy, "one-click-desktop", server.store.settings())
+    from .inspection import scope_findings
+    findings = scope_findings(findings, selected_checks)
+    raw = make_report(findings, policy, "one-click-desktop", server.store.settings(), selected_checks)
     if getattr(server, "solution_before", None) is not None:
         raw["resolution"] = compare_diagnoses(server.solution_before, raw["diagnosis"])
         raw["resolution"]["configuration"] = server.operations.config_remedies.verify_receipts(server.solution_before.get("configuration", []))

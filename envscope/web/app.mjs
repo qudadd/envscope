@@ -24,7 +24,6 @@ const sessionPromise=(async()=>{
   } catch {return null;} finally {clearTimeout(timer);}
 })();
 initConnection(sessionPromise);
-initInspection();
 initCoverage();
 const environment={timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"unknown",languages:[...navigator.languages],
   platform:navigator.userAgentData?.platform||navigator.platform||"unknown",automated:navigator.webdriver===true};
@@ -90,16 +89,17 @@ function renderDesktop(report,source='current') {
 }
 const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
 const targetUI=initTargetEnvironment({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy});
+initInspection({run:diagnosisUI.run,operate:diagnosisUI.operate,isBusy:diagnosisUI.isBusy,retest:checks=>runAudit({checks})});
 document.addEventListener('envscope-target-changed',()=>{lastReport=null;lastSnapshot=null;nodes.share.disabled=true;byId('qualification').hidden=true;byId('verdict').textContent='目标已更新，等待本轮检测';});
 initDesktopApp({run:diagnosisUI.run,operate:diagnosisUI.operate});
 const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy,operate:diagnosisUI.operate,
   onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
 
-async function nativeAudit(session,snapshot) {
+async function nativeAudit(session,snapshot,checks=null) {
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);
   try {
     const response=await fetch("/api/audit",{method:"POST",signal:controller.signal,credentials:"omit",
-      headers:{"Content-Type":"application/json","X-EnvScope-Token":session.token},body:JSON.stringify({snapshot})});
+      headers:{"Content-Type":"application/json","X-EnvScope-Token":session.token},body:JSON.stringify(checks?{snapshot,checks}:{snapshot})});
     if(!response.ok)throw new Error("native_unavailable");
     const report=await response.json();
     if(report.tool!=="envscope"||report.contains_sensitive!==false||!Array.isArray(report.findings))throw new Error("invalid_report");
@@ -107,7 +107,7 @@ async function nativeAudit(session,snapshot) {
   } finally {clearTimeout(timer);}
 }
 
-async function runAudit({oneStop=false,phase='check'}={}){
+async function runAudit({oneStop=false,phase='check',checks=null}={}){
   if(!await targetUI.ensure())return;
   setFlowStage(phase==='recheck'?'repair':'check',phase==='recheck'?'正在重新检测配置与连接，写入成功不代替复检结果。':'正在检查连接和环境设置，尚未写入任何配置。');
   document.dispatchEvent(new CustomEvent('envscope-audit-start'));
@@ -121,20 +121,23 @@ async function runAudit({oneStop=false,phase='check'}={}){
   byId("coverage-count").textContent="正在检测";byId("verdict-note").textContent="正在采集本次观测并分析问题。请保持本地页面打开。";
   byId("session-state").textContent="正在收集证据";byId("verdict").textContent="观测中…";
   try {
+    const selected=id=>!checks||checks.includes(id);
+    const rtc=selected('browser.webrtc')||selected('baseline.webrtc');
+    const v4=rtc||selected('browser.http_v4'),v6=rtc||selected('browser.http_v6');
     const [http,ice]=await Promise.all([
-      Promise.all([request("https://api4.ipify.org?format=json","json","ipify-v4",4),request("https://www.cloudflare.com/cdn-cgi/trace","trace","cloudflare-v4",4),request("https://api6.ipify.org?format=json","json","ipify-v6",6)]),
-      gatherICE()
+      Promise.all([...(v4?[request("https://api4.ipify.org?format=json","json","ipify-v4",4),request("https://www.cloudflare.com/cdn-cgi/trace","trace","cloudflare-v4",4)]:[]),...(v6?[request("https://api6.ipify.org?format=json","json","ipify-v6",6)]:[])]),
+      rtc?gatherICE():Promise.resolve({candidates:[],complete:false})
     ]);
     // Browser fetch cannot force an address family on a dual-stack endpoint;
     // the IPv6-specific service supplies an observation, never a negative proof.
     lastSnapshot={schema_version:1,kind:"envscope-browser-observations",created_at:new Date().toISOString(),
-      contains_sensitive:true,http,ice:ice.candidates,ice_complete:ice.complete,environment:browserEnvironment()};
+      contains_sensitive:true,http,ice:ice.candidates,ice_complete:ice.complete,...(selected('browser.environment')?{environment:browserEnvironment()}:{})};
     render(lastSnapshot);
     const session=await sessionPromise;
     if(session){
       byId("session-state").textContent="正在检测系统网络";
       byId("verdict-note").textContent="浏览器观测已完成，正在合并系统检查。";
-      try {lastReport=await nativeAudit(session,lastSnapshot);renderDesktop(lastReport);document.dispatchEvent(new CustomEvent("envscope-audit-complete",{detail:{report_id:lastReport.report_id}}));}
+      try {lastReport=await nativeAudit(session,lastSnapshot,checks);renderDesktop(lastReport);document.dispatchEvent(new CustomEvent("envscope-audit-complete",{detail:{report_id:lastReport.report_id}}));}
       catch {byId("verdict").textContent="系统检测没有完成，请重新检测";byId("verdict-note").textContent="已保留本轮浏览器观测。上次的系统结果不会作为本次证据；仍失败时请重新打开本地程序。";byId("session-state").textContent="系统检测未完成";}
     }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
     nodes.share.disabled=false;

@@ -206,7 +206,7 @@ def runtime_rules(preferences):
         return {"status": "unknown", "reason": "无法读取或验证代理内核运行规则"}
 
 
-def extra_network(transport):
+def extra_network(transport, metadata_enabled=True, targets_enabled=True):
     def metadata():
         response = transport.get("https://ipinfo.io/json")
         try:
@@ -221,18 +221,22 @@ def extra_network(transport):
         response = transport.get(url, headers_only=url == "https://claude.ai/")
         return response_evidence(url, response)
     with ThreadPoolExecutor(max_workers=3) as pool:
-        info = pool.submit(metadata)
-        web = pool.submit(target, "https://claude.ai/")
-        api = pool.submit(target, "https://api.anthropic.com/v1/models")
-        return info.result(), [web.result(), api.result()]
+        info = pool.submit(metadata) if metadata_enabled else None
+        web = pool.submit(target, "https://claude.ai/") if targets_enabled else None
+        api = pool.submit(target, "https://api.anthropic.com/v1/models") if targets_enabled else None
+        return info.result() if info else {}, [web.result(), api.result()] if web else []
 
 
-def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences, transport, online=False, context=None):
+def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences, transport, online=False, context=None, enabled=None):
+    from .inspection import resolve
+    enabled = resolve(None) if enabled is None else enabled
     with ThreadPoolExecutor(max_workers=3) as pool:
-        guard_job = pool.submit(guard_state)
-        rules_job = pool.submit(runtime_rules, preferences) if online else None
-        extra_job = pool.submit(extra_network, transport) if online else None
-        guard = guard_job.result()
+        guard_job = pool.submit(guard_state) if 'baseline.guard' in enabled else None
+        rules_job = pool.submit(runtime_rules, preferences) if online and enabled & {'baseline.rules', 'extra.runtime_tun'} else None
+        meta = bool(enabled & {'baseline.country', 'baseline.asn'})
+        targets = 'baseline.reachability' in enabled
+        extra_job = pool.submit(extra_network, transport, meta, targets) if online and (meta or targets) else None
+        guard = guard_job.result() if guard_job else {}
         rules = rules_job.result() if rules_job else {"status": "unknown", "reason": "尚未读取运行规则"}
         metadata, targets = extra_job.result() if extra_job else ({}, [])
     if context is not None:

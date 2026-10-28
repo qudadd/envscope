@@ -1,6 +1,14 @@
 # Feature parity and integration audit
 
-## Current scope: 0.10.0 (2026-10-29)
+## Current scope: 0.11.0 (2026-10-29)
+
+The 55-row catalogue now supports full selection, filtering, individual and
+batch checks with explicit dependencies, and reviewed batch repairs. It includes
+derived acceptance rows, not 55 independent network probes. Native Windows/macOS
+region actions use explicit city presets, readback and a private recovery record.
+An existing loopback Mihomo-compatible Selector can be changed; no nodes are
+created, country labels are not geolocation evidence, and official region
+qualification remains a separate gate. [Workflow and boundaries](SELECTIVE_CHECKS.md).
 
 The current product exposes a 23-task capability map and eight-dimension
 evidence view. Both platforms now implement temporary-browser sessions,

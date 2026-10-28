@@ -4,7 +4,7 @@ import json
 import re
 
 DEFAULTS = {"environment_confirmed": False, "connection_mode": "inherit", "provider": "anthropic",
-            "auth_mode": "existing", "language": "", "ipv6_mode": "observe", "protection": "standard", "target_proxy": "", "usage_country": ""}
+            "auth_mode": "existing", "language": "", "ipv6_mode": "observe", "protection": "standard", "target_proxy": "", "usage_country": "", "region_profile": ""}
 FIELDS = set(DEFAULTS) | {"usage", "country", "timezone", "locale", "client", "proxy_group", "webrtc_policy", "allowed_ipv4", "allowed_ipv6", "require_guard", "require_rules"}
 USAGES = {"desktop": "Claude 桌面版", "cli": "Claude Code", "both": "桌面版与 Code", "web": "Claude 网页"}
 CONNECTIONS = {"direct": "直连", "http_proxy": "HTTP / 系统代理", "tun": "TUN / VPN"}
@@ -12,6 +12,8 @@ PROVIDERS = {"anthropic": "Anthropic 官方", "custom": "自定义接口", "bedr
 
 
 def validate(values):
+    from .region_profiles import validate_profile
+    validate_profile(values)
     if not isinstance(values['usage_country'], str) or values['usage_country'] and not re.fullmatch('[A-Za-z]{2}', values['usage_country']):
         raise ValueError('实际使用地区请填写两个字母的国家 / 地区代码，例如 CN、RU、US')
     values['usage_country'] = values['usage_country'].upper()
@@ -76,12 +78,10 @@ def suggest(settings, inventory, cli, proxies):
         adapters = network.get('adapters', [])
         tun = any(re.search(r'TUN|TAP|utun|WireGuard|VPN', str(a.get('InterfaceDescription', a.get('name', ''))), re.I) for a in adapters)
         proposed['connection_mode'] = 'http_proxy' if proxies else 'tun' if tun else 'direct'
-    # Existing explicit comparison targets survive. Missing values are proposed
-    # from the computer, never inferred from an exit IP's country.
-    for key in ('timezone', 'locale'):
-        if not proposed[key]:
-            proposed[key] = actual[key]
+    # Observed values are shown above the form, never silently made into goals.
+    from .region_profiles import profiles
     return {'state': 'completed', 'observed': actual, 'proposed': proposed,
+            'profiles': profiles(actual['system']),
             'proxies': [{'url': p['url']} for p in proxies if isinstance(p.get('url'), str)],
             'note': '这是只读建议。确认仅保存检测目标，不会修改系统时区、语言、网络或账号。'}
 

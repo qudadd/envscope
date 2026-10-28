@@ -72,7 +72,7 @@ def main():
                     page.locator('#learning-skip').click()
                 expect(page.locator('#connection-status')).to_contain_text('已连接')
                 page.get_by_role('button', name='全部检查', exact=True).click()
-                expect(page.locator('[data-inspection]')).to_have_count(35)
+                expect(page.locator('[data-inspection]')).to_have_count(55)
                 expect(page.locator('#all-checks-context')).to_contain_text('尚未检测')
                 page.locator('#check-group').select_option('baseline')
                 expect(page.locator('[data-inspection]')).to_have_count(14)
@@ -80,7 +80,7 @@ def main():
                 expect(page.locator('[data-inspection]')).to_have_count(18)
                 page.locator('#check-group').select_option('all')
                 page.locator('#check-search').fill('证书')
-                assert 0 < page.locator('[data-inspection]').count() < 35
+                assert 0 < page.locator('[data-inspection]').count() < 55
                 page.locator('#check-search').fill('no-such-fixture')
                 expect(page.locator('#all-checks-list')).to_contain_text('没有符合条件')
                 page.locator('#check-search').fill('')
@@ -164,7 +164,7 @@ def main():
                 page.locator('#check-status').select_option('pass')
                 expect(page.locator('[data-inspection]')).to_have_count(0)
                 page.locator('#check-status').select_option('all')
-                expect(page.locator('[data-inspection]')).to_have_count(35)
+                expect(page.locator('[data-inspection]')).to_have_count(55)
                 page.unroute('**/api/audit')
 
                 page.get_by_role('button', name='工具', exact=True).click()
@@ -218,7 +218,7 @@ def main():
                     page.locator('#connection-retry').click()
                     expect(page.locator('#connection-status')).to_contain_text('已连接')
                 assert not errors, errors
-                summary[str(width)] = {'check_catalog':35, 'information_panels':'passed', 'failure_feedback':'passed', 'history_and_retest':'passed', 'disconnect_reconnect':'passed', 'visible_page_keepalive':'passed', 'keyboard_filters':'passed', 'comparison':'passed', 'page_errors':errors, 'overflow':False}
+                summary[str(width)] = {'check_catalog':55, 'information_panels':'passed', 'failure_feedback':'passed', 'history_and_retest':'passed', 'disconnect_reconnect':'passed', 'visible_page_keepalive':'passed', 'keyboard_filters':'passed', 'comparison':'passed', 'page_errors':errors, 'overflow':False}
                 context.close()
             summary['account_round_trip'] = {'isolated_profile_A_preserved':True,'isolated_profile_B_preserved':True,'callbacks':events,'real_accounts_touched':False}
             (OUT / 'result.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')

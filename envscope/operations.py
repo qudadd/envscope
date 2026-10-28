@@ -103,6 +103,10 @@ class Operations:
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}))
+        from .region_setup import RegionSetup
+        from .inventory import collect
+        self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home)
+        self.inspection_plans = {}
 
     def _open_remedy(self, action):
         system = platform.system()
@@ -117,7 +121,7 @@ class Operations:
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/notepad.exe"), str(path)]
             else:
                 uri = {"clock-settings": "ms-settings:dateandtime", "storage-settings": "ms-settings:storagesense",
-                       "proxy-settings": "ms-settings:network-proxy"}.get(action)
+                       "proxy-settings": "ms-settings:network-proxy", "locale-settings": "ms-settings:regionformatting"}.get(action)
                 if not uri:
                     return False
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "explorer.exe"), uri]
@@ -153,11 +157,93 @@ class Operations:
                 "settings": self.store.settings(), "environment": environment_summary(self.store.settings()), "history": self.store.history(), "maintenance": self.maintenance.status(),
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
                 'features':feature_catalog(legacy,browser), 'isolated_browser':browser,
+                'region_recovery': self.regions.public_recovery(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action == 'region-options':
+            if params:
+                raise ValueError('unexpected action parameters')
+            return self.regions.options()
+        if action == 'region-recovery':
+            if params:
+                raise ValueError('unexpected action parameters')
+            return {'recovery': self.regions.public_recovery()}
+        if action == 'region-settings':
+            if set(params) != {'item'} or params['item'] not in ('timezone', 'locale', 'proxy'):
+                raise ValueError('请选择固定的系统设置入口')
+            name = {'timezone': 'clock-settings', 'locale': 'locale-settings', 'proxy': 'proxy-settings'}[params['item']]
+            return {'state': 'opened' if self.remedy_opener(name) else 'unavailable', 'reason': '请在系统设置中处理后复检；打开设置不等于完成修改。'}
+        if action == 'region-undo':
+            if params:
+                raise ValueError('unexpected action parameters')
+            return self.regions.undo(confirmed)
+        if action == 'inspection-plan':
+            if set(params) - {'report_id', 'check_ids', 'group', 'node'}:
+                raise ValueError('invalid inspection parameters')
+            from .inspection import validate_selection, repair_options
+            import secrets
+            checks = validate_selection(params.get('check_ids'))
+            if not checks:
+                raise ValueError('请勾选需要处理的项目')
+            settings = self.store.settings()
+            if (not self.solutions._current(report) or params.get('report_id') != report['report_id'] or
+                    not settings.get('environment_confirmed') or report.get('environment', {}).get('fingerprint') != fingerprint(settings)):
+                return {'state': 'retest_required', 'reason': '请先检测勾选项目；仅使用本轮最新结果生成方案'}
+            found = {f['id']: f for f in report['findings']}
+            if any(found.get(key, {}).get('scope') == 'not-selected' for key in checks):
+                return {'state': 'retest_required', 'reason': '勾选项目包含本轮未检测项，请先点击检测所选'}
+            # Some target checks do not apply to the chosen use (e.g. Code auth for web).
+            # Missing evidence never authorizes a write; it must not block unrelated reviewed fixes.
+            missing = [key for key in checks if key not in found and key in report.get('environment', {}).get('required', [])]
+            checks = [key for key in checks if key in found]
+            options = repair_options(report)
+            manual = [{'id': k, 'title': found[k]['title'], 'steps': options[k]['steps']} for k in checks
+                      if options[k]['manual']]
+            manual.extend({'id': k, 'title': k, 'steps': ['本轮未取得必需证据，请重新检测本项；未生成自动修改。']} for k in missing)
+            components = [name for key, name in (('baseline.timezone', 'timezone'), ('baseline.locale', 'locale'))
+                          if key in checks and found[key]['status'] != 'pass']
+            if 'baseline.country' in checks and params.get('node'):
+                components.append('node')
+            elif 'baseline.country' in checks and found['baseline.country']['status'] != 'pass':
+                manual.append({'id': 'baseline.country', 'title': '节点地区需要处理', 'steps': ['在下方读取代理组并选择目标地区的已有节点；无法读取时在代理客户端手动选择。节点名称不证明出口地区，完成后复检。']})
+            region = self.regions.prepare(report, components, params.get('group', ''), params.get('node', '')) if components else {}
+            if components and region.get('state') != 'planned':
+                manual.append({'id': 'region', 'title': '地区配置需要手动确认', 'steps': [region.get('reason', '请重新检测')]})
+            solution = self.solutions.prepare(report, check_ids=checks) if checks else {}
+            for reason in solution.get('manual', []):
+                manual.append({'id': 'configuration', 'title': '配置需要手动处理', 'steps': [reason]})
+            effects = region.get('effects', []) + solution.get('effects', [])
+            if not effects:
+                return {'state': 'guided', 'manual_items': manual, 'effects': [], 'reason': '没有可直接执行的改动；请按红色项目的步骤处理后复查。' if manual else '所选项目没有可执行的修改，请根据检测结果继续。'}
+            token = secrets.token_urlsafe(20)
+            self.inspection_plans = {token: {'region': region.get('plan_id'), 'solution': solution.get('plan_id'),
+                                            'deadline': time.monotonic() + 90, 'report_id': report['report_id'], 'fingerprint': fingerprint(settings)}}
+            return {'state': 'planned', 'plan_id': token, 'effects': effects, 'manual_items': manual,
+                    'reason': '确认一次后依次执行，失败则停止；保留恢复记录。配置写入后自动复检，不能自动解决的项目仍标红。' + (region.get('reason', '') if components else '')}
+        if action == 'inspection-apply':
+            if set(params) != {'plan_id'} or not isinstance(params['plan_id'], str):
+                raise ValueError('invalid inspection plan')
+            if confirmed is not True:
+                return {'state': 'confirmation_required'}
+            plan = self.inspection_plans.get(params['plan_id'])
+            if (not plan or time.monotonic() > plan['deadline'] or not self.solutions._current(report)
+                    or plan['report_id'] != report['report_id'] or plan['fingerprint'] != fingerprint(self.store.settings())):
+                return {'state': 'retest_required', 'reason': '方案已过期或检测已改变，请重新生成'}
+            del self.inspection_plans[params['plan_id']]
+            results = []
+            if plan['region']:
+                results.append(self.regions.apply(plan['region'], report, True))
+                if results[-1]['state'] != 'completed':
+                    return {**results[-1], 'results': results, 'needs_retest': True}
+            if plan['solution']:
+                results.append(self.solutions.apply(plan['solution'], report, True))
+            last = results[-1]
+            return {'state': last['state'], 'results': results, 'needs_retest': last.get('needs_retest', True),
+                    'backups': [b for r in results for b in r.get('backups', [])],
+                    'reason': last.get('reason', '操作已返回，请复检实际结果')}
         if action in ('archive-export','archive-import'):
             if set(params) != {'slot','file','password'}:
                 raise ValueError('invalid archive parameters')

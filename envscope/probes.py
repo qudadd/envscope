@@ -69,14 +69,16 @@ def stun_observations(family=4, timeout=2):
         return list(pool.map(one, STUN_SERVERS))
 
 
-def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), browser=None, controller=None, secret=None, baseline_config=None):
+def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), browser=None, controller=None, secret=None, baseline_config=None, selected_checks=None):
+    from .inspection import resolve, scope_findings
+    enabled = resolve(selected_checks)
     with ThreadPoolExecutor(max_workers=6) as pool:
         inventory_job = pool.submit(collect)
-        facts_job = pool.submit(bounded_facts) if online else None
-        v4_job = pool.submit(http_observations, transport, 4) if online else None
-        v6_job = pool.submit(http_observations, transport, 6) if online and ipv6 else None
-        udp4_job = pool.submit(stun_observations, 4) if online and stun else None
-        udp6_job = pool.submit(stun_observations, 6) if online and stun and ipv6 else None
+        facts_job = pool.submit(bounded_facts) if online and enabled & {'extra.dns_resolution', 'extra.target_route'} else None
+        v4_job = pool.submit(http_observations, transport, 4) if online and 'http.egress' in enabled else None
+        v6_job = pool.submit(http_observations, transport, 6) if online and ipv6 and 'http.ipv6' in enabled else None
+        udp4_job = pool.submit(stun_observations, 4) if online and stun and 'udp.stun' in enabled else None
+        udp6_job = pool.submit(stun_observations, 6) if online and stun and ipv6 and 'udp.stun' in enabled else None
         inventory = inventory_job.result()
         network = facts_job.result() if facts_job else {"dns": [], "routes": []}
         v4, v6 = v4_job.result() if v4_job else [], v6_job.result() if v6_job else []
@@ -101,13 +103,14 @@ def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), b
         from .environment_info import device_information, device_finding
         context = {}
         with ThreadPoolExecutor(max_workers=3) as pool:
-            local_job = pool.submit(local_snapshot, inventory)
-            device_job = pool.submit(device_information)
-            baseline = collect_baseline(inventory, v4, v6, findings[-3], findings[-1], baseline_config, transport, online, context)
+            local_job = pool.submit(local_snapshot, inventory, listeners_enabled='extra.proxy_listener' in enabled)
+            device_job = pool.submit(device_information) if 'device.environment' in enabled else None
+            baseline = collect_baseline(inventory, v4, v6, findings[-3], findings[-1], baseline_config, transport, online, context, enabled=enabled)
             local = local_job.result()
         findings.extend(baseline)
         findings.extend(extended_checks(inventory, network, local, context))
-        findings.append(device_finding(device_job.result()))
+        if device_job:
+            findings.append(device_finding(device_job.result()))
     if controller:
         findings.append(inspect_controller(controller, secret))
     findings.append(environment_finding(browser))
@@ -120,4 +123,4 @@ def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), b
                                 transport.path, [{"endpoint": display_url(url), "http_status": response.status,
                                                   "application_state": state, "transport_error": response.error}],
                                 ["无认证 GET 请求，不跟随重定向；403、429 和 5xx 不记为应用可用。" ]))
-    return add_guidance(findings)
+    return add_guidance(scope_findings(findings, selected_checks))

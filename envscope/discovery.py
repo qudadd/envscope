@@ -36,7 +36,7 @@ def config_directories(home=None, platform_name=None, environ=None):
 
 def config_documents(home=None, platform_name=None, environ=None):
     for directory in config_directories(home, platform_name, environ):
-        for name in ("clash-verge.yaml", "verge.yaml", "clash.yaml"):
+        for name in ("clash-verge.yaml", "verge.yaml", "clash.yaml", "config.yaml"):
             path = directory / name
             try:
                 if path.is_file() and not path.is_symlink() and path.stat().st_size <= 1048576:

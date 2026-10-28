@@ -45,8 +45,8 @@ class EnvironmentInformationTests(unittest.TestCase):
 
     def test_catalog_covers_actual_checks_without_synthetic_results(self):
         rows = check_catalog()
-        self.assertEqual(len(rows), 35)
-        self.assertEqual(len({r['id'] for r in rows}), 35)
+        self.assertEqual(len(rows), 55)
+        self.assertEqual(len({r['id'] for r in rows}), 55)
         self.assertTrue(any(r['id']=='target.region' for r in rows))
         self.assertEqual({r['id'] for r in rows if r['group'] == 'extra'}, {'extra.' + k for k, _ in CHECKS})
         self.assertTrue(all(r['why'] and r['next_step'] and r['upkeep'] for r in rows))

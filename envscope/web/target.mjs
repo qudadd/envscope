@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 
 export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
-  let settings=null,loading=false,saving=false,pendingUsage=null;
+  let settings=null,loading=false,saving=false,pendingUsage=null,profiles=[];
   const form=$('target-form');
   const field=name=>form.elements.namedItem(name);
   function visibility(){
@@ -41,6 +41,8 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
     $('target-observed').textContent='正在读取当前系统、时区及连接配置；不会修改它们。';
     try{
       const value=await run('environment-suggest');
+      profiles=value.profiles||[];
+      $('target-region-profile').replaceChildren(new Option('自定义 / 仅观察',''),...profiles.map(p=>new Option(p.label,p.id)));
       populate(value.proposed||{});
       if(['cli','desktop','both','web'].includes(pendingUsage)){field('usage').value=pendingUsage;pendingUsage=null;visibility();}
       const o=value.observed||{};
@@ -50,6 +52,16 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
     if(!form.hidden&&!$('audit-content').hidden){form.scrollIntoView({block:'nearest'});field('usage').focus();}
   }
   field('usage').addEventListener('change',visibility);field('connection_mode').addEventListener('change',visibility);
+  field('region_profile').addEventListener('change',()=>{
+    const selected=profiles.find(p=>p.id===field('region_profile').value);
+    if(selected)for(const k of ['country','timezone','locale'])field(k).value=selected[k];
+    $('target-output').textContent=selected?'已填入 '+selected.label+' 的目标值。确认后先检测，修改系统需再审核方案。':'自定义目标；留空的项目只记录。';
+  });
+  for(const k of ['country','timezone','locale'])field(k).addEventListener('input',()=>{field('region_profile').value='';});
+  $('target-configure').addEventListener('click',()=>{
+    if(!settings?.environment_confirmed||!form.hidden){void open();$('target-output').textContent='先选择期望地区与城市，确认目标并检测。';return;}
+    document.dispatchEvent(new CustomEvent('envscope-region-configure'));
+  });
   $('target-edit').addEventListener('click',()=>void open());
   $('target-cancel').addEventListener('click',()=>{if(!saving&&!loading){form.hidden=true;$('target-edit').focus();}});
   form.addEventListener('submit',async event=>{

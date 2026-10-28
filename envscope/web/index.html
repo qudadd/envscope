@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.10.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.11.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="coverage">环境全览</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -42,12 +42,13 @@
           <label>使用方式<select name="usage" required><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版与 Code</option><option value="web">Claude 网页</option></select></label>
           <label>连接方式<select name="connection_mode" required><option value="direct">直连</option><option value="http_proxy">HTTP / 系统代理</option><option value="tun">TUN / VPN</option></select></label>
           <label>实际使用地区<input name="usage_country" list="region-codes" maxlength="2" pattern="[A-Za-z]{2}" required placeholder="选择或填写地区代码" title="填写实际所在地的两个字母代码，例如 CN、RU、US"></label>
-          <label>比较时区<input name="timezone" maxlength="100" placeholder="默认保留电脑当前值"></label>
-          <label>比较地区格式<input name="locale" maxlength="100" placeholder="默认保留电脑当前值"></label>
+          <label>期望配置地区与城市<select name="region_profile" id="target-region-profile"><option value="">自定义 / 仅观察</option></select></label>
+          <label>目标时区<input name="timezone" maxlength="100" placeholder="选择城市后自动填写"></label>
+          <label>目标地区格式<input name="locale" maxlength="100" placeholder="选择城市后自动填写"></label>
         </div>
         <datalist id="region-codes"><option value="CN" label="中国大陆 · 官方不支持"></option><option value="RU" label="俄罗斯 · 官方不支持"></option><option value="HK" label="中国香港 · 未列入支持名单"></option><option value="MO" label="中国澳门 · 未列入支持名单"></option><option value="US" label="美国"></option><option value="JP" label="日本"></option><option value="SG" label="新加坡"></option><option value="TW" label="中国台湾 · 官方名单单列"></option><option value="GB" label="英国"></option><option value="DE" label="德国"></option><option value="FR" label="法国"></option><option value="KR" label="韩国"></option><option value="CA" label="加拿大"></option><option value="AU" label="澳大利亚"></option></datalist>
         <p class="note">填写实际所在地，不能用代理出口代替。中国大陆（CN）、俄罗斯（RU）不在官方支持名单中，地区条件将判为不合格。<a href="https://support.claude.com/en/articles/8461763-where-can-i-access-claude" target="_blank" rel="noopener noreferrer">Claude 地区名单</a> · <a href="https://platform.claude.com/docs/en/api/supported-regions" target="_blank" rel="noopener noreferrer">API 地区名单</a>（核对于 2026-10-28）。</p>
-        <p class="note">时区与地区格式默认保留当前值，留空则仅记录。无需与出口国家相同。系统时钟是否准确会单独检测。</p>
+        <p class="note">选择期望城市后填写对应的出口国家、时区和地区格式。美国等多时区国家需选城市；可改为自定义。留空仅观察。配置目标不会替代实际所在地，时区差异本身不代表账号风险。</p>
         <div id="target-code-fields" class="form-grid" hidden>
           <label>Code 接口<select name="provider"><option value="anthropic">Anthropic 官方</option><option value="custom">自定义接口</option><option value="bedrock">Amazon Bedrock</option><option value="vertex">Google Vertex</option><option value="foundry">Microsoft Foundry</option></select></label>
           <label>认证方式<select name="auth_mode"><option value="existing">保留现有登录</option><option value="subscription">Claude 订阅登录</option><option value="api_key">API Key</option><option value="managed">云平台 / 组织管理</option></select></label>
@@ -63,6 +64,7 @@
         <p class="note">确认只保存 EnvScope 的检测目标。系统、账号与 Code 配置修改会在检测后另列方案，由你确认后执行。</p>
         <p id="target-output" role="status" class="note"></p><div class="actions"><button id="target-confirm" type="submit" class="primary">确认目标并检测</button><button id="target-cancel" type="button" class="link">取消调整</button></div>
       </form>
+      <button id="target-configure" class="link" type="button">按目标调整时区、地区格式与节点</button>
     </section>
 
     <section id="audit-results" aria-label="检测结果" aria-busy="false">
@@ -112,8 +114,11 @@
     </div>
 
     <div id="page-checks" class="page" hidden>
-      <h1>全部检查</h1><p class="subtle">14 项基础对应 claude-switcher，18 项扩展检查连接、配置和安装。每一项都能查看用途、结果与下一步。</p>
+      <h1>全部检查</h1><p class="subtle">勾选要检查的项目，检测后预览并一键修改。红色项目需要手动处理，展开即可看到步骤。</p>
       <p id="all-checks-context" class="note" role="status">尚未检测，下面是完整检查目录。</p>
+      <div class="inspection-toolbar"><div class="actions"><button id="checks-run">检测所选</button><button id="checks-repair">预览所选修改</button><button id="checks-select-all" class="link">全选</button><button id="checks-clear" class="link">取消全选</button><button id="checks-select-problems" class="link">只选需处理项</button><button id="checks-select-visible" class="link">勾选筛选结果</button></div><p id="checks-selected-count" class="note" aria-live="polite"></p></div>
+      <details id="checks-region-options"><summary>节点地区与恢复记录</summary><p class="note">先在目标设置选择城市。只切换你已有的节点；组内其他应用的新连接也可能受影响。节点名称与真实出口分开核对。</p><button id="checks-load-nodes" class="link">读取可控制的代理组</button><div class="form-grid"><label>代理组<select id="checks-node-group"><option value="">保持不变</option></select></label><label>目标地区的已有节点<select id="checks-node"><option value="">保持不变</option></select></label></div><p id="checks-node-note" class="note" role="status">未读取控制接口；没有兼容接口时，请在代理客户端手动选择节点。</p><button id="checks-region-undo" class="link" hidden>预览恢复上次地区配置</button><div id="checks-region-recovery"></div></details>
+      <section id="checks-plan" aria-live="polite"></section><p id="checks-output" role="status"></p>
       <div class="check-filters"><label>查找项目<input id="check-search" type="search" placeholder="例如：DNS、登录、证书"></label><label>分类<select id="check-group"><option value="all">全部分类</option><option value="target">目标验收</option><option value="baseline">14 项基础</option><option value="extra">18 项扩展</option><option value="measurement">补充测量</option></select></label><label>状态<select id="check-status"><option value="all">全部状态</option><option value="required">本次必需</option><option value="attention">需要处理或复核</option><option value="unknown">需要补全</option><option value="excluded">不适用、参考或版本未支持</option><option value="pass">范围内通过</option><option value="not_run">尚未检测</option></select></label></div>
       <p id="check-count" class="note" role="status"></p><div id="all-checks-list"></div>
       <div class="actions"><button id="checks-return" class="link">返回一键检测与修复</button></div>

@@ -41,14 +41,17 @@ class Finding:
         return value
 
 
-def make_report(findings, policy, mode="audit", preferences=None):
+def make_report(findings, policy, mode="audit", preferences=None, selected_checks=None):
     from .policy import decide
     from .target_environment import build_findings, plan, summary, scoped_preferences, FIELDS
 
     preferences = preferences or {}
     from .regions import region_finding
+    from .inspection import scope_findings, selection_info, repair_options
     findings = list(findings)
+    findings = scope_findings(findings, selected_checks)
     findings = findings + [region_finding(findings, preferences)] + build_findings(findings, preferences)
+    findings = scope_findings(findings, selected_checks)
 
     ids = [f.id for f in findings]
     if len(ids) != len(set(ids)):
@@ -70,6 +73,7 @@ def make_report(findings, policy, mode="audit", preferences=None):
         },
         "decision": decision,
         "findings": [f.to_dict() for f in findings],
+        "selection": selection_info(selected_checks),
         "boundary": "只读诊断；结论仅覆盖本次观测与配置范围，不证明零泄漏或防火墙保护。",
     }
     target_plan = plan(preferences)
@@ -80,6 +84,7 @@ def make_report(findings, policy, mode="audit", preferences=None):
     report["assessment"] = assessment(report, preferences)
     from .diagnosis import diagnose
     report["diagnosis"] = diagnose(report, scoped_preferences(preferences))
+    report['repair_options'] = repair_options(report)
     from .claude_checks import checklist
     report["claude_checks"] = checklist(report, preferences)
     from .guide import usage_guide

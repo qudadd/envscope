@@ -119,6 +119,8 @@ class StateStore:
         if 'environment_confirmed' in value:
             raise ValueError('请使用目标环境确认入口')
         merged = {**previous, **value}
+        if 'region_profile' not in value and any(k in value and value[k] != previous.get(k) for k in ('country', 'timezone', 'locale')):
+            merged['region_profile'] = ''
         if invalidate_environment or any(k in ENVIRONMENT_FIELDS and previous.get(k) != v for k, v in value.items()):
             merged['environment_confirmed'] = False
         if confirm_environment:
