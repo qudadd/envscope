@@ -49,7 +49,7 @@ def main():
     for file in distribution.files or []:
         if str(file).endswith("licenses/COPYING.txt"):
             shutil.copy2(distribution.locate_file(file), licenses / "PYINSTALLER-COPYING.txt")
-    packages = {"pywebview", "pystray", "Pillow", "pythonnet", "clr_loader", "proxy_tools", "typing_extensions", "cffi", "pycparser", "six", "bottle"}
+    packages = {"cryptography", "pywebview", "pystray", "Pillow", "pythonnet", "clr_loader", "proxy_tools", "typing_extensions", "cffi", "pycparser", "six", "bottle"}
     packages.update(d.metadata["Name"] for d in importlib.metadata.distributions() if d.metadata["Name"].lower().startswith("pyobjc"))
     for package in sorted(packages):
         try:

@@ -66,8 +66,26 @@ def main():
                         page.locator('#target-form [name=connection_mode]').select_option('direct')
                         expect(page.locator('#target-form [name=timezone]')).to_have_value('China Standard Time')
                         expect(page.locator('#target-form [name=locale]')).to_have_value('zh-CN')
+                        expect(page.locator('#target-form [name=usage_country]')).to_have_value('')
+                        page.locator('#target-form [name=usage_country]').fill('CN')
                         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                         page.screenshot(path=str(out/f'{width}-setup.png'), full_page=True)
+                        page.locator('#target-confirm').click()
+                        expect(page.locator('[data-problem="target.region"]')).to_contain_text('官方不支持')
+                        expect(page.locator('#try-claude')).to_be_hidden()
+                        expect(page.locator('#apply-solution')).to_have_count(0)
+                        assert code.read_bytes() == original
+                        page.screenshot(path=str(out/f'{width}-cn-restricted.png'), full_page=True)
+                        page.locator('#target-edit').click()
+                        expect(page.locator('#target-confirm')).to_be_enabled()
+                        page.locator('#target-form [name=usage_country]').fill('RU')
+                        page.locator('#target-confirm').click()
+                        expect(page.locator('[data-problem="target.region"]')).to_contain_text('俄罗斯')
+                        expect(page.locator('#apply-solution')).to_have_count(0)
+                        assert code.read_bytes() == original
+                        page.locator('#target-edit').click()
+                        expect(page.locator('#target-confirm')).to_be_enabled()
+                        page.locator('#target-form [name=usage_country]').fill('JP')
                         page.locator('#target-confirm').click()
                         expect(page.locator('#apply-solution')).to_be_visible()
                         expect(page.locator('#verdict')).to_contain_text('不合格')
@@ -111,7 +129,7 @@ def main():
                         page.locator('#check-status').select_option('excluded')
                         expect(page.locator('[data-inspection="dns.leak"]')).to_contain_text('本版未支持')
                         assert not errors, errors
-                        results[str(width)] = {'first_use_gate':True,'api_gate':True,'preserve_timezone_locale':True,
+                        results[str(width)] = {'first_use_gate':True,'api_gate':True,'preserve_timezone_locale':True,'cn_ru_rejected_without_writes':True,'actual_region_not_inferred':True,
                                                'repair_recheck':True,'private_fields_preserved':True,'repeat_without_setup':True,
                                                'cancel_no_change':True,'change_usage_scope':True,'unknown_not_privacy_pass':True,
                                                'page_errors':errors,'overflow':False,'real_network_or_account_changes':False}

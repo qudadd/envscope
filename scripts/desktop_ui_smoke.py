@@ -48,7 +48,7 @@ def main():
     summary = {}
     with tempfile.TemporaryDirectory() as directory, sync_playwright() as runtime:
         store = StateStore(Path(directory) / 'state')
-        store.save_settings({'usage':'desktop','connection_mode':'direct'}, confirm_environment=True)
+        store.save_settings({'usage':'desktop','connection_mode':'direct','usage_country':'JP'}, confirm_environment=True)
         opener = Mock()
         class FixtureOperations(Operations):
             def run(self, action, params, **kwargs):
@@ -58,8 +58,9 @@ def main():
         operations = FixtureOperations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))))
         operations.desktop_runtime = DesktopFixture()
         def audit(*args, **kwargs):
-            findings = [Finding(c['id'], c['title'], Status.PASS, '离线测试观测', 'test-fixture') for c in check_catalog()]
+            findings = [Finding(c['id'], c['title'], Status.PASS, '离线测试观测', 'test-fixture') for c in check_catalog() if c['id']!='target.region']
             by_id = {f.id: f for f in findings}
+            by_id['baseline.country'].evidence = [{'actual':'JP'}]
             by_id['extra.hosts'].status = Status.UNKNOWN
             by_id['extra.hosts'].evidence = [{'error': 'permission_denied'}]
             by_id['extra.cli_paths'].status = Status.SKIPPED

@@ -24,7 +24,8 @@ def ready_findings():
 
 
 def ready_report():
-    return make_report(ready_findings(), Policy(), "one-click-desktop")
+    return make_report(ready_findings()+[Finding('baseline.country','country','warn','fixture','fixture',[{'actual':'US'}])],
+                       Policy(), "one-click-desktop", {'usage_country':'US'})
 
 
 class ReadinessTests(unittest.TestCase):

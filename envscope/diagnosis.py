@@ -12,6 +12,7 @@ SOURCES = {
     "errors": "https://platform.claude.com/docs/en/api/errors",
     "settings": "https://code.claude.com/docs/en/settings",
     "troubleshooting": "https://code.claude.com/docs/en/troubleshooting",
+    "regions": "https://support.claude.com/en/articles/8461763-where-can-i-access-claude",
 }
 
 
@@ -32,6 +33,15 @@ def diagnose(report, preferences=None):
                          "steps": steps, "action": action, "repair": repair, "priority": priority,
                          "certainty": certainty, "source": SOURCES[source]})
         verification[key] = "problem"
+
+    region = by_id.get('target.region', {})
+    if region:
+        verification['target.region'] = 'clear' if region.get('status') == 'pass' else 'unverified'
+        if region.get('status') != 'pass':
+            add('target.region', region.get('summary', 'Claude 地区条件待核实'), region.get('summary', ''),
+                '按官方支持名单分别核对申报地区与出口；中国大陆和俄罗斯不在支持名单。',
+                [region.get('suggestion', '')], 'region-support', priority=-1,
+                certainty='confirmed' if region.get('status') == 'fail' else 'review', source='regions')
 
     config = evidence("extra.config")
     for index, target, label in ((0, "desktop", "Claude 桌面配置"), (1, "cli", "Claude Code 用户配置")):
@@ -305,6 +315,8 @@ def diagnose(report, preferences=None):
         required = set(report['environment']['required'])
         for f in findings:
             if not f['id'].startswith('target.') or f['id'] not in required:
+                continue
+            if f['id'] == 'target.region':
                 continue
             verification[f['id']] = 'clear' if f['status'] == 'pass' else 'unverified'
             if f['status'] == 'pass':

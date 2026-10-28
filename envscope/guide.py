@@ -9,7 +9,7 @@ USAGES = ("auto", "desktop", "cli", "both", "web")
 EXPLANATIONS = {
     "proxy": ("连接工具有没有工作", "代理", "把请求交给你已有的连接工具。工具没启动或端口失效时，Claude 可能连不上。", "先打开平时使用的连接工具，再测试连接；只用隧道模式时不一定需要本地代理端口。"),
     "tun": ("需要的应用能否走同一条连接", "TUN / 虚拟网卡", "一种接管应用网络请求的方式。普通网页或 Code 能连接时，不必为了这一项单独开启；严格账号切换有额外要求。", "只有准备使用严格账号切换、或确实需要隧道接管时，再核对客户端的 TUN 和服务权限。"),
-    "country": ("连接显示的地区是否符合你的设置", "出口国家", "记录本次网络出口的地区。它不能证明账号有使用资格，也不要求你修改真实所在地。", "没有设置比较目标时无需处理。填错目标时修正设置；服务是否支持实际地区请核对官方说明。"),
+    "country": ("实际地区与出口是否得到官方支持", "出口国家", "官方支持地区是独立必需项；中国大陆（CN）和俄罗斯（RU）不受支持。出口不证明实际所在地或账号资格。", "核对所在地及官方名单；地区限制不能靠更改时区、语言、代理或账号修复。"),
     "ip_stability": ("连接地址最近有没有变化", "出口变化", "频繁重连可能伴随地址变化；变化本身不能说明账号有风险。第一次检测没有历史可比较。", "经常中断时查看历史和持续维护记录，结合客户端重连情况排查。"),
     "timezone": ("电脑时间是否影响登录", "时区与系统时钟", "明显的时钟偏差可能导致证书或登录失败。时区名称不同本身不是故障。", "有时钟偏差时先启用系统自动校时；没有比较目标时不必改时区。"),
     "locale": ("地区格式有没有意外改变", "地区格式", "主要记录日期和数字的地区格式。使用中文格式不自动影响 Claude 连接。", "按自己的实际习惯保留设置；只有明确设置了目标且发生变化时才核对。"),
@@ -98,5 +98,5 @@ def usage_guide(report):
     return {"schema_version": 1, "headline": headline, "summary": summary, "tasks": tasks,
             "primary_problem_id": primary["id"] if primary else None,
             "next_action": "repair" if primary and primary.get("repair") else "problem" if primary else "try" if network_known else "proxy-test",
-            "manual_confirmation": {"state": "required", "text": "需要你在自己的 Claude 中确认登录并收到回复。本工具不会发送消息、读取密钥或代替账号验证。"},
+            "manual_confirmation": {"state": "blocked" if findings.get('target.region', {}).get('status') == 'fail' else "required", "text": "地区条件不合格，先核对实际所在地和官方支持名单；此时不应继续登录或试用 Claude。" if findings.get('target.region', {}).get('status') == 'fail' else "需要你在自己的 Claude 中确认登录并收到回复。本工具不会发送消息、读取密钥或代替账号验证。"},
             "boundary": "这些步骤用于定位使用问题；不证明全流量接管、零泄漏、地区资格或账号权限。"}

@@ -1,5 +1,13 @@
 # Third-party origins
 
+## cryptography
+
+Encrypted `.envsnap` archives use [cryptography](https://github.com/pyca/cryptography),
+licensed under Apache-2.0 OR BSD-3-Clause. Distribution licenses, including its
+bundled component notices, are retained in native package licenses. EnvScope
+uses Scrypt and AES-256-GCM, not a custom cipher. Runtime range:
+`cryptography>=46,<51`; the release build records the resolved version.
+
 EnvScope is MIT licensed. It contains no Scrapling, proxy core, browser automation
 framework, VPN application, account database, or captured research pages at runtime.
 Desktop distributions bundle Python through PyInstaller; applicable runtime and

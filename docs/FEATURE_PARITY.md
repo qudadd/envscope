@@ -1,5 +1,22 @@
 # Feature parity and integration audit
 
+## Current scope: 0.10.0 (2026-10-29)
+
+The current product exposes a 23-task capability map and eight-dimension
+evidence view. Both platforms now implement temporary-browser sessions,
+authenticated `.envsnap` archives, passive CLI conflict/provenance inspection,
+and broader device/browser metadata. Installed guard modes are compared with
+the selected client. CN/RU are rejected by a separate official-region gate.
+
+Upstream main was reviewed at `495b9952f36b8b7b7575fa0d8de48c2465dbf486`.
+The bundled immutable pin remains `870c4ca`. OS repairs, routing, process guard,
+Mac timezone watchdog and DMG still depend on explicitly installed legacy
+components. [Current implementation and tests](ENVIRONMENT_COVERAGE.md).
+
+The dated sections below record prior audits. Former native browser, archive
+and tray gaps are superseded where stated above. Firewall enforcement,
+authoritative DNS egress and server-side account qualification remain unverified.
+
 ## 0.7.1 usability and upstream refresh (2026-10-28)
 
 The complete 14 + 18 index is now a first-class page, available before a run,

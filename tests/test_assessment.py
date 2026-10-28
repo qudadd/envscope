@@ -50,7 +50,7 @@ class AssessmentTests(unittest.TestCase):
         self.assertEqual(hosts_overrides(path)['error'], 'permission_denied')
 
     def test_basic_qualified_scope_does_not_claim_privacy_pass(self):
-        ids = ('extra.dns_resolution', 'extra.tls', 'baseline.reachability', 'extra.config', 'extra.storage', 'extra.desktop', 'extra.profile', 'extra.account', 'http.egress')
+        ids = ('extra.dns_resolution', 'extra.tls', 'baseline.reachability', 'extra.config', 'extra.storage', 'extra.desktop', 'extra.profile', 'extra.account', 'http.egress', 'target.region')
         report = {'usage': 'desktop', 'policy': {'required_checks': ['dns.leak']}, 'findings': [finding(k, 'pass') for k in ids] + [finding('dns.leak')]}
         result = assessment(report)
         self.assertEqual(result['verdict'], 'qualified_in_scope')

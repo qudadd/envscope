@@ -175,6 +175,7 @@ export function initDiagnosis({sessionPromise,retest}) {
     else if(problem.action==='maintenance')controls.append(button('生成修复方案',()=>action(prepare)));
     else if(['settings','accounts'].includes(problem.action))controls.append(button(problem.action==='settings'?'调整比较或启动设置':'打开账号管理',()=>document.querySelector(`.tab[data-page="${problem.action}"]`)?.click()));
     else if(links[problem.action])controls.append(link(...links[problem.action]));
+    else if(problem.action==='region-support')controls.append(button('核对实际使用地区',()=>document.dispatchEvent(new CustomEvent('envscope-target-review'))),link('查看 Claude 官方地区名单','https://support.claude.com/en/articles/8461763-where-can-i-access-claude'),link('查看官方 API 地区名单','https://platform.claude.com/docs/en/api/supported-regions'));
     controls.append(button('重新检测',()=>{if(!busy)void retest();}));row.append(controls);return row;
   }
   function renderChecklist(value){

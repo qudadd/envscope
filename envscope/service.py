@@ -148,6 +148,9 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     except ValueError:
                         return False
                     collect_report(self.server, fresh_browser)
+                    if request['action'] == 'open-safe':
+                        from .readiness import browser_readiness
+                        return browser_readiness(self.server.last_raw_report,self.server.store.settings())
                     return launch_gate(self.server.last_raw_report, self.server.store.settings())[0]
                 result = self.server.operations.run(request["action"], request["params"], confirmed=request["confirmed"],
                                                     report=self.server.last_raw_report, preflight=preflight)

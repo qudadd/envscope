@@ -5,7 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .browser import assess_snapshot
+from .browser import assess_snapshot, environment_finding
 from .controller import inspect_controller
 from .inventory import collect
 from .model import Finding, Status, utc_now
@@ -98,15 +98,19 @@ def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), b
     findings.append(assess_snapshot(browser, policy))
     if baseline_config is not None:
         from .baseline import collect_baseline
+        from .environment_info import device_information, device_finding
         context = {}
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=3) as pool:
             local_job = pool.submit(local_snapshot, inventory)
+            device_job = pool.submit(device_information)
             baseline = collect_baseline(inventory, v4, v6, findings[-3], findings[-1], baseline_config, transport, online, context)
             local = local_job.result()
         findings.extend(baseline)
         findings.extend(extended_checks(inventory, network, local, context))
+        findings.append(device_finding(device_job.result()))
     if controller:
         findings.append(inspect_controller(controller, secret))
+    findings.append(environment_finding(browser))
     for index, url in enumerate(targets):
         response = transport.get(url)
         state = application_state(response)

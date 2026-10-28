@@ -58,6 +58,29 @@ class FakeScheduler:
 
 
 class MaintenanceTests(unittest.TestCase):
+    def test_region_change_blocks_background_restoration_before_any_write(self):
+        self.enable(auto_restore=True)
+        content=json.loads(self.path.read_text())
+        content['env']['NODE_TLS_REJECT_UNAUTHORIZED']='0'
+        self.path.write_text(json.dumps(content))
+        before=self.path.read_bytes()
+        def restricted(*args,**kwargs):
+            values=findings()
+            next(f for f in values if f.id=='baseline.country').evidence=[{'actual':'CN'}]
+            return values
+        self.auditor.side_effect=restricted
+        result=self.manager.run_once()
+        self.assertEqual(result['state'],'completed')
+        self.assertEqual(self.path.read_bytes(),before)
+        self.assertEqual(self.manager.status()['restore_state'],'paused')
+
+    def test_region_failure_refuses_new_auto_restore_plan(self):
+        from copy import deepcopy
+        report=deepcopy(self.report)
+        next(f for f in report['findings'] if f['id']=='target.region')['status']='fail'
+        self.assertEqual(self.manager.prepare(report,5,True)['state'],'blocked')
+        self.assertEqual(self.manager.prepare(report,5,False)['state'],'planned')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

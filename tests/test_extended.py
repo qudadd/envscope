@@ -274,7 +274,8 @@ class MeasurementIntegrationTests(unittest.TestCase):
                 patch("envscope.probes.http_observations", return_value=[]), patch("envscope.probes.stun_observations", return_value=[]), \
                 patch("envscope.probes.local_snapshot", return_value=local), patch("envscope.probes.assess_snapshot", return_value=browser), \
                 patch("envscope.baseline.guard_state", return_value={"registered": False}), patch("envscope.baseline.runtime_rules", return_value={"status": "unknown", "reason": "fixture"}), \
-                patch("envscope.baseline.extra_network", return_value=({}, [])):
+                patch("envscope.baseline.extra_network", return_value=({}, [])), \
+                patch('envscope.environment_info.device_information',return_value={'state':'completed','rows':[]}):
             findings = audit(Policy(), transport, online=True, stun=True, ipv6=True, baseline_config={})
         self.assertEqual(sum(f.id.startswith("baseline.") for f in findings), 14)
         self.assertEqual(sum(f.id.startswith("extra.") for f in findings), 18)

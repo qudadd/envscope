@@ -24,6 +24,22 @@ def main(output=None):
         operations = Operations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),
                                 environment_reader=lambda: {'platform':platform.system(),'locale':'en-US','network':{'timezone_id':'UTC'}})
         assert operations.legacy._vendor_integrity()['verified'], 'Bundled upstream bytes and filenames must survive installation'
+        # Exercise the packaged cryptography/OpenSSL runtime on disposable data.
+        manager = operations.accounts
+        manager.accounts_dir.mkdir(parents=True)
+        manager.data_dir.mkdir(parents=True)
+        (manager.state_dir/manager.current_filename).write_text('A')
+        archived = manager.accounts_dir/'B'
+        archived.mkdir()
+        (archived/'fixture.txt').write_text('NATIVE_ARCHIVE_FIXTURE',encoding='utf-8')
+        encrypted = Path(directory)/'native.envsnap'
+        operations.archives.export('B',str(encrypted),'native-fixture-password-123')
+        operations.archives.import_archive(str(encrypted),'C','native-fixture-password-123')
+        assert (manager.accounts_dir/'C/fixture.txt').read_bytes()==(archived/'fixture.txt').read_bytes()
+        assert b'NATIVE_ARCHIVE_FIXTURE' not in encrypted.read_bytes()
+        assert not list((Path(directory)/'.envscope/archive-work').iterdir())
+        import cryptography
+        result.update(encrypted_archive_roundtrip=True,cryptography_version=cryptography.__version__)
         server = make_server(store=store, operations=operations, auditor=Mock(side_effect=AssertionError('No public probes')))
         window = webview.create_window('EnvScope isolated test', 'http://127.0.0.1:' + str(server.server_port), width=1040, height=760, hidden=True)
         runtime = DesktopRuntime(server, window)

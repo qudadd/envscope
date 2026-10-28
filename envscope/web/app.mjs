@@ -6,6 +6,7 @@ import {initInspection} from "./inspection.mjs";
 import {initDesktopApp} from "./desktop.mjs";
 import {initConnection, disconnected} from "./connection.mjs";
 import {initTargetEnvironment} from './target.mjs';
+import {initCoverage, browserEnvironment} from './coverage.mjs';
 
 const byId=id=>document.getElementById(id);
 const nodes={start:byId("start"),share:byId("share"),checks:byId("checks"),quit:byId("quit")};
@@ -24,6 +25,7 @@ const sessionPromise=(async()=>{
 })();
 initConnection(sessionPromise);
 initInspection();
+initCoverage();
 const environment={timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"unknown",languages:[...navigator.languages],
   platform:navigator.userAgentData?.platform||navigator.platform||"unknown",automated:navigator.webdriver===true};
 const envRows=[["时区",environment.timezone],["语言",environment.languages.join(" · ")],["运行环境",environment.platform+(environment.automated?" / 自动化会话":"")]];
@@ -126,7 +128,7 @@ async function runAudit({oneStop=false,phase='check'}={}){
     // Browser fetch cannot force an address family on a dual-stack endpoint;
     // the IPv6-specific service supplies an observation, never a negative proof.
     lastSnapshot={schema_version:1,kind:"envscope-browser-observations",created_at:new Date().toISOString(),
-      contains_sensitive:true,http,ice:ice.candidates,ice_complete:ice.complete,environment};
+      contains_sensitive:true,http,ice:ice.candidates,ice_complete:ice.complete,environment:browserEnvironment()};
     render(lastSnapshot);
     const session=await sessionPromise;
     if(session){

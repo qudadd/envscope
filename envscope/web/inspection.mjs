@@ -13,7 +13,7 @@ export function initInspection(){
   function render(){
     const found=new Map((report?.findings||[]).map(f=>[f.id,f]));
     const known=new Set(catalog.map(c=>c.id));
-    const items=[...catalog,...(report?.findings||[]).filter(f=>!known.has(f.id)).map(f=>({id:f.id,title:f.title,label:f.title,group:f.id.startsWith('target.')?'target':'measurement',why:f.id.startsWith('target.')?'按已确认的用途和连接方式，核对本次证据是否达到目标。':'独立记录测量来源和范围，不重复计入 32 项检查。'}))];
+    const items=[...catalog,...(report?.findings||[]).filter(f=>!known.has(f.id)).map(f=>({id:f.id,title:f.title,label:f.title,group:f.id.startsWith('target.')?'target':'measurement',why:f.id.startsWith('target.')?'按已确认的用途和连接方式，核对本次证据是否达到目标。':'独立记录测量来源和范围；检测目录与补充测量分别列出。'}))];
     const annotations=new Map((report?.assessment?.items||[]).map(i=>[i.id,i]));
     const rows=items.map(c=>({...c,annotation:annotations.get(c.id),finding:found.get(c.id),status:report?(found.get(c.id)?.status||'skipped'):phase==='not_run'?'not_run':'unknown'}));
     rows.sort((a,b)=>Number(!!b.annotation?.required)-Number(!!a.annotation?.required)||Number(b.group==='target')-Number(a.group==='target'));

@@ -28,7 +28,10 @@ def finding(key, state="unknown", entries=(), summary="fixture"):
 
 
 def report_with(*findings, preferences=None):
-    return make_report(list(findings), Policy(), "one-click-desktop", preferences)
+    rows = list(findings)
+    if not any(f.id == 'baseline.country' for f in rows):
+        rows.append(finding('baseline.country','warn',[{'actual':'US','expected':''}]))
+    return make_report(rows, Policy(), "one-click-desktop", {'usage_country':'US', **(preferences or {})})
 
 
 def response(code=401, error="", host="api.anthropic.com"):
@@ -86,11 +89,11 @@ class DiagnosisTests(unittest.TestCase):
         self.assertFalse(value["problems"])
         self.assertTrue(all(c["state"] == "unsupported" for c in value["checks"] if c["id"] in ("dns.leak","network.route")))
 
-    def test_optional_preferences_and_system_proxy_route_are_not_faults(self):
+    def test_optional_preferences_do_not_hide_an_unsupported_exit(self):
         value = report_with(finding("baseline.country", "warn", [{"actual":"CN","expected":""}]),
                             finding("extra.target_route", "warn"), finding("extra.runtime_tun", "warn"),
                             finding("extra.config", "skipped", [{"exists":False},{"exists":False}]))["diagnosis"]
-        self.assertFalse(value["problems"])
+        self.assertEqual([p['id'] for p in value['problems']], ['target.region'])
         self.assertIn("无需按此项改动", value["checks"][0]["text"])
 
     def test_socks_tls_bypass_and_provider_conflicts_have_specific_actions(self):
@@ -318,13 +321,13 @@ class PlanTests(ConfigurationRepairFixture):
 class SolutionAPITests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.home=Path(self.temp.name);self.store=StateStore(memory=True)
-        self.store.save_settings({'usage':'desktop','connection_mode':'http_proxy'}, confirm_environment=True)
+        self.store.save_settings({'usage':'desktop','connection_mode':'http_proxy','usage_country':'US'}, confirm_environment=True)
         self.ops=Operations(self.store,self.home,discoverer=lambda:[],remedy_opener=Mock(return_value=True))
         self.file=self.ops.config_remedies.paths['desktop'];self.file.parent.mkdir(parents=True)
         self.original=b'{"mcpServers":{},"fixture":"PRIVATE_FIXTURE",}'
         self.file.write_bytes(self.original)
         def auditor(*args,**kwargs):
-            return [finding('extra.config','warn',[config_shape(self.file),{'exists':False}]),finding('baseline.reachability','pass',[response()])]
+            return [finding('extra.config','warn',[config_shape(self.file),{'exists':False}]),finding('baseline.reachability','pass',[response()]),finding('baseline.country','pass',[{'actual':'US'}])]
         self.server=make_server(auditor=auditor,store=self.store,operations=self.ops)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
         self.origin='http://127.0.0.1:'+str(self.server.server_port);self.opener=build_opener(ProxyHandler({}))

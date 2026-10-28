@@ -110,6 +110,10 @@ export function initGuide({sessionPromise,run,retest,isBusy,operate,onReport}){
     const states={attention:'需要处理',checked:'所列范围已核实',responding:'已收到回应',unverified:'还不能确认',optional:'按需要启用'};
     guide.tasks.forEach((task,i)=>{const row=el('li');row.dataset.task=task.id;const text=el('div');text.append(el('h3',task.title),el('p',task.text));row.append(el('span',String(i+1),'task-number'),text,el('span',states[task.state]||'还不能确认','task-state'));tasks.append(row);});
     const area=$('try-instructions');area.replaceChildren();
+    if(guide.manual_confirmation?.state==='blocked'){
+      $('try-claude').hidden=true;$('desktop-handoff').hidden=true;$('try-success').disabled=true;
+      $('try-feedback').textContent=guide.manual_confirmation.text;return;
+    }
     const usage=value.usage;
     $('desktop-handoff').hidden=['cli','web'].includes(usage);
     const readiness=value.launch;

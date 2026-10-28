@@ -27,7 +27,10 @@ EXTRA_HELP = {
 
 
 def check_catalog():
-    rows = []
+    rows = [{'id':'target.region','group':'target','title':'Claude 官方地区支持','label':'实际地区与出口是否在官方支持名单内',
+             'why':'分别核对用户申报的实际所在地和检测到的出口。中国大陆、俄罗斯不在名单中；时区和语言不证明所在地。',
+             'next_step':'核对真实所在地及官方说明。地区条件不能通过自动配置、改时区或换账号修复。',
+             'upkeep':'实际所在地、网络或官方支持名单变化后重新检查；名单核对日期为 2026-10-28。'}]
     for key, title, ids, measurement, remedy, upkeep, action in ITEMS:
         label, _, why, next_step = EXPLANATIONS[key]
         rows.append({"id": "baseline." + key, "group": "baseline", "title": title,
@@ -38,4 +41,10 @@ def check_catalog():
         rows.append({"id": "extra." + key, "group": "extra", "title": title,
                      "label": label, "why": why, "next_step": next_step,
                      "upkeep": "更改相关设置或更新软件后重新检测；持续维护可记录原生检查的变化。"})
+    rows.extend([
+        {'id':'device.environment','group':'measurement','title':'设备与显示环境','label':'设备资料能读取哪些',
+         'why':'读取图形、显示、字体数量和虚拟化线索，不推断封禁风险。','next_step':'工具页可单独读取；遇到图形问题时核对驱动。','upkeep':'系统或驱动升级后重新采集。'},
+        {'id':'browser.environment','group':'measurement','title':'当前浏览器环境资料','label':'当前窗口向网页提供哪些信息',
+         'why':'记录时区、语言、屏幕和可取得的图形资料；不代表其他浏览器或 Claude 桌面版。','next_step':'在实际浏览器复查；受限字段不判为故障。','upkeep':'浏览器更新或使用方式变化后复查。'}
+    ])
     return rows

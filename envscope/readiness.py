@@ -6,6 +6,21 @@ only a summary of the listed observations, never an account or privacy verdict.
 from datetime import datetime, timezone
 
 
+def browser_readiness(report, preferences):
+    """Fresh selected web conditions; no requirement to install desktop Claude."""
+    from .target_environment import fingerprint
+    from .assessment import assessment
+    try:
+        age = (datetime.now(timezone.utc)-datetime.fromisoformat(report['created_at'])).total_seconds()
+        return (0 <= age < 90 and report.get('mode')=='one-click-desktop'
+                and preferences.get('environment_confirmed') is True
+                and preferences.get('usage') in ('web','desktop','both')
+                and report.get('environment',{}).get('fingerprint') == fingerprint(preferences)
+                and assessment(report,preferences)['verdict']=='qualified_in_scope')
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+
+
 def launch_readiness(report, preferences=None):
     preferences = preferences or {}
     checks = []
@@ -61,12 +76,12 @@ def launch_readiness(report, preferences=None):
     add("service", "Claude 网页连接", web is not None,
         ("已收到可信连接的回应，仍需在 Claude 中确认登录或访问校验。" if web["http_status"] in (401, 403) else "所列网页端点已回应；还需在 Claude 中确认实际回复。") if web is not None
         else "尚未确认 Claude 网页端点连接；先处理对应连接问题，API 回应不能替代桌面访问。")
-    required = ["http.egress", "udp.stun", "baseline.proxy", "baseline.tun", "baseline.ipv6"]
+    required = ["target.region", "http.egress", "udp.stun", "baseline.proxy", "baseline.tun", "baseline.ipv6"]
     if preferences.get("require_guard", True):
         required.append("baseline.guard")
     if preferences.get("require_rules", True):
         required.append("baseline.rules")
-    titles = {"http.egress": "网络出口", "udp.stun": "实时连接出口", "baseline.proxy": "代理客户端",
+    titles = {"target.region":"官方地区支持", "http.egress": "网络出口", "udp.stun": "实时连接出口", "baseline.proxy": "代理客户端",
               "baseline.tun": "全局连接接管", "baseline.ipv6": "IPv6 配置", "baseline.guard": "进程保护", "baseline.rules": "目标连接规则"}
     for key in required:
         finding = by_id.get(key, {})

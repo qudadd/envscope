@@ -4,7 +4,7 @@ import json
 import re
 
 DEFAULTS = {"environment_confirmed": False, "connection_mode": "inherit", "provider": "anthropic",
-            "auth_mode": "existing", "language": "", "ipv6_mode": "observe", "protection": "standard", "target_proxy": ""}
+            "auth_mode": "existing", "language": "", "ipv6_mode": "observe", "protection": "standard", "target_proxy": "", "usage_country": ""}
 FIELDS = set(DEFAULTS) | {"usage", "country", "timezone", "locale", "client", "proxy_group", "webrtc_policy", "allowed_ipv4", "allowed_ipv6", "require_guard", "require_rules"}
 USAGES = {"desktop": "Claude 桌面版", "cli": "Claude Code", "both": "桌面版与 Code", "web": "Claude 网页"}
 CONNECTIONS = {"direct": "直连", "http_proxy": "HTTP / 系统代理", "tun": "TUN / VPN"}
@@ -12,6 +12,9 @@ PROVIDERS = {"anthropic": "Anthropic 官方", "custom": "自定义接口", "bedr
 
 
 def validate(values):
+    if not isinstance(values['usage_country'], str) or values['usage_country'] and not re.fullmatch('[A-Za-z]{2}', values['usage_country']):
+        raise ValueError('实际使用地区请填写两个字母的国家 / 地区代码，例如 CN、RU、US')
+    values['usage_country'] = values['usage_country'].upper()
     if type(values['environment_confirmed']) is not bool:
         raise ValueError('目标确认状态无效')
     choices = {'connection_mode': {'inherit', *CONNECTIONS}, 'provider': set(PROVIDERS),
@@ -96,7 +99,7 @@ def plan(settings):
     if not settings.get('environment_confirmed'):
         return None
     usage, mode = settings['usage'], settings['connection_mode']
-    required = {'target.dns', 'target.tls', 'target.service', 'target.path', 'target.clock', 'http.egress'}
+    required = {'target.region', 'target.dns', 'target.tls', 'target.service', 'target.path', 'target.clock', 'http.egress'}
     excluded = {k: '本项为全部端点的合并记录；所选用途在目标检查中单独判断。' for k in ('extra.dns_resolution', 'extra.tls', 'extra.clock', 'baseline.reachability')}
     references = {'baseline.asn', 'baseline.ip_stability', 'system.inventory', 'extra.timing', 'extra.hosts', 'baseline.dns'}
     cli_used, desktop_used = usage in ('cli', 'both'), usage in ('desktop', 'both')

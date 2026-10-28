@@ -10,9 +10,9 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.9.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.10.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
-    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
+    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="coverage">环境全览</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
   <main id="workspace" data-state="ready">
     <section id="connection-banner" class="connection-banner" role="status" hidden><strong id="connection-title">本地服务已断开</strong><p id="connection-message">请重新双击 EnvScope 启动器，并使用它新打开的页面；旧地址可能已经失效。</p><button id="connection-retry" class="link">重新连接本页</button></section>
@@ -41,9 +41,12 @@
         <div class="form-grid">
           <label>使用方式<select name="usage" required><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版与 Code</option><option value="web">Claude 网页</option></select></label>
           <label>连接方式<select name="connection_mode" required><option value="direct">直连</option><option value="http_proxy">HTTP / 系统代理</option><option value="tun">TUN / VPN</option></select></label>
+          <label>实际使用地区<input name="usage_country" list="region-codes" maxlength="2" pattern="[A-Za-z]{2}" required placeholder="选择或填写地区代码" title="填写实际所在地的两个字母代码，例如 CN、RU、US"></label>
           <label>比较时区<input name="timezone" maxlength="100" placeholder="默认保留电脑当前值"></label>
           <label>比较地区格式<input name="locale" maxlength="100" placeholder="默认保留电脑当前值"></label>
         </div>
+        <datalist id="region-codes"><option value="CN" label="中国大陆 · 官方不支持"></option><option value="RU" label="俄罗斯 · 官方不支持"></option><option value="HK" label="中国香港 · 未列入支持名单"></option><option value="MO" label="中国澳门 · 未列入支持名单"></option><option value="US" label="美国"></option><option value="JP" label="日本"></option><option value="SG" label="新加坡"></option><option value="TW" label="中国台湾 · 官方名单单列"></option><option value="GB" label="英国"></option><option value="DE" label="德国"></option><option value="FR" label="法国"></option><option value="KR" label="韩国"></option><option value="CA" label="加拿大"></option><option value="AU" label="澳大利亚"></option></datalist>
+        <p class="note">填写实际所在地，不能用代理出口代替。中国大陆（CN）、俄罗斯（RU）不在官方支持名单中，地区条件将判为不合格。<a href="https://support.claude.com/en/articles/8461763-where-can-i-access-claude" target="_blank" rel="noopener noreferrer">Claude 地区名单</a> · <a href="https://platform.claude.com/docs/en/api/supported-regions" target="_blank" rel="noopener noreferrer">API 地区名单</a>（核对于 2026-10-28）。</p>
         <p class="note">时区与地区格式默认保留当前值，留空则仅记录。无需与出口国家相同。系统时钟是否准确会单独检测。</p>
         <div id="target-code-fields" class="form-grid" hidden>
           <label>Code 接口<select name="provider"><option value="anthropic">Anthropic 官方</option><option value="custom">自定义接口</option><option value="bedrock">Amazon Bedrock</option><option value="vertex">Google Vertex</option><option value="foundry">Microsoft Foundry</option></select></label>
@@ -130,14 +133,28 @@
       <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、实际账号登录与权限需在使用时确认。后台不复用旧浏览器观测，不自动安装代理、切换账号、修改时区或停止 Claude；进程守护由随附开源维护核心另行安装。</p></section>
     </div>
 
+    <div id="page-coverage" class="page" hidden>
+      <h1>环境全览</h1><p class="subtle">查看八个方面测到了什么、哪里有问题，以及还缺哪些证据。</p>
+      <p id="coverage-context" class="note" role="status">先完成首页的一键检测，随后显示本轮证据。</p>
+      <div id="coverage-dimensions"></div>
+      <p class="note">全览不是服务端风控评分。软件不伪造地区、设备或行为；登录、订阅与服务端账号限制仍由 Claude 官方决定。</p>
+      <section class="tool-section"><h2>与 claude-switcher 的功能对照</h2><p id="feature-boundary" class="note">正在读取可用功能…</p><div id="feature-catalog"></div></section>
+    </div>
+
     <div id="page-accounts" class="page" hidden>
       <h1>账号</h1><p class="subtle">为 Claude 桌面版保存不同的本机登录资料。这里只管理存档，登录仍在 Claude 中完成。</p>
       <section class="account-guide" aria-label="账号使用步骤"><h2>第一次怎样使用</h2><ol><li>只有一个账号：正常在 Claude 登录即可，无需添加槽位。</li><li>需要多个账号：先给 A 命名，检测通过后点“保存当前资料到 A”。</li><li>给 B 命名，点“首次登录”；现有资料会保留在 A，在新打开的 Claude 中登录自己的另一个账号。</li><li>以后用“切换并打开”返回已有存档。请先保存工作；切换会退出桌面应用。</li></ol><p class="note">A、B 是资料文件夹的代号，不是邮箱或已注册账号。添加名称不会创建 Claude 账号，也不会登录。Claude Code 和浏览器的登录不随此处切换。</p><button id="account-check" class="link">检测启动条件</button></section>
       <p id="account-readiness" class="note" role="status">先检测环境；切换时还会重新检测。</p><button id="account-view-checks" class="link">查看启动条件与处理办法</button>
       <p id="account-note" class="note"></p><div id="account-list"></div>
       <div class="inline-form"><label>新增资料代号<input id="new-slot" maxlength="32" placeholder="work" aria-describedby="slot-help"></label><label>显示名称<input id="new-label" maxlength="80" placeholder="例如：工作账号"></label><button id="account-add">添加</button></div><p id="slot-help" class="note">代号使用英文字母、数字、下划线或短横线，以字母或数字开头；最多 32 字符。可先使用现有的 A、B。</p>
-      <details><summary>本地目录备份与导入</summary>
-        <p class="note">目录包含登录资料，未加密。仅支持非活动账号导出、空槽位导入；不能保证跨系统迁移登录状态。macOS 的加密 DMG 位于工具页。</p>
+      <section class="tool-section"><h2>加密备份与恢复</h2><p class="note">Windows / macOS 均可使用 .envsnap 加密存档。先切换到其他账号，再导出非活动槽位；导入只能选择空槽位。密码不保存，丢失无法恢复。存档不保证登录凭据能跨设备或系统迁移。</p>
+        <div class="form-grid"><label>槽位<input id="encrypted-slot" placeholder="B" maxlength="32"></label><label>密码<input id="encrypted-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" placeholder="至少 12 个字符"></label></div>
+        <label>加密文件路径<input id="encrypted-path" placeholder="选择或填写 .envsnap 文件的绝对路径"></label>
+        <div class="actions"><button id="encrypted-choose-export" class="link">选择导出位置</button><button id="encrypted-choose-import" class="link">选择已有存档</button></div>
+        <div class="actions"><button id="encrypted-export">加密导出</button><button id="encrypted-import">校验并导入</button></div>
+      </section>
+      <details><summary>高级：未加密目录备份与导入</summary>
+        <p class="note">目录包含登录资料，未加密。仅支持非活动账号导出、空槽位导入；不能保证跨系统迁移登录状态。原版 macOS DMG 兼容入口位于工具页。</p>
         <div class="form-grid"><label>槽位<input id="archive-slot" placeholder="B" maxlength="32"></label><label>绝对目录路径<input id="archive-path" placeholder="选择一个新目录作为导出目标"></label></div>
         <div class="actions"><button id="account-export">导出目录</button><button id="account-import">导入目录</button></div>
       </details>
@@ -161,6 +178,7 @@
         <div id="param-url" class="parameter" hidden><label>网页地址<input id="safe-url" type="url" value="https://claude.ai/"></label></div>
         <div id="param-snapshot" class="parameter" hidden><div class="form-grid"><label>账号<select id="snapshot-account"><option>A</option><option>B</option><option>C</option><option>D</option></select></label><label>DMG 绝对路径<input id="snapshot-file"></label></div><label>密码<input id="snapshot-password" type="password" autocomplete="new-password"></label></div>
         <div class="actions"><button id="maintenance-run">执行</button><span id="maintenance-availability"></span></div>
+        <button id="browser-cleanup" class="link">清理已关闭的临时浏览器资料</button>
         <p class="note">首次安装会打开随附的原版交互安装器。修复可能修改系统和代理设置；执行前列出具体影响。原版更新只更新维护核心。</p>
       </section>
       <pre id="tool-output" class="output" aria-live="polite">尚未执行操作</pre>

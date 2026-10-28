@@ -49,6 +49,7 @@ def main():
                  ("timezone", "时区"), ("locale", "地区格式"), ("ipv6", "IPv6 配置"), ("dns", "DNS 配置"),
                  ("webrtc", "UDP / WebRTC"), ("guard", "守护进程"), ("rules", "代理路由规则"), ("language", "客户端语言"), ("asn", "ASN 信息"), ("reachability", "服务连接")]
         baseline = [Finding("baseline." + key, title, Status.UNKNOWN, "离线夹具：尚无有效证据", "test-fixture") for key, title in names]
+        baseline[2].evidence = [{'actual':'US','expected':''}]
         baseline[-1] = Finding("baseline.reachability", "服务连接", Status.PASS, "离线响应夹具", "test-fixture",
                                [{"endpoint":"https://api.anthropic.com/v1/models","http_status":401,"error":"","tls_verified":True}])
         if operations.desktop_ready:
@@ -71,7 +72,7 @@ def main():
         desktop_ready = False
         def run(self, action, params, **kwargs):
             if action == 'environment-suggest':
-                return {'proposed':{**self.store.settings(),'usage':'both','connection_mode':'http_proxy','timezone':'','locale':''},'observed':{'system':'offline fixture'}}
+                return {'proposed':{**self.store.settings(),'usage':'both','connection_mode':'http_proxy','timezone':'','locale':'','usage_country':'US'},'observed':{'system':'offline fixture'}}
             if action == "proxy-diagnose":
                 return {"state": "completed", "evidence": [{"endpoint":"https://api.anthropic.com/v1/models", "http_status":401 if self.valid_proxy else 403,"tls_verified":True,"error":""}], "boundary": "offline fixture"}
             return super().run(action, params, **kwargs)
@@ -295,6 +296,8 @@ def main():
                 page.locator('#target-form [name=country]').fill('')
                 page.locator('#target-confirm').click()
                 expect(page.locator("#share")).to_be_enabled()
+                expect(page.locator('html')).to_have_attribute('data-operation-busy','false')
+                expect(page.locator('#start')).to_be_enabled()
                 page.get_by_role("button", name="历史", exact=True).click()
                 page.get_by_role("button", name="比较", exact=True).click()
                 expect(page.locator("#history-output")).to_contain_text("出口证据不足")

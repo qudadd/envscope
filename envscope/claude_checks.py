@@ -9,7 +9,7 @@ from .guide import explain_check
 
 
 CHECK_PROBLEMS = {
-    "proxy": ("proxy.", "cli.socks", "cli.proxy_format", "cli.bypass", "network.proxy_dns"), "tun": ("startup.tun",), "country": ("target.country",),
+    "proxy": ("proxy.", "cli.socks", "cli.proxy_format", "cli.bypass", "network.proxy_dns"), "tun": ("startup.tun",), "country": ("target.country", "target.region"),
     "ip_stability": (), "timezone": ("target.timezone", "clock."),
     "locale": ("target.locale",), "ipv6": ("policy.http.ipv6", "policy.browser.http_v6"),
     "dns": ("hosts.",), "webrtc": ("policy.udp.stun", "policy.browser.webrtc"),
@@ -27,9 +27,9 @@ ITEMS = (
      "读取接口与运行内核的 TUN 配置；不能据此认定全部流量已接管。",
      "桌面账号的启动策略需要 TUN 时，在客户端完成服务权限；原版修复可恢复其支持的 TUN 配置。",
      "持续复查接口和运行配置；代理更新或休眠唤醒后检查是否改变。", "solution"),
-    ("country", "出口国家", ("baseline.country", "http.egress"),
+    ("country", "出口国家", ("baseline.country", "http.egress", "target.region"),
      "比较无认证 HTTP 探测的出口资料与用户明确填写的国家目标。",
-     "确认实际所在地和服务支持范围；在代理客户端核对所用连接，或修正填错的比较目标。",
+     "按官方名单核对实际所在地及出口；中国大陆和俄罗斯不受支持。地区限制不能通过改代理、时区或账号修复。",
      "持续复查出口和目标差异；国家资料不能代替官方地区资格核验。", "settings"),
     ("ip_stability", "出口变化", ("baseline.ip_stability",),
      "使用本机私有 HMAC 比较有效出口集合；不会公开保存原始地址。",
@@ -99,6 +99,8 @@ def checklist(report, preferences=None):
             note = next((r for r in report['assessment']['items'] if r['id'] == ids[0]), {})
             if note.get('state') in ('not_applicable', 'informational'):
                 status, summary = 'info', note['reason']
+        if key == 'country' and by_id.get('target.region', {}).get('status') in ('fail', 'warn', 'unknown'):
+            status, summary = by_id['target.region']['status'], by_id['target.region']['summary']
         rows.append({"id": key, "number": index, "title": title, "status": status,
                      "summary": summary, "scope": scope, "measurement": measurement,
                      "observations": [{"id": f["id"], "title": f["title"], "status": f["status"], "summary": f["summary"]} for f in observed],

@@ -15,6 +15,9 @@ from .maintenance import Maintenance
 from .readiness import launch_readiness
 from .check_catalog import check_catalog
 from .environment_info import cli_information, device_information
+from .coverage import feature_catalog
+from .isolated_browser import IsolatedBrowser
+from .snapshot_archive import SnapshotArchive
 from .target_environment import FIELDS as TARGET_FIELDS, summary as environment_summary, suggest as environment_suggest, fingerprint
 
 
@@ -93,6 +96,8 @@ class Operations:
                 if platform.system() == "Windows" and home is None else self.home / "AppData/Roaming/Claude"
                 if platform.system() == "Windows" else self.home / "Library/Application Support/Claude")
         self.accounts = account_manager or AccountManager(state, data, stop_app=stop_claude, launch_app=launch_claude)
+        self.isolated_browser = IsolatedBrowser(self.home)
+        self.archives = SnapshotArchive(self.accounts, self.home/'.envscope/archive-work')
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
@@ -138,15 +143,42 @@ class Operations:
             if entry["id"] in ("cli-info", "fingerprint"):
                 entry.update(supported=True, available=True, requires_confirmation=False, reason="native_read_only")
         legacy["actions"].extend(detailed)
+        browser = self.isolated_browser.capability()
+        for entry in legacy['actions']:
+            if entry['id'] == 'open-safe':
+                entry.update(supported=True, available=browser['available'], requires_confirmation=True,
+                             reason=browser['reason'], effects=['使用独立临时浏览器资料；打开前复检。关闭全部临时窗口后清理，不更改日常浏览器。'])
         desktop = getattr(self, "desktop_runtime", None)
         return {"desktop": desktop.status() if desktop else {"mode": "browser"}, "legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
                 "settings": self.store.settings(), "environment": environment_summary(self.store.settings()), "history": self.store.history(), "maintenance": self.maintenance.status(),
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
+                'features':feature_catalog(legacy,browser), 'isolated_browser':browser,
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action in ('archive-export','archive-import'):
+            if set(params) != {'slot','file','password'}:
+                raise ValueError('invalid archive parameters')
+            if confirmed is not True:
+                return {'state':'confirmation_required','reason':'将处理加密账号存档，密码不保存；只允许非活动槽位导出、空槽位导入。临时明文会限制读取权限并在完成后清理。'}
+            result = self.archives.export(params['slot'],params['file'],params['password']) if action=='archive-export' else self.archives.import_archive(params['file'],params['slot'],params['password'])
+            return {'state':'completed','result':result,'reason':'加密存档已校验并导出。请单独保管密码，丢失后无法恢复。' if action=='archive-export' else '已校验并导入空槽位，未启动 Claude；登录状态是否可迁移需在实际客户端确认。'}
+        if action == 'archive-choose-file':
+            if set(params) != {'mode'} or params['mode'] not in ('export','import'):
+                raise ValueError('invalid file dialog mode')
+            desktop = getattr(self,'desktop_runtime',None)
+            if not desktop:
+                return {'state':'unavailable','reason':'文件选择器需要独立桌面窗口；当前可填写绝对文件路径。'}
+            import webview
+            result = desktop.window.create_file_dialog(webview.SAVE_DIALOG if params['mode']=='export' else webview.OPEN_DIALOG,
+                        allow_multiple=False, save_filename='Claude-backup.envsnap', file_types=('EnvScope archive (*.envsnap)',))
+            return {'state':'selected' if result else 'cancelled','file':result[0] if result else None}
+        if action == 'browser-cleanup':
+            if params:
+                raise ValueError('unexpected browser parameters')
+            return self.isolated_browser.cleanup()
         if action == 'environment-suggest':
             if params:
                 raise ValueError('unexpected action parameters')
@@ -181,6 +213,21 @@ class Operations:
             if not self.store.settings().get('environment_confirmed') or report['environment']['fingerprint'] != fingerprint(self.store.settings()):
                 return {'state': 'retest_required', 'reason': '目标环境已改变，请确认目标并重新检测；旧方案不再执行。'}
         gate = preflight or (lambda: launch_gate(report, self.store.settings())[0])
+        if action == 'open-safe':
+            if set(params) != {'url'}:
+                raise ValueError('invalid browser parameters')
+            if confirmed is not True:
+                return {'state':'confirmation_required','reason':'将复检后打开临时浏览器，不带入原浏览器登录资料，关闭窗口后清理。'}
+            from .readiness import browser_readiness
+            browser_gate = preflight or (lambda: browser_readiness(report,self.store.settings()))
+            return self.isolated_browser.open(params['url'], self.store.settings(), browser_gate)
+        if action in ('fix','install','set-region'):
+            from .regions import region_finding
+            from .model import Status
+            known = next((f for f in (report or {}).get('findings',[]) if f['id']=='target.region'),None)
+            declared = region_finding([],self.store.settings())
+            if declared.status == Status.FAIL or known and known['status']=='fail':
+                return {'state':'blocked','reason':'官方地区条件不合格，未执行环境改写。地区限制不能通过修改代理、时区或语言修复。'}
         if action in ("legacy-cli-info", "legacy-fingerprint"):
             return self.legacy.run(action.removeprefix("legacy-"), params, confirmed=confirmed, preflight=gate)
         if action == "learning-complete":
@@ -230,7 +277,7 @@ class Operations:
                 return {"state": "completed", "result": self.accounts.switch(params.get("slot"), preflight=gate)}
             if action == "account-export":
                 return {"state": "completed", "result": self.accounts.copy_snapshot_to(params.get("slot"), params.get("file")),
-                        "note": "这是未加密的本地目录备份，不能直接公开分享。加密镜像请使用 macOS 快照功能。"}
+                        "note": "这是未加密的本地目录备份，不能直接公开分享。请优先使用账号页的加密存档功能。"}
             if action == "account-import":
                 return {"state": "completed", "result": self.accounts.import_snapshot_from(params.get("file"), params.get("slot"))}
             try:

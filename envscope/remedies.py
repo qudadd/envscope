@@ -456,6 +456,11 @@ class SolutionPlans:
             raise ValueError("先选择完善 Code 连接设置，再指定代理")
         if not self._current(report):
             return {"state": "retest_required", "reason": "请先完成一次新的本机一键检测，再生成处理方案。"}
+        region = next((f for f in report.get('findings', []) if f['id'] == 'target.region'), {})
+        if region.get('status') == 'fail':
+            return {'state':'guided', 'effects':[], 'connections':[], 'manual':[region['summary'], region.get('suggestion','')],
+                    'manual_items':[{'id':'target.region','title':'先核对官方地区支持'}],
+                    'reason':'地区条件不合格，无法通过自动配置修复；本次不生成网络或账号修改方案。'}
         problems = report["diagnosis"]["problems"]
         if check_id is not None:
             from .claude_checks import CHECK_PROBLEMS

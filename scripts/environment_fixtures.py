@@ -24,12 +24,12 @@ def fixture_policy(settings):
 
 
 def target(system='Windows', usage='cli', mode='direct', **overrides):
-    return validate_settings({'environment_confirmed': True, 'usage': usage, 'connection_mode': mode,
+    return validate_settings({'environment_confirmed': True, 'usage': usage, 'connection_mode': mode, 'usage_country':'JP',
                               'timezone': 'China Standard Time' if system == 'Windows' else 'Asia/Shanghai',
                               'locale': 'zh-CN', 'target_proxy': PROXY if mode == 'http_proxy' else '', **overrides})
 
 
-def fixture(home, settings, system='Windows', fault=None):
+def fixture(home, settings, system='Windows', fault=None, browser=None):
     home = Path(home)
     mode = settings['connection_mode']
     bin_dir = home / 'bin'
@@ -63,7 +63,7 @@ def fixture(home, settings, system='Windows', fault=None):
                        'pac_configured': False, 'endpoints': [PROXY] if mode == 'http_proxy' else [], 'bypass': {}}},
              'listeners': [{'endpoint': PROXY, 'tcp_accepts': True}] if mode == 'http_proxy' else []}
     runtime = {'status': 'pass', 'reason': 'fixture rules', 'runtime': {'tun_enabled': mode == 'tun'}}
-    guard = {'registered': True, 'enabled': True, 'running': True}
+    guard = {'registered': True, 'enabled': True, 'running': True, 'configured_mode':settings.get('client','auto')}
     if fault == 'missing_cli':
         cli['installation_count'] = 0
     elif fault == 'missing_desktop':
@@ -112,16 +112,17 @@ def fixture(home, settings, system='Windows', fault=None):
             if 'api.anthropic.com' in url and fault == 'api_405':
                 return Response(status=405, tls_verified=True, clock_offset_seconds=2)
             address = '2001:4860:4860::8888' if family == 6 else '8.8.8.8'
-            body = 'ip='+address+'\nloc=CN' if 'trace' in url else json.dumps({'ip': address, 'country': 'CN', 'org': 'FIXTURE'})
+            body = 'ip='+address+'\nloc=JP' if 'trace' in url else json.dumps({'ip': address, 'country': 'JP', 'org': 'FIXTURE'})
             return Response(status=401 if 'api.anthropic.com' in url else 200, body=body,
                             content_type='application/json', tls_verified=True, clock_offset_seconds=600 if fault == 'clock' else 2,
                             timings={'total_ms': 50})
     transport = Transport()
     with patch('envscope.probes.collect', return_value=inventory), patch('envscope.probes.bounded_facts', return_value=network), \
          patch('envscope.probes.local_snapshot', return_value=local), \
+         patch('envscope.environment_info.device_information', return_value={'state':'completed','rows':[{'label':'图形','value':'Fixture GPU'}]}), \
          patch('envscope.probes.stun_observations', return_value=[{'source': 'fixture-a', 'ip': '8.8.8.8'}, {'source': 'fixture-b', 'ip': '8.8.8.8'}]), \
          patch('envscope.baseline.guard_state', return_value=guard), patch('envscope.baseline.runtime_rules', return_value=runtime):
-        findings = audit(fixture_policy(settings), transport, online=True, stun=True, ipv6=True, baseline_config=settings)
+        findings = audit(fixture_policy(settings), transport, online=True, stun=True, ipv6=True, baseline_config=settings, browser=browser)
     return findings
 
 

@@ -29,7 +29,8 @@ def gate_report():
                  Finding("extra.config", "config", Status.SKIPPED, "fixture", "test", [{"exists": False}]),
                  Finding("baseline.reachability", "service", Status.PASS, "fixture", "test", [{"endpoint":"https://claude.ai/", "http_status":200, "tls_verified":True}]),
                  Finding("extra.account", "accounts", Status.PASS, "fixture", "test", [{"valid": True, "pending": [], "tracked": False}])]
-    return make_report(findings, Policy(), "one-click-desktop")
+    findings.append(Finding('baseline.country','country','warn','fixture','fixture',[{'actual':'US'}]))
+    return make_report(findings, Policy(), "one-click-desktop", {'usage_country':'US'})
 
 
 class HistoryTests(unittest.TestCase):

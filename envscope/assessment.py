@@ -17,7 +17,7 @@ def assessment(report, preferences=None):
     cli = next((v for v in by_id.get("extra.cli_env", {}).get("evidence", []) if isinstance(v, dict)), {})
     cli_used = usage in ("cli", "both") or usage == "auto" and bool(cli.get("installation_count") or cli.get("config", {}).get("exists"))
     desktop_used = usage in ("desktop", "both") or usage == "auto" and not cli_used
-    required = {"extra.dns_resolution", "extra.tls", "baseline.reachability", "extra.config", "extra.storage"}
+    required = {"target.region", "extra.dns_resolution", "extra.tls", "baseline.reachability", "extra.config", "extra.storage"}
     if cli_used:
         required.update(("extra.cli_env", "extra.cli_paths"))
     if desktop_used:
@@ -114,4 +114,4 @@ def target_assessment(report):
     return {'verdict': verdict, 'headline': {'needs_fix': '目标环境有不合格项', 'incomplete': '目标环境仍有待完成的检查', 'qualified_in_scope': '所选目标的环境检查合格'}[verdict],
             'summary': f"必需检查 {len(active)} 项：通过 {len(active)-len(pending)} 项，不合格 {len(blockers)} 项，待完成 {len(pending)-len(blockers)} 项。",
             'counts': counts, 'items': details, 'target_summary': env['summary'],
-            'boundary': '合格仅指所选目标与已测条件；请在实际 Claude 中完成登录并确认回复。参考项保留原始结果，完整隐私保护、进程接管和权威 DNS 出口不据此判为通过。'}
+            'boundary': '官方地区条件不合格时不要继续登录或试用 Claude；先核对申报信息与官方支持名单。' if any(f['id']=='target.region' and f['status']=='fail' for f in report.get('findings',[])) else '合格仅指所选目标与已测条件；请在实际 Claude 中完成登录并确认回复。参考项保留原始结果，完整隐私保护、进程接管和权威 DNS 出口不据此判为通过。'}

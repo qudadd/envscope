@@ -129,6 +129,8 @@ class Maintenance:
             return {"state": "retest_required", "reason": "先完成一次新的本机检测，再生成长期维护方案。"}
         approved, file_hash = {}, None
         if auto_restore:
+            if any(f['id']=='target.region' and f['status']=='fail' for f in report.get('findings',[])):
+                return {'state':'blocked','reason':'官方地区条件不合格，不启用自动配置恢复；仍可选择只读巡检。'}
             approved, file_hash = self.remedies.capture_guard()
             proxy = approved.get("HTTPS_PROXY") or approved.get("https_proxy")
             if proxy and self.proxy_tester(proxy) is not True:
@@ -304,12 +306,21 @@ class Maintenance:
             stats["started_at"] = utc_now()
             self._write("stats", stats)
             try:
-                self._restore(config, stats)
                 preferences = self.store.settings()
                 policy = self.store.policy()
                 from .transport import desktop_transport
                 findings = (self.auditor or audit)(policy, desktop_transport(preferences), online=True, stun=True, ipv6=True,
                                                    browser=None, baseline_config=preferences)
+                from .regions import region_finding
+                region = region_finding(findings,preferences)
+                if config['auto_restore'] and region.status == Status.FAIL:
+                    stats.update(repair_paused=True,restore_state='paused',restore_note='本轮官方地区条件不合格，已暂停配置恢复；只读巡检继续。')
+                    self._event('restore_paused','官方地区条件不合格，未改写 Code 配置。')
+                else:
+                    self._restore(config,stats)
+                    if stats.get('restore_state') in ('restored','unverified'):
+                        findings = (self.auditor or audit)(policy, desktop_transport(preferences), online=True, stun=True, ipv6=True,
+                                                           browser=None, baseline_config=preferences)
                 signature, key = self.data._signature([f.to_dict() for f in findings])
                 self.data._write("history-key.private.json", key)
                 comparison_key = hashlib.sha256(bytes.fromhex(key)).hexdigest()

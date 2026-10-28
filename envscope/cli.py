@@ -33,6 +33,7 @@ def parser():
     run.add_argument("--controller-secret-env", default="ENVSCOPE_CONTROLLER_SECRET")
     run.add_argument("--policy", help="私有 JSON 策略文件，勿提交真实地址")
     run.add_argument("--profile", choices=("privacy", "transport"), default="privacy")
+    run.add_argument('--usage-country',help='本轮实际所在地的两字母代码；不保存，不以代理出口代替')
     for command in (run,):
         command.add_argument("--output", default="reports/audit.json")
         command.add_argument("--html", help="另存无外部资源的 HTML 报告")
@@ -76,7 +77,17 @@ def save(report, output, html_path=None, sensitive=False):
         print("  " + statement)
     print(diagnosis["coverage"])
     print("JSON: " + str(Path(output).resolve()))
-    return 0 if report["decision"]["verdict"] == "clear_in_scope" else 1 if report["decision"]["verdict"] == "blocked" else 2
+    return exit_status(report)
+
+
+def exit_status(report):
+    region = next((f for f in report.get('findings',[]) if f['id']=='target.region'),{})
+    assessment = report.get('assessment',{}).get('verdict')
+    if region.get('status')=='fail' or assessment=='needs_fix' or report['decision']['verdict']=='blocked':
+        return 1
+    if region.get('status')!='pass' or assessment=='incomplete':
+        return 2
+    return 0 if report['decision']['verdict']=='clear_in_scope' else 2
 
 
 def main(argv=None):
@@ -132,10 +143,17 @@ def main(argv=None):
                 raise ValueError("proxy environment variable is empty; refusing alternate path")
         transport = CurlTransport(proxy)
         policy = Policy.load(args.policy, args.profile)
+        preferences = StateStore().settings()
+        if args.usage_country is not None:
+            from .regions import code
+            country = code(args.usage_country)
+            if not country:
+                raise ValueError('实际使用地区需为两字母代码')
+            preferences = {**preferences,'usage_country':country}
         snapshot = load_snapshot(args.browser) if args.browser else None
         findings = audit(policy, transport, args.online, args.stun, args.ipv6, args.target, snapshot,
-                         args.controller, os.environ.get(args.controller_secret_env), baseline_config=StateStore().settings())
-        return save(make_report(findings, policy, preferences=StateStore().settings()), args.output, args.html, args.include_sensitive)
+                         args.controller, os.environ.get(args.controller_secret_env), baseline_config=preferences)
+        return save(make_report(findings, policy, preferences=preferences), args.output, args.html, args.include_sensitive)
     except (ValueError, OSError) as exc:
         # Parser/OS exception details can contain credentials or private file content.
         print("EnvScope 输入或本地资源错误（" + type(exc).__name__ + "）；请检查参数、文件格式和权限。", file=sys.stderr)

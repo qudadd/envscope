@@ -46,7 +46,9 @@ def make_report(findings, policy, mode="audit", preferences=None):
     from .target_environment import build_findings, plan, summary, scoped_preferences, FIELDS
 
     preferences = preferences or {}
-    findings = list(findings) + build_findings(findings, preferences)
+    from .regions import region_finding
+    findings = list(findings)
+    findings = findings + [region_finding(findings, preferences)] + build_findings(findings, preferences)
 
     ids = [f.id for f in findings]
     if len(ids) != len(set(ids)):
@@ -84,4 +86,6 @@ def make_report(findings, policy, mode="audit", preferences=None):
     report["guide"] = usage_guide(report)
     from .readiness import launch_readiness
     report["launch"] = launch_readiness(report, preferences)
+    from .coverage import environment_portrait
+    report['portrait'] = environment_portrait(report)
     return report

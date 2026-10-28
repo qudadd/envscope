@@ -33,7 +33,7 @@ class DesktopAPITests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.store = StateStore(memory=True)
-        self.store.save_settings({'usage':'desktop','connection_mode':'direct'}, confirm_environment=True)
+        self.store.save_settings({'usage':'desktop','connection_mode':'direct','usage_country':'JP'}, confirm_environment=True)
         self.operations = Operations(self.store, self.directory.name, discoverer=lambda: [])
         self.server = make_server(auditor=fixture_audit, store=self.store, operations=self.operations)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)

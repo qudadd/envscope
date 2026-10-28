@@ -7,6 +7,7 @@ import platform
 import re
 import shutil
 import subprocess
+from pathlib import Path
 from urllib.request import build_opener, ProxyHandler, Request
 
 from .model import Finding, Status
@@ -68,11 +69,42 @@ def guard_state():
             if not isinstance(value, dict):
                 raise ValueError("invalid guard response")
             return {"registered": value.get("registered") is True, "enabled": value.get("enabled") is True,
-                    "running": value.get("running") is True, "kind": "scheduled-task"}
+                    "running": value.get("running") is True, "kind": "scheduled-task", **installed_guard_mode('Windows')}
         return {"registered": r.returncode == 0 and bool(r.stdout.strip()), "enabled": r.returncode == 0,
-                "running": bool(re.search(r"\bstate\s*=\s*running\b", r.stdout)), "kind": "launchd"}
+                "running": bool(re.search(r"\bstate\s*=\s*running\b", r.stdout)), "kind": "launchd", **installed_guard_mode('Darwin')}
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return {"registered": False, "error": "unavailable"}
+
+
+def installed_guard_mode(system, path=None):
+    path = Path(path) if path else Path.home()/'.claude-switcher/proxy-mode.txt' if system=='Windows' else Path('/Library/Application Support/claude-switcher/claude-bodyguard.sh')
+    try:
+        from .accounts import _safe_chain, AccountError
+        _safe_chain(path)
+        if path.stat().st_size > 65536:
+            raise ValueError('oversize guard config')
+        source = path.read_text(encoding='utf-8-sig')
+        if system == 'Windows':
+            mode = source.strip()
+        else:
+            modes = re.findall(r'^MODE=[\"\']?([a-z0-9-]+)[\"\']?\s*$',source,re.M)
+            mode = modes[0] if len(modes)==1 else ''
+        if not re.fullmatch('[a-z0-9-]{1,32}',mode):
+            raise ValueError('unrecognized guard mode')
+        return {'configured_mode':mode,'mode_scope':'installed-file-not-running-memory'}
+    except (OSError, ValueError, AccountError):
+        return {'configured_mode':None,'mode_error':'unavailable'}
+
+
+def guard_finding(guard, preferences):
+    active = guard.get('registered') and guard.get('enabled') and guard.get('running')
+    expected, mode = preferences.get('client','auto'), guard.get('configured_mode')
+    mismatch = bool(mode and expected!='auto' and mode!=expected)
+    status = Status.FAIL if mismatch else Status.UNKNOWN if guard.get('error') or active and not mode else Status.PASS if active else Status.WARN
+    message = '守护配置仍使用 '+str(mode)+'，与当前选择 '+expected+' 不一致' if mismatch else '守护任务启用且运行，已读取其客户端配置' if active and mode else '任务在运行，但未读到守护客户端配置' if active else '守护任务未运行、已停用或尚未安装'
+    return baseline_finding('guard','守护进程',status,message,[guard],
+                            ['只核对任务状态与安装文件；不证明运行进程已加载最新配置。更换客户端后需重新安装 / 重启守护并复检。',
+                             '进程级轮询存在时间窗口，不是防火墙阻断保证。'])
 
 
 def verify_rules(config, rules, proxies, preferences):
@@ -240,8 +272,7 @@ def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences,
                 baseline_finding("webrtc", "UDP / WebRTC", rtc_status, "系统 UDP 与浏览器 ICE 分别比较完成" if rtc_status == Status.PASS else "系统 UDP 与浏览器 ICE 需分别查看测量细项",
                                  [{"native_udp": udp_result.status.value, "browser_ice": browser_result.status.value}],
                                  ["两种探测不互相替代；无响应不能证明没有旁路。"]),
-                baseline_finding("guard", "守护进程", Status.PASS if guard.get("registered") and guard.get("enabled") and guard.get("running") else Status.UNKNOWN if guard.get("error") else Status.WARN,
-                                 "已确认守护任务启用且正在运行" if guard.get("running") and guard.get("enabled") else "守护任务未运行、已停用或尚未安装", [guard], ["进程级轮询保护存在时间窗口，不是防火墙阻断保证。"]),
+                guard_finding(guard,preferences),
                 baseline_finding("rules", "代理路由规则", Status(rules["status"]), rules["reason"], [rules]),
                 language_result,
                 baseline_finding("asn", "ASN 信息", Status.PASS if metadata.get("org") else Status.UNKNOWN,

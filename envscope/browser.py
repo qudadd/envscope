@@ -91,3 +91,36 @@ def assess_snapshot(snapshot, policy, now=None):
             result.status = Status.WARN
             result.summary = "候选与已观测地址相符，但独立 HTTP 对照不足"
     return result
+
+
+def environment_finding(snapshot, now=None):
+    """Whitelisted browser metadata, scoped to this window and 5 minute sample."""
+    info, fresh = {}, False
+    try:
+        created = datetime.fromisoformat(snapshot['created_at'].replace('Z','+00:00'))
+        age = ((now or datetime.now(timezone.utc))-created).total_seconds()
+        fresh = -30 <= age <= 300
+        raw = snapshot.get('environment', {})
+        if not isinstance(raw, dict):
+            raw = {}
+        for key in ('timezone','platform','renderer','vendor'):
+            if isinstance(raw.get(key),str) and 0 < len(raw[key]) <= 256:
+                info[key] = raw[key]
+        for key in ('automated','canvas_available'):
+            if type(raw.get(key)) is bool:
+                info[key] = raw[key]
+        for key in ('hardware_threads','screen_width','screen_height','color_depth'):
+            if type(raw.get(key)) is int and 0 < raw[key] <= 65536:
+                info[key] = raw[key]
+        if isinstance(raw.get('languages'),list):
+            info['languages'] = [v for v in raw['languages'][:16] if isinstance(v,str) and 0<len(v)<=64]
+    except (KeyError, TypeError, ValueError, AttributeError):
+        pass
+    usable = fresh and bool(info.get('timezone')) and bool(info.get('languages'))
+    return Finding('browser.environment','当前浏览器环境资料',Status.PASS if usable else Status.UNKNOWN,
+                   '已记录本窗口的时区、语言及可取得的设备资料' if usable else '尚未取得新鲜、完整的浏览器环境资料',
+                   'current-browser-self-reported-metadata', [info] if fresh else [],
+                   ['浏览器可限制或修改这些值；不代表 Claude Electron 或其他浏览器。',
+                    '不保存 Canvas 摘要，不收集行为时序；原始 Canvas 摘要仅在工具页本地按需查看。',
+                    '自动化、中文、虚拟 GPU 和屏幕差异均不是账号风险判据。'],
+                   '使用你实际运行 Claude 的浏览器重新检测；被浏览器限制的属性无需关闭隐私保护来获取。')
