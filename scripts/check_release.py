@@ -1,13 +1,19 @@
 """Reject private artifacts and recognizable credential formats before publishing."""
 from pathlib import Path
 import re
+import os
 import subprocess
 
+from envscope import __release__, __version__
 from envscope.legacy import LegacyBridge
 
 
 def main():
     root = Path(__file__).resolve().parents[1]
+    if not __release__.startswith('v'+__version__+'-'):
+        raise SystemExit('App and updater versions must agree')
+    if os.environ.get('GITHUB_REF_TYPE') == 'tag' and os.environ.get('GITHUB_REF_NAME') != __release__:
+        raise SystemExit('Build tag and installed release identifier must agree')
     result = subprocess.run(["git", "-c", "safe.directory=" + root.as_posix(), "ls-files", "-z"], cwd=root,
                             check=True, capture_output=True)
     names = [name for name in result.stdout.decode("utf-8").split("\0") if name]

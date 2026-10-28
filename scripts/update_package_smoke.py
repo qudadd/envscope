@@ -8,6 +8,7 @@ import sys
 import tempfile
 
 from envscope.state import StateStore
+from envscope import __release__
 from envscope.updates import AppUpdates, API, asset_name
 
 
@@ -43,6 +44,7 @@ def main():
         assert result.returncode == 0, 'Installed binary failed to start its isolated test'
         native = json.loads(output.read_text())
         assert not native['errors'] and native['native_window'] and native['tray'] and native['quit']
+        assert native['release'] == __release__, 'Installed archive release does not match the source'
         evidence = {'archive': archive.name, 'sha256': digest, 'metadata': 'offline-fixture', 'installed_archive': True, 'native': native, 'real_update_network': False, 'real_user_data_changed': False}
         path = Path('artifacts/update-package-smoke.json')
         path.parent.mkdir(parents=True, exist_ok=True)

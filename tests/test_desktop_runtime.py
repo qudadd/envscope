@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch
 import zipfile
 
 from envscope.desktop_runtime import DesktopRuntime, SingleInstance
+from envscope import __version__
 from envscope.updates import AppUpdates, API, RELEASE, allowed_url, asset_name, safe_extract, version
 from envscope.state import StateStore
 
@@ -21,7 +22,9 @@ class UpdateTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.store = StateStore(Path(self.temp.name))
-        self.tag = 'v0.9.0-alpha.1'
+        major, minor, _ = version(RELEASE)[:3]
+        self.future_base = f'v{major}.{minor+1}.0'
+        self.tag = self.future_base + '-alpha.1'
         self.data = self.archive({'EnvScope/EnvScope.exe': b'MZ-TEST-NOT-EXECUTABLE', 'EnvScope/data.txt': b'test'})
         self.size = len(self.data)
         self.digest = hashlib.sha256(self.data).hexdigest()
@@ -67,7 +70,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(self.updates.install(self.tag, True)['state'], 'ready')
         first = self.updates.installed()
         self.assertEqual(first.read_bytes(), b'MZ-TEST-NOT-EXECUTABLE')
-        self.tag = 'v0.9.0-alpha.2'
+        self.tag = self.future_base + '-alpha.2'
         self.release = self.metadata()
         self.updates.check()
         self.updates.install(self.tag, True)
@@ -135,10 +138,19 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(asset_name('Darwin', 'arm64'), 'EnvScope-macOS-arm64.zip')
         with self.assertRaises(ValueError):
             asset_name('Windows', 'arm64')
-        self.assertGreater(version('v0.8.0'), version(RELEASE))
+        self.assertGreater(version('v'+__version__), version(RELEASE))
         self.assertFalse(allowed_url('http://github.com/file'))
         self.assertFalse(allowed_url('https://github.com.evil.invalid/file'))
         self.assertFalse(allowed_url('https://name@github.com/file'))
+
+    def test_installed_release_is_not_offered_as_an_update(self):
+        self.tag = RELEASE
+        self.release = self.metadata()
+        value = self.updates.check()
+        self.assertEqual(value['current'], RELEASE)
+        self.assertEqual(value['state'], 'up_to_date')
+        self.assertEqual(version(RELEASE)[:3], tuple(map(int, __version__.split('.'))))
+        self.assertFalse(any(u.endswith('.zip') for u in self.calls))
 
     def test_damaged_receipt_is_not_an_executable(self):
         self.store._write('desktop-install.private.json', [])

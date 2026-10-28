@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from envscope import __release__
 
 
 def main():
@@ -52,6 +53,7 @@ def main():
             print(result.stderr.decode('utf-8', errors='replace')[-12000:])
         assert result.returncode == 0 and desktop_output.exists(), "frozen native window/tray smoke failed"
         assert not native['errors'] and all(native[key] for key in ('native_window', 'tray', 'close_hides', 'reopened', 'quit')), native
+        assert native['release'] == __release__, 'Built executable release does not match the source'
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 

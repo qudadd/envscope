@@ -11,12 +11,13 @@ from unittest.mock import Mock
 
 def main(output=None):
     import webview
+    from envscope import __release__
     from envscope.desktop_runtime import DesktopRuntime
     from envscope.service import make_server
     from envscope.state import StateStore
     from envscope.operations import Operations
     from envscope.legacy import LegacyBridge
-    result = {"platform": platform.system(), "native_window": False, "tray": False, "close_hides": False, "reopened": False, "quit": False, "network_probes": False, "user_data_changed": False}
+    result = {"platform": platform.system(), "release": __release__, "native_window": False, "tray": False, "close_hides": False, "reopened": False, "quit": False, "network_probes": False, "user_data_changed": False}
     with tempfile.TemporaryDirectory(prefix='envscope-native-test-') as directory:
         store = StateStore(Path(directory) / 'state')
         store._write('desktop-preferences.private.json', {'check_updates': False})
@@ -26,6 +27,7 @@ def main(output=None):
         server = make_server(store=store, operations=operations, auditor=Mock(side_effect=AssertionError('No public probes')))
         window = webview.create_window('EnvScope isolated test', 'http://127.0.0.1:' + str(server.server_port), width=1040, height=760, hidden=True)
         runtime = DesktopRuntime(server, window)
+        assert runtime.updates.status()['current'] == __release__, 'Updater release must match the installed binary'
         operations.desktop_runtime = runtime
         window.events.closing += runtime.closing
         runtime.start_tray()

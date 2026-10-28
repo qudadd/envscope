@@ -15,11 +15,11 @@ from urllib.request import Request, HTTPRedirectHandler, build_opener
 import uuid
 import zipfile
 
-from . import __version__
+from . import __version__, __release__
 from .legacy import UPSTREAM_COMMIT
 
 REPOSITORY = "qudadd/envscope"
-RELEASE = "v0.8.0-alpha.1"
+RELEASE = __release__
 API = "https://api.github.com/repos/" + REPOSITORY
 HOSTS = {"api.github.com", "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"}
 MAX_ARCHIVE = 350 * 1024 * 1024
