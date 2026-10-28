@@ -84,15 +84,24 @@ def windows_identity(body):
             or principals is None or len(principals) != 1 or triggers is None or len(triggers) != 2
             or {t.tag for t in triggers} != {"{" + NS + "}TimeTrigger", "{" + NS + "}LogonTrigger"}):
         return None
-    def text(path):
-        return tree.findtext("/".join("{" + NS + "}" + p for p in path.split("/")))
-    return {k: text(p) for k, p in {
+    def text(path, default=None):
+        element = tree.find("/".join("{" + NS + "}" + p for p in path.split("/")))
+        return default if element is None else element.text
+    value = {k: text(p) for k, p in {
         "marker": "RegistrationInfo/Description", "program": "Actions/Exec/Command",
         "arguments": "Actions/Exec/Arguments", "cwd": "Actions/Exec/WorkingDirectory",
         "interval": "Triggers/TimeTrigger/Repetition/Interval", "sid": "Principals/Principal/UserId",
         "login_sid": "Triggers/LogonTrigger/UserId", "login_enabled": "Triggers/LogonTrigger/Enabled",
         "logon": "Principals/Principal/LogonType", "level": "Principals/Principal/RunLevel",
         "enabled": "Settings/Enabled"}.items()}
+    # Export-ScheduledTask elides OS defaults. Absence is a documented value,
+    # unlike an empty/invalid element or an unresolved account identity.
+    for key, path in (("enabled", "Settings/Enabled"), ("login_enabled", "Triggers/LogonTrigger/Enabled"),
+                      ("time_enabled", "Triggers/TimeTrigger/Enabled")):
+        flag = text(path, "true")
+        value[key] = {"1": "true", "0": "false"}.get(flag, flag)
+    value["level"] = text("Principals/Principal/RunLevel", "LeastPrivilege")
+    return value
 
 
 def mac_plist(command, cwd, interval):
@@ -149,9 +158,12 @@ class UserScheduler:
     def inspect(self, spec=None):
         try:
             if self.system == "Windows":
-                code = ("try{$t=@(Get-ScheduledTask -TaskPath '\\' -ErrorAction Stop|Where-Object {$_.TaskName -eq 'EnvScopeMaintenance'});"
+                code = ("try{$ErrorActionPreference='Stop';$t=@(Get-ScheduledTask -TaskPath '\\' -ErrorAction Stop|Where-Object {$_.TaskName -eq 'EnvScopeMaintenance'});"
                         "if($t.Count -eq 0){@{present=$false}|ConvertTo-Json -Compress}else{"
-                        "@{present=$true;xml=(Export-ScheduledTask -TaskName 'EnvScopeMaintenance' -TaskPath '\\' -ErrorAction Stop)}|ConvertTo-Json -Compress}}catch{exit 2}")
+                        "$d=[xml](Export-ScheduledTask -TaskName 'EnvScopeMaintenance' -TaskPath '\\' -ErrorAction Stop);"
+                        "$d.XmlResolver=$null;foreach($n in $d.SelectNodes('//*[local-name()=\"Principal\" or local-name()=\"LogonTrigger\"]/*[local-name()=\"UserId\"]')){"
+                        "if($n.InnerText -notmatch '^S-1-[0-9-]+$'){$n.InnerText=[Security.Principal.NTAccount]::new($n.InnerText).Translate([Security.Principal.SecurityIdentifier]).Value}};"
+                        "@{present=$true;xml=$d.OuterXml}|ConvertTo-Json -Compress}}catch{exit 2}")
                 result = self._powershell(code)
                 if result.returncode:
                     raise ValueError("task query failed")
@@ -159,9 +171,9 @@ class UserScheduler:
                 present = value.get("present") is True
                 actual = windows_identity(value["xml"]) if present else None
                 expected = windows_identity(spec["body"]) if spec else None
-                identity = lambda v: {k: x for k, x in v.items() if k not in ("enabled", "login_enabled")} if v else None
+                identity = lambda v: {k: x for k, x in v.items() if k not in ("enabled", "login_enabled", "time_enabled")} if v else None
                 owned = bool(present and spec and actual and identity(actual) == identity(expected))
-                registered = owned and actual["enabled"] == "true" and actual["login_enabled"] == "true"
+                registered = owned and all(actual[k] == "true" for k in ("enabled", "login_enabled", "time_enabled"))
             elif self.system == "Darwin":
                 body = _read(self.path)
                 present = body is not None

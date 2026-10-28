@@ -389,6 +389,30 @@ class ScheduleTests(unittest.TestCase):
         self.assertNotIn("UserName", value)
         self.assertNotIn("KeepAlive", value)
 
+    def test_windows_export_elided_defaults_still_requires_matching_identity_and_enabled_triggers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            scheduler = UserScheduler(directory, Path(directory)/"maintenance", system="Windows", sid="S-1-5-21-123")
+            spec = scheduler.build(5)
+            tree = ET.fromstring(spec["body"])
+            paths = ("Settings/Enabled", "Principals/Principal/RunLevel", "Triggers/LogonTrigger/Enabled", "Triggers/TimeTrigger/Enabled")
+            for path in paths:
+                parts = ["{"+NS+"}"+v for v in path.split("/")]
+                parent = tree.find('/'.join(parts[:-1]))
+                parent.remove(parent.find(parts[-1]))
+            def runner(args, **kwargs):
+                return subprocess.CompletedProcess(args, 0, json.dumps({"present":True,"xml":ET.tostring(tree,encoding='unicode')}), "")
+            scheduler.runner = runner
+            self.assertTrue(scheduler.inspect(spec)["registered"])
+            trigger = tree.find("{"+NS+"}Triggers/{"+NS+"}TimeTrigger")
+            ET.SubElement(trigger, "{"+NS+"}Enabled").text = "false"
+            self.assertTrue(scheduler.inspect(spec)["owned"])
+            self.assertFalse(scheduler.inspect(spec)["registered"])
+            trigger.find("{"+NS+"}Enabled").text = None
+            self.assertFalse(scheduler.inspect(spec)["registered"], "an empty element is not absence")
+            principal = tree.find("{"+NS+"}Principals/{"+NS+"}Principal/{"+NS+"}UserId")
+            principal.text = "S-1-5-21-999"
+            self.assertFalse(scheduler.inspect(spec)["owned"])
+
     def test_foreign_or_unreadable_windows_task_is_never_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:
             runner = Mock(return_value=subprocess.CompletedProcess([], 0, json.dumps({"present": True, "xml": "<invalid/>"}), ""))

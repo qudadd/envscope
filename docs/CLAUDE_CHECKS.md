@@ -81,6 +81,8 @@
 - [Claude Code 网络配置](https://code.claude.com/docs/en/network-config)
 - [Claude Code 设置](https://code.claude.com/docs/en/settings)
 - [微软 Task Scheduler Schema](https://learn.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-schema)
+- [微软任务权限上下文](https://learn.microsoft.com/en-us/windows/win32/taskschd/security-contexts-for-running-tasks)
+- [Windows 账号名到 SID 的身份解析](https://learn.microsoft.com/en-us/dotnet/api/system.security.principal.ntaccount.translate)
 - [Apple 创建 launchd 任务](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)
 
 来源经 Scrapling 核对，原文摘要与哈希元数据记入 `sources.lock.json`；
