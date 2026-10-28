@@ -100,11 +100,11 @@ Windows 独立程序已在本机构建并通过隔离的真实窗口、托盘和
 
 账号目录备份**未加密**，不可作为普通诊断包分享。macOS 加密 DMG 使用原版 `--password-stdin`，密码不进入进程参数。复制本地资料不保证服务端会话、系统凭据库或跨系统登录迁移。
 
-“工具”页列出维护操作的实际影响。安装 / 修复可能改写代理规则、IPv6、时区、地区格式和后台任务。完整卸载并不等于恢复历史网络设置。原版更新只更新已安装的维护核心，不更新 EnvScope；EnvScope 自身的签名更新器尚未实现。
+“工具”页列出维护操作的实际影响。安装 / 修复可能改写代理规则、IPv6、时区、地区格式和后台任务。完整卸载并不等于恢复历史网络设置。原版更新只更新已安装的维护核心；EnvScope 本体使用“设置 → 软件与后台”的校验更新。当前 Alpha 使用发布摘要校验，尚无商业代码签名 / Apple 公证。
 
 ## 从源码启动
 
-已安装 Python 3.10+ 时，Windows 双击 `start-windows.cmd`，macOS 运行 `start-macos.command`，同样打开一键检测页。Windows 10/11 和 macOS 自带的 curl 用于原生 HTTP 检测。
+源码运行需要 Python 3.10+，先在源码目录执行 `python -m pip install '.[desktop]'`，再在 Windows 双击 `start-windows.cmd`，或在 macOS 运行 `start-macos.command`。日常用户直接下载自带运行时的桌面包即可。Windows 10/11 和 macOS 自带的 curl 用于原生 HTTP 检测。
 
 以下命令用于开发或进阶诊断，日常桌面使用无需执行。
 

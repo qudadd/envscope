@@ -126,7 +126,9 @@ preserve recovery copies and refuse new writes; automatic power-loss recovery
 is not implemented. Directory backups are **unencrypted** and are not support
 bundles. Local copying does not guarantee cross-OS or server-session migration.
 Never use both account managers concurrently. Upstream updates affect only its
-installed core; EnvScope has no whole-product automatic updater.
+installed core. EnvScope's own verified updates are in Settings → Software and background;
+installation and restart require confirmation. Alpha builds do not yet have commercial
+code signing or Apple notarization.
 
 - A timeout, missing IPv6 response, mDNS candidate, or relay-only ICE result is
   **unknown**, never proof of protection.
