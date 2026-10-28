@@ -9,6 +9,7 @@ import shutil
 import stat
 import threading
 import time
+import unicodedata
 from urllib.parse import urlsplit
 from urllib.request import Request, HTTPRedirectHandler, build_opener
 import uuid
@@ -101,7 +102,15 @@ def safe_extract(archive, destination, system):
         for item in z.infolist():
             if item.filename.startswith("__MACOSX/"):
                 continue
-            path = PurePosixPath(item.filename)
+            filename = item.filename
+            # macOS ditto sometimes writes UTF-8 filenames without ZIP's UTF-8
+            # bit. Keep the same normalization used by release verification.
+            if not item.flag_bits & 0x800:
+                try:
+                    filename = filename.encode('cp437').decode('utf-8')
+                except UnicodeError:
+                    pass
+            path = PurePosixPath(unicodedata.normalize('NFC', filename))
             if not path.parts or path.parts[0] != root_name or path.is_absolute() or any(p in ("..", ".") or ":" in p or "\\" in p or p.rstrip(" .") != p or any(ord(c) < 32 for c in p) for p in path.parts):
                 raise ValueError("更新包包含不安全路径")
             key = str(path).casefold()

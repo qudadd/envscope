@@ -43,12 +43,15 @@ def main():
         desktop_output = Path(directory) / "native.private.json"
         result = subprocess.run([str(executable), "--desktop-smoke", str(desktop_output)], capture_output=True,
                                 timeout=50, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        assert result.returncode == 0 and desktop_output.exists(), "frozen native window/tray smoke failed"
-        native = json.loads(desktop_output.read_text())
-        assert not native['errors'] and all(native[key] for key in ('native_window', 'tray', 'close_hides', 'reopened', 'quit')), native
         evidence = Path('artifacts/native-smoke.json')
         evidence.parent.mkdir(parents=True, exist_ok=True)
+        native = json.loads(desktop_output.read_text()) if desktop_output.exists() else {'errors': ['native process returned no evidence'], 'returncode': result.returncode}
         evidence.write_text(json.dumps(native, indent=2), encoding='utf-8')
+        if result.returncode or native.get('errors'):
+            print(json.dumps(native))
+            print(result.stderr.decode('utf-8', errors='replace')[-12000:])
+        assert result.returncode == 0 and desktop_output.exists(), "frozen native window/tray smoke failed"
+        assert not native['errors'] and all(native[key] for key in ('native_window', 'tray', 'close_hides', 'reopened', 'quit')), native
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 

@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import struct
 import threading
 from types import SimpleNamespace
 import unittest
@@ -93,6 +94,19 @@ class UpdateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             safe_extract(file, self.store.root / 'stage', 'Windows')
         self.assertFalse((self.store.root / 'escape').exists())
+
+    def test_macos_ditto_utf8_names_without_flag_are_restored(self):
+        raw = bytearray(self.archive({'EnvScope.app/Contents/MacOS/EnvScope': b'\xcf\xfa\xed\xfeTEST', 'EnvScope.app/资料.txt': b'fixture'}))
+        for marker, offset in ((b'PK\x03\x04', 6), (b'PK\x01\x02', 8)):
+            start = 0
+            while (index := raw.find(marker, start)) >= 0:
+                flags = struct.unpack_from('<H', raw, index + offset)[0]
+                struct.pack_into('<H', raw, index + offset, flags & ~0x800)
+                start = index + 4
+        archive = self.store.root / 'mac.zip'
+        archive.write_bytes(raw)
+        safe_extract(archive, self.store.root / 'extracted', 'Darwin')
+        self.assertEqual((self.store.root / 'extracted/EnvScope.app/资料.txt').read_bytes(), b'fixture')
 
     def test_unofficial_asset_and_missing_digest_cannot_install(self):
         self.release['assets'][0]['browser_download_url'] = 'https://evil.invalid/binary.zip'
