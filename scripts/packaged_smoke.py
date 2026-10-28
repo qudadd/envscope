@@ -10,6 +10,13 @@ import threading
 from envscope import __release__
 
 
+def assert_worker(result, stage):
+    if result.returncode:
+        print(json.dumps({'stage': stage, 'returncode': result.returncode,
+                          'stderr': (result.stderr or b'').decode('utf-8', errors='replace')[-12000:]}, ensure_ascii=False), flush=True)
+        raise AssertionError(stage + ' failed')
+
+
 def main():
     executable = Path(sys.argv[1]).resolve()
     internal = executable.parent / "_internal" / "envscope" / "web"
@@ -30,17 +37,17 @@ def main():
         output = Path(directory) / "worker.private.json"
         result = subprocess.run([str(executable), "--stun-worker", "127.0.0.1", str(sock.getsockname()[1]), "4", "2", str(output)],
                                 capture_output=True, timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        assert result.returncode == 0, "frozen worker failed"
+        assert_worker(result, 'frozen STUN worker')
         assert json.loads(output.read_text())["ip"] == "8.8.8.8"
         thread.join(timeout=2)
         network_output = Path(directory) / "network.private.json"
         result = subprocess.run([str(executable), "--network-worker", "--offline", str(network_output)], capture_output=True,
                                 timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        assert result.returncode == 0, "frozen network worker failed"
+        assert_worker(result, 'frozen network worker')
         assert json.loads(network_output.read_text())["mode"] == "offline"
         result = subprocess.run([str(executable), "--maintenance-worker", "--check-runtime"], capture_output=True,
                                 timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        assert result.returncode == 0, "frozen maintenance worker imports failed"
+        assert_worker(result, 'frozen maintenance worker imports')
         desktop_output = Path(directory) / "native.private.json"
         result = subprocess.run([str(executable), "--desktop-smoke", str(desktop_output)], capture_output=True,
                                 timeout=50, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
