@@ -52,7 +52,7 @@
         <label id="target-proxy-field" hidden>本机 HTTP / HTTPS 代理<input name="target_proxy" type="url" maxlength="2048" placeholder="留空则读取现有环境或系统代理"><span class="note">不填写密码。Code 修改前验证连接；桌面版和网页还会核对系统代理是否一致。</span></label>
         <details><summary>其他目标与保护要求</summary><div class="form-grid">
           <label>比较出口国家<input name="country" maxlength="2" placeholder="可选，例如 US"></label>
-          <label>比较应用语言<input name="language" maxlength="30" placeholder="可选，例如 zh-CN"></label>
+          <label id="target-language-field">比较桌面应用语言<input name="language" maxlength="30" placeholder="可选，仅核对 Claude 桌面偏好"></label>
           <label>IPv6 要求<select name="ipv6_mode"><option value="observe">仅观察，不限制</option><option value="disabled">要求已关闭</option><option value="allowlist">要求出口在指定网段内</option></select></label>
           <label>IPv6 允许网段<textarea name="allowed_ipv6" rows="2" placeholder="选择指定网段时必填，每行一个"></textarea></label>
           <label>检查要求<select name="protection"><option value="standard">标准使用条件</option><option value="guarded">严格 TUN 保护条件</option></select></label>

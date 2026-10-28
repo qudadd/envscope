@@ -66,13 +66,18 @@ def diagnose(report, preferences=None):
         add("desktop.installation", "未在已检查位置找到 Claude 桌面版", "常见安装位置与已注册应用中均未确认安装。", "可能尚未安装，也可能安装位置不在本次检查范围；不要删除现有账号资料。",
             ["通过官方桌面下载入口确认并安装对应 Windows / macOS 版本。", "首次打开完成登录后，再运行检测和账号管理。"], "desktop-install")
     bad_cli_config = any(p["id"] == "config.cli" for p in problems)
+    bypass = cli.get("proxy_bypass", {})
+    cli_bypassed = bool(bypass.get("target_matches") or bypass.get("all_hosts"))
+    if preferences.get('environment_confirmed'):
+        cli_bypassed = preferences.get('connection_mode') == 'http_proxy' and (
+            'api.anthropic.com' in bypass.get('target_matches', []) or bool(bypass.get('all_hosts')))
     cli_rules = [
         ("cli.socks", cli.get("proxy_scheme") in ("socks5", "socks5h"), "Claude Code 配置了不支持的 SOCKS 代理", "当前生效的代理协议是 SOCKS。",
          "curl 可以测试 SOCKS，但 Claude Code 官方仅支持 HTTP / HTTPS 代理；两个结果不能混用。",
          ["使用代理客户端的 HTTP 或 mixed 端口。", "修复方案会先测试已发现的兼容端口，验证 API 可达后才写入 Claude Code 用户配置。", "关闭并重开 Claude Code 会话，让新环境变量生效。"], "cli-proxy"),
         ("cli.proxy_format", cli.get("proxy_valid") is False, "Claude Code 代理地址格式无效", "当前代理变量不能解析为有效地址。", "代理变量有值，但无法作为连接地址使用。",
          ["通过修复方案测试已发现的 HTTP / HTTPS 代理。", "确认后仅更新 Claude Code 用户配置，再重开会话。"], "cli-proxy"),
-        ("cli.bypass", bool(cli.get("proxy_bypass", {}).get("target_matches")) and not cli.get("custom_endpoint"), "Claude Code 的绕过名单匹配了目标服务", "NO_PROXY 匹配 Claude 或 Anthropic 目标域名。",
+        ("cli.bypass", cli_bypassed and not cli.get("custom_endpoint"), "Claude Code 的绕过名单匹配了目标服务", "NO_PROXY 匹配所检查的 Anthropic API 目标。",
          "这些请求可能绕过已设置的代理。只有明确需要直连时才应保留对应条目。",
          ["若希望经代理访问，使用修复方案移除 Claude Code 中匹配目标的绕过项。", "其他内部域名条目保留；重开会话后复检。"], "cli-proxy"),
         ("cli.tls_disabled", cli.get("tls_verification_disabled") is True, "Claude Code 的证书验证被关闭", "NODE_TLS_REJECT_UNAUTHORIZED 被设置为 0。", "这会跳过服务端证书验证，不能用于解决网络证书故障。",

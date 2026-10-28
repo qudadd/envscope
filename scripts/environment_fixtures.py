@@ -78,6 +78,12 @@ def fixture(home, settings, system='Windows', fault=None):
         cli.update(proxy_configured=True, proxy_valid=True, proxy_scheme='socks5', proxy_endpoint='socks5://127.0.0.1:7898')
     elif fault == 'provider':
         cli['vertex'] = True
+    elif fault == 'system_bypass':
+        local['proxy']['system']['bypass'] = {'target_matches':['claude.ai']}
+    elif fault == 'system_proxy_mismatch':
+        local['proxy']['system']['endpoints'] = ['http://127.0.0.1:9999']
+    elif fault in ('cli_web_bypass', 'cli_api_bypass'):
+        cli['proxy_bypass'] = {'target_matches':['claude.ai' if fault == 'cli_web_bypass' else 'api.anthropic.com']}
     elif fault == 'timezone':
         inventory['network']['timezone_id'] = inventory['timezone_iana'] = 'UTC'
     elif fault == 'locale':

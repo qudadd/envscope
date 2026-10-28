@@ -8,6 +8,8 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
     const code=['cli','both'].includes(field('usage').value);
     $('target-code-fields').hidden=!code;
     $('target-proxy-field').hidden=field('connection_mode').value!=='http_proxy';
+    $('target-language-field').hidden=!['desktop','both'].includes(field('usage').value);
+    if($('target-language-field').hidden)field('language').value='';
     if(!code){field('provider').value='anthropic';field('auth_mode').value='existing';}
   }
   function populate(value){

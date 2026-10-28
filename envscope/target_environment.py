@@ -41,6 +41,8 @@ def validate(values):
             raise ValueError('严格保护请明确选择 IPv6 已关闭或指定允许网段，不能只观察')
         if values['usage'] in ('web', 'desktop') and (values['provider'] != 'anthropic' or values['auth_mode'] in ('api_key', 'managed')):
             raise ValueError('此处的接口及 API 认证目标用于 Claude Code')
+        if values['language'] and values['usage'] in ('web', 'cli'):
+            raise ValueError('本机语言读取仅覆盖 Claude 桌面偏好；网页版或 Code 请在实际会话中确认语言')
 
 
 def fingerprint(settings):
@@ -211,10 +213,12 @@ def build_findings(findings, settings):
     route_mismatch = False
     if desktop_path:
         if mode == 'http_proxy':
-            expected_proxy = settings.get('target_proxy')
+            expected_proxy = settings.get('target_proxy') or next((r.get('proxy_endpoint') for r in path_rows if r.get('proxy_endpoint')), '')
+            endpoints = {p.rstrip('/') for p in system.get('endpoints', [])}
+            bypass = system.get('bypass', {})
+            bypassed = bypass.get('all_hosts') or bool(set(hosts) & set(bypass.get('target_matches', [])))
             system_ok = system_known and system.get('enabled') is True and bool(system.get('endpoints'))
-            if expected_proxy:
-                system_ok = system_ok and expected_proxy.rstrip('/') in [p.rstrip('/') for p in system.get('endpoints', [])]
+            system_ok = system_ok and bool(expected_proxy) and endpoints == {expected_proxy.rstrip('/')} and not bypassed
             route_mismatch = system_known and not system_ok
             path_ok = path_ok and system_ok
         else:
@@ -271,7 +275,7 @@ def build_findings(findings, settings):
             '在 Code 用户或组织配置中仅保留所选提供方；EnvScope 不替换凭据和接口。')
         proxy_ok = bool(cli) and (not cli.get('proxy_configured') if mode != 'http_proxy' else
                                  cli.get('proxy_configured') and cli.get('proxy_valid') and cli.get('proxy_scheme') in ('http', 'https')
-                                 and not cli.get('proxy_bypass', {}).get('target_matches') and not cli.get('proxy_bypass', {}).get('all_hosts'))
+                                 and 'api.anthropic.com' not in cli.get('proxy_bypass', {}).get('target_matches', []) and not cli.get('proxy_bypass', {}).get('all_hosts'))
         if mode == 'http_proxy':
             expected_proxy = settings.get('target_proxy') or next((r.get('proxy_endpoint') for r in path_rows if r.get('proxy_endpoint')), '')
             proxy_ok = proxy_ok and bool(expected_proxy) and (cli.get('proxy_endpoint') or '').rstrip('/') == expected_proxy.rstrip('/')

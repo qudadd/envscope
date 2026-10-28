@@ -49,6 +49,21 @@ class TargetEnvironmentTests(unittest.TestCase):
             with self.subTest(settings=settings, fault=fault), tempfile.TemporaryDirectory() as home:
                 self.assertNotEqual(report(home, settings, fault=fault)['assessment']['verdict'], 'qualified_in_scope')
 
+    def test_desktop_proxy_bypass_and_wrong_system_route_cannot_pass(self):
+        for fault in ('system_bypass', 'system_proxy_mismatch'):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as home:
+                value = report(home, target(usage='desktop', mode='http_proxy'), fault=fault)
+                self.assertEqual(value['assessment']['verdict'], 'needs_fix')
+                self.assertEqual(next(f['status'] for f in value['findings'] if f['id']=='target.path'), 'fail')
+
+    def test_code_bypass_diagnosis_only_checks_its_selected_route(self):
+        for mode, fault, qualified in (('http_proxy','cli_web_bypass',True), ('http_proxy','cli_api_bypass',False),
+                                       ('direct','cli_api_bypass',True)):
+            with self.subTest(mode=mode, fault=fault), tempfile.TemporaryDirectory() as home:
+                value = report(home, target(usage='both', mode=mode), fault=fault)
+                self.assertEqual(value['assessment']['verdict'] == 'qualified_in_scope', qualified, value['assessment'])
+                self.assertEqual(any(p['id'] == 'cli.bypass' for p in value['diagnosis']['problems']), not qualified)
+
     def test_confirmation_persistence_invalidation_and_restore(self):
         with tempfile.TemporaryDirectory() as directory:
             store = StateStore(Path(directory))
@@ -79,7 +94,8 @@ class TargetEnvironmentTests(unittest.TestCase):
 
     def test_invalid_combinations_and_credentials_rejected(self):
         for changes in ({'usage': 'auto'}, {'connection_mode': 'inherit'}, {'target_proxy': 'http://user:secret@127.0.0.1:7897'},
-                        {'usage': 'web', 'provider': 'vertex'}, {'protection': 'guarded'}, {'ipv6_mode': 'allowlist'}):
+                        {'usage': 'web', 'provider': 'vertex'}, {'protection': 'guarded'}, {'ipv6_mode': 'allowlist'},
+                        {'usage':'cli','language':'en-US'}, {'usage':'web','language':'zh-CN'}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 target(**changes)
 
