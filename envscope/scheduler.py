@@ -64,7 +64,15 @@ def windows_xml(command, cwd, interval, sid, start=None):
     node(execute, "Command", command[0])
     node(execute, "Arguments", subprocess.list2cmdline(command[1:]))
     node(execute, "WorkingDirectory", cwd)
-    return ET.tostring(task, encoding="utf-8", xml_declaration=True)
+    # schtasks imports this through a Unicode XML reader: UTF-8 declarations
+    # can fail with "unable to switch the encoding" despite passing the XSD.
+    # Keep the declaration, BOM and actual file bytes consistently UTF-16.
+    return ET.tostring(task, encoding="utf-16", xml_declaration=True)
+
+
+def definition_text(body):
+    """Read current UTF-16 Windows definitions and earlier UTF-8 definitions."""
+    return body.decode("utf-16") if body.startswith((b"\xff\xfe", b"\xfe\xff")) else body.decode("utf-8")
 
 
 def windows_identity(body):
@@ -135,7 +143,7 @@ class UserScheduler:
             body = mac_plist(self.command, self.cwd, interval)
         else:
             raise ValueError("持续维护仅支持 Windows 和 macOS")
-        return {"system": self.system, "body": body.decode("utf-8"), "command": self.command,
+        return {"system": self.system, "body": definition_text(body), "command": self.command,
                 "cwd": self.cwd, "interval": interval}
 
     def inspect(self, spec=None):
@@ -174,9 +182,9 @@ class UserScheduler:
         if state["present"] is None or state["present"] and not state["owned"]:
             raise ValueError("同名任务不属于本方案或无法验证，未覆盖；请检查任务权限")
         before = _read(self.path)
-        if before is not None and (previous is None or before.decode("utf-8") != previous["body"]):
+        if before is not None and (previous is None or definition_text(before) != previous["body"]):
             raise ValueError("后台任务文件已被外部修改，未覆盖")
-        _replace(self.path, spec["body"].encode("utf-8"), before)
+        _replace(self.path, spec["body"].encode("utf-16" if self.system == "Windows" else "utf-8"), before)
         try:
             if self.system == "Windows":
                 args = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/schtasks.exe"),
@@ -209,7 +217,7 @@ class UserScheduler:
                 raise ValueError("维护已停用，但操作系统任务移除尚未确认")
         body = _read(self.path)
         if body is not None:
-            if spec is None or body.decode("utf-8") != spec["body"]:
+            if spec is None or definition_text(body) != spec["body"]:
                 raise ValueError("任务文件已经变化，保留供核对")
             _safe(self.path).unlink()
         return {"state": "removed"}

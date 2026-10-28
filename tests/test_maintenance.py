@@ -16,7 +16,7 @@ from envscope.model import Finding, Status, make_report
 from envscope.operations import Operations
 from envscope.policy import Policy
 from envscope.remedies import ConfigRemedies, GUARDED_KEYS, SolutionPlans
-from envscope.scheduler import UserScheduler, windows_xml, windows_identity, mac_plist, NS, MARKER
+from envscope.scheduler import UserScheduler, windows_xml, windows_identity, mac_plist, NS, MARKER, definition_text
 from envscope.state import StateStore
 
 
@@ -344,7 +344,7 @@ class ScheduleTests(unittest.TestCase):
                     if args[0].endswith("powershell.exe"):
                         value = {"present": state["loaded"]}
                         if state["loaded"]:
-                            value["xml"] = scheduler.path.read_text(encoding="utf-8")
+                            value["xml"] = definition_text(scheduler.path.read_bytes())
                         return subprocess.CompletedProcess(args, 0, json.dumps(value), "")
                     if "/Create" in args or "bootstrap" in args:
                         state["loaded"] = True
@@ -364,6 +364,9 @@ class ScheduleTests(unittest.TestCase):
     def test_windows_task_is_user_scoped_fixed_command_and_escaped(self):
         command = [r"C:\A & B\EnvScope.exe", "--maintenance-worker"]
         body = windows_xml(command, r"C:\A & B", 5, "S-1-5-21-123")
+        self.assertTrue(body.startswith((b"\xff\xfe", b"\xfe\xff")))
+        self.assertIn("encoding='utf-16'", definition_text(body))
+        self.assertEqual(definition_text(b"<legacy-utf8/>"), "<legacy-utf8/>")
         value = windows_identity(body)
         self.assertEqual(value["program"], command[0])
         self.assertEqual(value["arguments"], "--maintenance-worker")
