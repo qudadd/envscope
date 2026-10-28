@@ -78,6 +78,8 @@ def main():
         with sync_playwright() as runtime:
             browser = runtime.chromium.launch(headless=True)
             for label, width, height in (("desktop-small", 1024, 800), ("desktop", 1280, 1000), ("desktop-wide", 1440, 1000)):
+                store._learning = {"version": 0, "completed": False}
+                store.save_settings({"usage": "auto", "country": ""})
                 config_file.write_bytes(original)
                 cli_file.write_text(json.dumps({"env":{"HTTPS_PROXY":"http://127.0.0.1:7897","https_proxy":"http://127.0.0.1:7897",
                                                        "NODE_TLS_REJECT_UNAUTHORIZED":"1"}}),encoding='utf-8')
@@ -90,18 +92,38 @@ def main():
                 page.add_init_script("window.RTCPeerConnection = undefined;")
                 page.route("https://**/*", lambda route: route.abort())
                 page.goto(f"http://127.0.0.1:{server.server_port}", wait_until="networkidle")
+                expect(page.locator('#learning-panel')).to_be_visible()
+                expect(page.locator('#audit-content')).to_be_hidden()
+                expect(page.locator('#learning-title')).to_have_text('你准备怎样使用 Claude？')
+                before_learning_settings=store.settings()
                 page.screenshot(path=str(ARTIFACTS / f"{label}-initial.png"), full_page=True)
-                page.get_by_role("button", name="一键检测").click()
+                page.get_by_role('radio',name='Claude Code 在终端或编辑器里写代码、运行任务。',exact=True).check()
+                page.locator('#learning-next').click()
+                expect(page.locator('#learning-title')).to_contain_text('只用先看下一步')
+                page.locator('#learning-back').click()
+                expect(page.locator('input[name="lesson-usage"][value="cli"]')).to_be_checked()
+                page.locator('input[name="lesson-usage"][value="auto"]').check()
+                page.locator('#learning-next').click()
+                page.screenshot(path=str(ARTIFACTS / f"{label}-lesson.png"), full_page=True)
+                page.locator('#learning-next').click()
+                expect(page.locator('#learning-title')).to_contain_text('再选择怎样保持')
+                assert store.settings()==before_learning_settings, 'reading the lesson must not save network preferences'
+                assert not operations.maintenance._config().get('enabled'), 'reading must not install a job'
+                page.get_by_role('button',name='开始第一次检测',exact=True).click()
                 expect(page.locator("#share")).to_be_enabled()
-                expect(page.locator("#verdict")).to_contain_text("1 个需要处理的问题")
+                expect(page.locator("#verdict")).to_contain_text("先处理这件事")
+                assert store.learning()['completed'] is True
+                assert not page.locator('#technical-details').evaluate('(node)=>node.open')
+                assert not page.locator('#beginner-checks').evaluate('(node)=>node.open')
+                expect(page.locator('#usage-tasks')).to_contain_text('软件和设置')
                 assert page.locator('#checks tr[data-check^="baseline."]').count()==14
                 assert page.locator('#checks tr[data-check^="extra."]').count()==18
-                assert page.locator('#claude-check-rows tr[data-claude-check]').count()==14
-                expect(page.locator('#claude-check-rows')).to_contain_text('长期保持')
+                assert page.locator('#claude-check-rows [data-claude-check]').count()==14
                 expect(page.locator('#problems')).to_contain_text('配置结尾存在多余逗号')
                 assert '查看详情' not in page.locator('#audit-results').inner_text()
                 assert 'PRIVATE_FIXTURE' not in page.locator('body').inner_text()
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "horizontal overflow"
+                page.locator('#technical-details>summary').click()
                 with page.expect_download() as downloaded:
                     page.get_by_role("button", name="导出结果").click()
                 download = downloaded.value
@@ -112,30 +134,54 @@ def main():
                 assert value["mode"] == "one-click-desktop"
                 assert 'PRIVATE_FIXTURE' not in json.dumps(value)
                 page.evaluate('window.scrollTo(0,0)')
+                page.locator('#technical-details>summary').click()
+                page.evaluate('window.scrollTo(0,0)')
                 page.screenshot(path=str(ARTIFACTS/f'{label}-diagnosis.png'))
+                page.locator('#beginner-checks>summary').click()
+                page.locator('[data-claude-check="dns"]>summary').click()
+                expect(page.locator('[data-claude-check="dns"]')).to_contain_text('电脑能不能找到 Claude 的服务器')
+                expect(page.locator('[data-claude-check="dns"]')).to_contain_text('能力有限，不等于发现泄漏')
+                expect(page.locator('[data-claude-check="dns"]')).to_contain_text('怎样长期保持')
                 page.locator('#claude-checklist').screenshot(path=str(ARTIFACTS/f'{label}-checklist.png'))
-                page.get_by_role('button',name='一站式处理',exact=True).click()
+                page.locator('#beginner-checks>summary').click()
+                page.get_by_role('button',name='预览可修复内容',exact=True).click()
                 expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
                 assert config_file.read_bytes()==original, 'preview must not edit'
                 page.screenshot(path=str(ARTIFACTS/f'{label}-plan.png'))
                 page.get_by_role('button',name='确认执行此方案',exact=True).click()
                 expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
-                expect(page.locator('#verdict')).to_have_text('Claude 服务已返回响应')
+                expect(page.locator('#verdict')).to_have_text('连接有回应，下一步试用 Claude')
                 assert config_shape(config_file)['valid']
                 page.screenshot(path=str(ARTIFACTS/f'{label}-resolved.png'))
                 page.get_by_role('button',name='撤销 Claude 桌面配置',exact=True).click()
-                expect(page.locator('#verdict')).to_contain_text('1 个需要处理的问题')
+                expect(page.locator('#verdict')).to_contain_text('先处理这件事')
                 assert config_file.read_bytes()==original
-                page.get_by_role('button',name='一站式处理',exact=True).click()
+                page.get_by_role('button',name='预览可修复内容',exact=True).click()
                 expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
                 page.get_by_role('button',name='确认执行此方案',exact=True).click()
                 expect(page.locator('#resolution')).to_contain_text('1 项已确认消除')
                 # A fresh page has no in-memory undo buttons. Its per-item plan
                 # must still be visible, and persistent backups must be listed.
                 page.reload(wait_until='networkidle')
+                expect(page.locator('#learning-panel')).to_be_hidden()
+                page.get_by_role('button',name='使用教学',exact=True).click()
+                expect(page.locator('#learning-panel')).to_be_visible()
+                page.get_by_role('button',name='稍后学习',exact=True).click()
+                expect(page.locator('#learning-panel')).to_be_hidden()
                 page.get_by_role('button',name='一键检测',exact=True).click()
                 expect(page.locator('#share')).to_be_enabled()
+                page.locator('#try-success').click()
+                expect(page.locator('#try-feedback')).to_contain_text('不会改变技术检测结论')
+                page.locator('#try-help').click()
+                page.locator('#symptom').select_option('code')
+                expect(page.locator('#symptom-advice')).to_contain_text('claude doctor')
+                page.locator('#symptom').select_option('mcp')
+                expect(page.locator('#symptom-advice')).to_contain_text('/mcp')
+                page.screenshot(path=str(ARTIFACTS/f'{label}-symptoms.png'))
+                page.locator('#symptom-help>summary').click()
                 expect(page.locator('#solution-tools')).to_be_hidden()
+                page.locator('#beginner-checks>summary').click()
+                page.locator('[data-claude-check="guard"]>summary').click()
                 page.locator('[data-claude-check="guard"]').get_by_role('button',name='审核本项处理方案',exact=True).click()
                 expect(page.locator('#solution-tools')).to_be_visible()
                 expect(page.locator('#solution-plan')).to_contain_text('本次处理方案')
@@ -163,7 +209,8 @@ def main():
                 page.screenshot(path=str(ARTIFACTS/f'{label}-upkeep.png'),full_page=True)
                 page.locator('#upkeep-report').click()
                 expect(page.locator('#session-state')).to_contain_text('后台原生巡检')
-                assert page.locator('#claude-check-rows tr[data-claude-check]').count()==14
+                assert page.locator('#claude-check-rows [data-claude-check]').count()==14
+                expect(page.locator('#try-feedback')).to_have_text('尚未由你确认实际回复。')
                 page.get_by_role('button',name='持续维护',exact=True).click()
                 page.get_by_role('button',name='停用并撤销 Claude Code 用户配置',exact=True).first.click()
                 expect(page.locator('#upkeep-state')).to_contain_text('尚未启用')
@@ -179,6 +226,8 @@ def main():
                 expect(page.locator("#account-output")).to_contain_text("账号名称已保存")
                 page.screenshot(path=str(ARTIFACTS / f"{label}-accounts.png"), full_page=True)
                 page.get_by_role("button", name="工具", exact=True).click()
+                expect(page.locator('#opensource-options')).to_contain_text('Mihomo')
+                expect(page.locator('#opensource-options')).to_contain_text('Clash Verge Rev')
                 page.locator("#proxy-url").fill("http://127.0.0.1:7897")
                 page.get_by_role("button", name="测试连接", exact=True).click()
                 expect(page.locator("#tool-output")).to_contain_text("自动探测被拒绝")
@@ -191,7 +240,7 @@ def main():
                 expect(page.locator("#settings-output")).to_contain_text("已保存")
                 page.screenshot(path=str(ARTIFACTS / f"{label}-settings.png"), full_page=True)
                 page.get_by_role("button", name="检测", exact=True).click()
-                page.get_by_role("button", name="重新检测", exact=True).click()
+                page.locator('#start').click()
                 expect(page.locator("#share")).to_be_enabled()
                 page.get_by_role("button", name="历史", exact=True).click()
                 page.get_by_role("button", name="比较", exact=True).click()
@@ -200,13 +249,25 @@ def main():
                 for name in ("检测", "持续维护", "账号", "工具", "历史", "设置"):
                     page.get_by_role("button", name=name, exact=True).click()
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), name + " overflow"
+                page.get_by_role('button',name='检测',exact=True).click()
+                page.route('**/api/audit',lambda route:route.fulfill(status=503,content_type='application/json',body='{"error":"offline fixture failure"}'))
+                page.locator('#start').click()
+                expect(page.locator('#start')).to_be_enabled()
+                expect(page.locator('#verdict')).to_contain_text('系统检测没有完成')
+                expect(page.locator('#usage-tasks')).to_contain_text('尚无本轮系统结论')
+                expect(page.locator('#try-claude')).to_be_hidden()
+                expect(page.locator('#beginner-checks')).to_be_hidden()
+                page.unroute('**/api/audit')
                 assert not errors, errors
                 summary[label] = {"page_errors": 0, "horizontal_overflow": False,
                                   "baseline_categories": 14, "extended_checks": 18, "one_stop_repair": "passed", "recheck":"passed", "undo":"passed", "no_raw_details":True, "share_download": "passed", "account_labels": "passed",
                                   "proxy_diagnostics": "passed", "preferences": "passed", "history_compare": "passed",
                                   "source_mapped_checklist":14,"maintenance_preview_enable":"passed","config_drift_restore":"passed",
                                   "unrelated_settings_preserved":"passed","maintenance_stop_and_undo":"passed",
-                                  "per_item_plan_visible_without_problems":"passed","persistent_backup_list":"passed"}
+                                  "per_item_plan_visible_without_problems":"passed","persistent_backup_list":"passed",
+                                  "first_launch_teaching":"passed","teaching_back_and_replay":"passed","teaching_persistence":"passed",
+                                  "plain_check_explanations":14,"symptom_help":"passed","manual_trial_separate_and_reset":"passed",
+                                  "advanced_records_collapsed":"passed","open_source_roles":"passed","failed_audit_clears_old_guidance":"passed"}
                 context.close()
             browser.close()
     finally:

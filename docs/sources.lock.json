@@ -1,5 +1,5 @@
 {
-  "reviewed_on": "2026-10-27",
+  "reviewed_on": "2026-10-28",
   "collector": "Scrapling 0.4.15, research only",
   "sources": [
     {
@@ -221,5 +221,43 @@
       "xsd_sha256": "b9589e166d85fcf68090e762658b86dbadf200b7f45fc17ae2070ef6d6c10ead"
     },
     "boundary": "Source and schema verification; no real scheduler registration, OS maintenance, account switch or Claude login was executed."
-  }
+  },
+  "usability_review": [
+    {
+      "id": "claude-troubleshooting",
+      "url": "https://code.claude.com/docs/en/troubleshooting",
+      "captured_at": "2026-10-28T00:56:37.133296+00:00",
+      "collector": "Scrapling 0.4.15 --ai-targeted",
+      "sha256": "2edca91fa23cfe19e8e892d6d3e805e294cc91e2e3fc3b93a20d34860fba47ec",
+      "bytes": 12349,
+      "role": "official /doctor and symptom routing"
+    },
+    {
+      "id": "mihomo-api",
+      "url": "https://wiki.metacubex.one/api/",
+      "captured_at": "2026-10-28T00:56:37.133413+00:00",
+      "collector": "Scrapling 0.4.15 --ai-targeted",
+      "sha256": "63ac8f99c652586aae9945961b77ef4d3264a54050e8ee478166e18460546c16",
+      "bytes": 15198,
+      "role": "documented read-only controller interface, no source copied"
+    },
+    {
+      "id": "clash-verge-readme",
+      "url": "https://github.com/clash-verge-rev/clash-verge-rev/blob/3953e125b223defcec28a3c822c292c743fc1b1e/README.md",
+      "captured_at": "2026-10-28T00:56:37.133510+00:00",
+      "collector": "Scrapling 0.4.15 --ai-targeted",
+      "sha256": "b6da71352bd2805485fa90aab43ca729e7c094670ff3d6641770b7302a14e71b",
+      "bytes": 6760,
+      "role": "external client role only, no GPL implementation copied"
+    },
+    {
+      "id": "clash-verge-quickstart",
+      "url": "https://www.clashverge.dev/guide/quickstart.html",
+      "captured_at": "2026-10-28T00:56:37.133592+00:00",
+      "collector": "Scrapling 0.4.15 --ai-targeted",
+      "sha256": "5039a73368d334fbabbefff3e00b10f09c4aa090164d41f118db60eda5bea9a2",
+      "bytes": 1876,
+      "role": "external client setup reference only"
+    }
+  ]
 }

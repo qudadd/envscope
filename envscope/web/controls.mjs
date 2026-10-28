@@ -23,6 +23,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const response=await fetch("/api/catalog",{headers:{"X-EnvScope-Token":session.token},cache:"no-store"});
     if(!response.ok)throw new Error("无法读取本机功能列表");
     catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderBackups();
+    document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{learning:catalog.learning,settings:catalog.settings}}));
     const options=[el("option","手动填写")];options[0].value="";
     for(const proxy of catalog.proxies||[]){const option=el("option",proxy.url+" · "+proxy.sources.join(" / "));option.value=proxy.url;options.push(option);}
     $("proxy-found").replaceChildren(...options);
@@ -30,7 +31,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     if(options.some(o=>o.value===$("proxy-url").value))$("proxy-found").value=$("proxy-url").value;
   }
   async function action(id,params={},output="tool-output",confirmation=null){
-    if(document.documentElement.dataset.operationBusy==='true'){$(output).textContent="正在执行一站式处理，请等待完成。";return null;}
+    if(document.documentElement.dataset.operationBusy==='true'){$(output).textContent="正在执行处理方案，请等待完成。";return null;}
     if(busy){$(output).textContent="已有操作进行中，请稍候。";return null;}
     const descriptor=catalog?.legacy.actions.find(a=>a.id===id);
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
@@ -195,5 +196,5 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(response.ok){const value=await response.json();renderUpkeep(value.maintenance);}
     }catch{/* Keep the explicit last completion time; never fabricate a new heartbeat. */}
   },15000);
-  try{await refresh();}catch(error){$("backend-note").textContent=error.message;}
+  try{await refresh();}catch(error){$("backend-note").textContent=error.message;document.dispatchEvent(new CustomEvent('envscope-catalog-error'));}
 }

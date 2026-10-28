@@ -5,43 +5,63 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://www.cloudflare.com https://api4.ipify.org https://api6.ipify.org; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <title>EnvScope — 环境检测</title>
+  <title>EnvScope — Claude 使用助手</title>
   <link rel="stylesheet" href="minimal.css">
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.4.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.5.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
   <main id="workspace" data-state="ready">
     <div id="page-audit" class="page">
+    <p id="welcome-loading" class="note" role="status">正在读取本机使用偏好…</p>
+    <section id="learning-panel" class="learning" aria-labelledby="learning-title" hidden>
+      <div class="learning-top"><span id="learning-progress">初次使用 · 1 / 3</span><button id="learning-skip" class="link">稍后学习</button></div>
+      <h1 id="learning-title" tabindex="-1">你准备怎样使用 Claude？</h1>
+      <div id="learning-body"></div>
+      <p id="learning-output" class="note" role="status"></p>
+      <div class="actions"><button id="learning-back" class="link" hidden>上一步</button><button id="learning-next" class="primary">继续</button></div>
+      <p class="note learning-footnote">只在本机保存教学进度。随时可从左下角重新学习。</p>
+    </section>
+    <div id="audit-content" hidden>
     <section class="introduction">
-      <div class="intro-heading"><h1>Claude 使用检测</h1><div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div></div>
+      <div class="intro-heading"><h1>让 Claude 稳定可用</h1><div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div></div>
       <p id="mode-note">检查当前浏览器的 HTTP 出口和 WebRTC 候选地址。</p>
       <details class="network-note"><summary>只读检测，探测会联系外部服务</summary><p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p></details>
     </section>
 
     <section id="audit-results" aria-label="检测结果" aria-busy="false">
-      <div class="result-summary" aria-live="polite"><h2 id="verdict">开始检测，定位需要处理的问题</h2><span id="coverage-count">14 类基础 / 18 项扩展</span></div>
-      <p id="verdict-note" class="note">结果会直接说明发现了什么、为什么需要处理，以及下一步怎么做。</p>
-      <label class="usage-selector">使用范围<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面</option><option value="cli">Claude Code</option><option value="both">桌面与 Code</option></select></label>
+      <div class="result-summary" aria-live="polite"><h2 id="verdict">先打开平时使用的连接工具，再检测</h2><span id="coverage-count">14 项基础 · 18 项扩展</span></div>
+      <p id="verdict-note" class="note">先判断影响使用的问题，处理后再试用，最后按需要开启日常保持。</p>
+      <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option></select></label>
+      <ol id="usage-tasks" class="usage-tasks" aria-label="使用步骤"><li><span class="task-number">1</span><div><h3>检查连接和设置</h3><p>自动识别已有软件与连接，先找影响使用的原因。</p></div></li><li><span class="task-number">2</span><div><h3>处理后，实际试用</h3><p>看清改动再修复，到自己的 Claude 发一条消息。</p></div></li><li><span class="task-number">3</span><div><h3>按需要持续保持</h3><p>定时复检和配置保持均由你选择启用。</p></div></li></ol>
       <p id="resolution" class="resolution" aria-live="polite" hidden></p>
       <section id="solution-tools" class="solution-tools" hidden>
-        <div class="actions"><button id="prepare-solution" hidden>一站式处理</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy">测试已发现代理</button></div>
+        <div class="actions"><button id="prepare-solution" hidden>预览可修复内容</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy">测试已发现代理</button></div>
         <div id="solution-plan"></div><div id="solution-output" class="solution-output" aria-live="polite"></div><div id="solution-backups" class="actions"></div>
       </section>
       <div id="problems"></div><div id="normal-observations" class="normal-observations"></div>
-      <section id="claude-checklist" class="claude-checklist" hidden aria-label="Claude 逐项核对">
-        <h2>逐项核对与保持</h2><p class="note">对应 claude-switcher 的 14 项检查。每项列出实际观测、解决方式和长期保持办法；未核实的项目不会计为通过。</p><div id="claude-check-rows"></div>
+      <section id="try-claude" class="try-claude" hidden aria-labelledby="try-title">
+        <h2 id="try-title">接下来，到自己的 Claude 试一条消息</h2><p class="note">本工具只测试连接，不会替你登录或发送消息。收到实际回复后，才能确认这次使用成功。</p>
+        <div id="try-instructions"></div><div class="actions"><button id="try-success">我已收到 Claude 的回复</button><button id="try-help" class="link">还是不能用</button><button id="try-upkeep" class="link">设置日常保持</button></div><p id="try-feedback" class="note" aria-live="polite"></p>
       </section>
+      <details id="symptom-help" class="help-section"><summary>Claude 仍不能用？按现象排查</summary><label>我遇到的情况<select id="symptom"><option value="connect">一直转圈，或提示无法连接</option><option value="login">打不开登录，或反复要求登录</option><option value="interrupt">原来能用，后来经常中断</option><option value="certificate">提示证书或安全连接错误</option><option value="code">Claude Code 命令找不到或设置不生效</option><option value="mcp">Claude 能回复，但某个 MCP 工具不能用</option></select></label><div id="symptom-advice"></div></details>
+      <details id="beginner-checks" class="help-section" hidden><summary>看懂 14 项检查：查什么、怎样处理、怎样保持</summary>
+      <section id="claude-checklist" class="claude-checklist" hidden aria-label="Claude 逐项核对">
+        <p class="note">逐项对应 claude-switcher。先看白话解释，需要时再展开具体证据。</p><div id="claude-check-rows"></div>
+      </section>
+      </details>
+      <details id="technical-details" class="help-section"><summary>技术记录与检测范围（完整保留）</summary>
       <div class="result-toolbar"><h2 id="checks-title" hidden>本次检查记录</h2><button id="share" class="link" disabled>导出结果</button></div>
       <div id="checks"></div>
       <p class="note export-note">导出结果隐藏地址。环境信息仍可能识别设备，分享前请检查。</p>
-    </section>
-
     <section class="environment"><h2>环境</h2><dl id="environment"><div><dt>时区</dt><dd>—</dd></div><div><dt>语言</dt><dd>—</dd></div><div><dt>运行环境</dt><dd>—</dd></div></dl></section>
     <section class="limits"><h2>检测范围</h2><p id="coverage-note">本次会检查网络、代理、客户端与账号资料。系统 UDP 和浏览器 WebRTC 分开测量，不申请麦克风权限。</p></section>
+    </details>
+    </section>
+    </div>
     </div>
 
     <div id="page-upkeep" class="page" hidden>
@@ -72,7 +92,7 @@
     </div>
 
     <div id="page-tools" class="page" hidden>
-      <h1>工具</h1><section class="tool-section"><h2>代理连接</h2><p class="note">从现有环境、系统与客户端配置中发现本机代理，不扫描端口。发现不代表连接已验证。</p>
+      <h1>工具</h1><section id="opensource-tools" class="tool-section"><h2>开源方案怎么配合使用</h2><p class="note">优先使用你已有的工具。以下说明各方案负责什么；外部项目需要单独安装和授权，不会自动下载或改动系统。</p><div id="opensource-options"></div></section><section class="tool-section"><h2>代理连接</h2><p class="note">从现有环境、系统与客户端配置中发现本机代理，不扫描端口。发现不代表连接已验证。</p>
         <label>已发现的地址<select id="proxy-found"><option value="">未发现，手动填写</option></select></label>
         <div class="inline-form"><label class="grow">代理地址<input id="proxy-url" type="password" autocomplete="off" placeholder="http://127.0.0.1:7897"></label><button id="proxy-test">测试连接</button></div>
         <p class="note">仅经指定代理检测 Claude 网页与 API，区分连接失败、需认证、拒绝访问、限流及服务错误。代理失败不回退直连。</p>
@@ -110,6 +130,6 @@
       </form>
     </div>
   </main>
-  <footer><span>Windows / macOS<br>本地运行，无追踪脚本</span><button id="quit" class="link" hidden>结束本地服务</button></footer>
+  <footer><button id="learning-replay" class="link">使用教学</button><span>Windows / macOS<br>本地运行，无追踪脚本</span><button id="quit" class="link" hidden>结束本地服务</button></footer>
 </body>
 </html>

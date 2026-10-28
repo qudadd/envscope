@@ -155,6 +155,18 @@ class DesktopAPITests(unittest.TestCase):
         self.assertFalse(result["report"]["contains_sensitive"])
         self.assertEqual(len(self.store.history()), 1)
 
+    def test_teaching_progress_cannot_change_policy_or_authorize_operations(self):
+        previous = self.store.settings()
+        value = json.loads(self.post({"action": "learning-complete", "params": {"version": 1}, "confirmed": False}, path="/api/action").read())
+        self.assertTrue(value["learning"]["completed"])
+        self.assertEqual(self.store.settings(), previous)
+        self.assertIsNone(self.server.last_raw_report)
+        for params in ({"version": True}, {"version": 1, "require_guard": False}, {"version": 1, "usage": "cli"}):
+            with self.assertRaises(HTTPError) as caught:
+                self.post({"action": "learning-complete", "params": params, "confirmed": False}, path="/api/action")
+            self.assertEqual(caught.exception.code, 400)
+        self.assertEqual(list(Path(self.directory.name).iterdir()), [])
+
 
 class MacInventoryTests(unittest.TestCase):
     def test_interface_parser_does_not_collect_mac_addresses(self):

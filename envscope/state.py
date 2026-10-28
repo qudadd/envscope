@@ -54,6 +54,7 @@ class StateStore:
         self._reports = {}
         self._key = secrets.token_bytes(32)
         self._previous_settings = None
+        self._learning = {"version": 0, "completed": False}
 
     def _read(self, name, fallback):
         if self.memory:
@@ -91,6 +92,23 @@ class StateStore:
             return validate_settings(self._settings if self.memory else self._read("settings.private.json", {}))
         except ValueError:
             return validate_settings({})
+
+    def learning(self):
+        """Teaching progress is deliberately outside the maintenance policy hash."""
+        from .guide import LESSON_VERSION
+        value = self._learning if self.memory else self._read("learning.private.json", {})
+        if not isinstance(value, dict) or type(value.get("version")) is not int or type(value.get("completed")) is not bool:
+            return {"version": 0, "completed": False}
+        return {"version": value["version"], "completed": value["completed"] and value["version"] == LESSON_VERSION}
+
+    def complete_learning(self, version):
+        from .guide import LESSON_VERSION
+        if type(version) is not int or version != LESSON_VERSION:
+            raise ValueError("invalid lesson version")
+        value = {"version": version, "completed": True}
+        self._write("learning.private.json", value)
+        self._learning = value
+        return dict(value)
 
     def save_settings(self, value):
         if not isinstance(value, dict):

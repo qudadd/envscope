@@ -45,7 +45,7 @@ def diagnose(report, preferences=None):
             repairable = shape.get("repairable") == "trailing_comma"
             add(key, label + "无法正确读取", location + shape.get("explanation", "文件格式或安全检查未通过"),
                 "配置结尾存在多余逗号，解析器无法载入。" if repairable else "文件需要修正后才能载入，不能通过清空配置解决。",
-                ["点击“一站式处理”，先备份，再移除已确认的多余逗号。", "保存工作并重开对应客户端，再复检。"] if repairable else
+                ["点击“预览可修复内容”，先备份，再移除已确认的多余逗号。", "保存工作并重开对应客户端，再复检。"] if repairable else
                 ["备份并打开此配置文件，按上面的行列位置修正。", "保留现有 MCP、认证和其他设置；保存后重开客户端并复检。"],
                 action="config-" + target, repair="json-" + target if repairable else None, priority=0, source="settings")
         elif shape.get("error") == "unreadable":
@@ -66,14 +66,14 @@ def diagnose(report, preferences=None):
     cli_rules = [
         ("cli.socks", cli.get("proxy_scheme") in ("socks5", "socks5h"), "Claude Code 配置了不支持的 SOCKS 代理", "当前生效的代理协议是 SOCKS。",
          "curl 可以测试 SOCKS，但 Claude Code 官方仅支持 HTTP / HTTPS 代理；两个结果不能混用。",
-         ["使用代理客户端的 HTTP 或 mixed 端口。", "一站式处理会先测试已发现的兼容端口，验证 API 可达后才写入 Claude Code 用户配置。", "关闭并重开 Claude Code 会话，让新环境变量生效。"], "cli-proxy"),
+         ["使用代理客户端的 HTTP 或 mixed 端口。", "修复方案会先测试已发现的兼容端口，验证 API 可达后才写入 Claude Code 用户配置。", "关闭并重开 Claude Code 会话，让新环境变量生效。"], "cli-proxy"),
         ("cli.proxy_format", cli.get("proxy_valid") is False, "Claude Code 代理地址格式无效", "当前代理变量不能解析为有效地址。", "代理变量有值，但无法作为连接地址使用。",
-         ["通过一站式处理测试已发现的 HTTP / HTTPS 代理。", "确认后仅更新 Claude Code 用户配置，再重开会话。"], "cli-proxy"),
+         ["通过修复方案测试已发现的 HTTP / HTTPS 代理。", "确认后仅更新 Claude Code 用户配置，再重开会话。"], "cli-proxy"),
         ("cli.bypass", bool(cli.get("proxy_bypass", {}).get("target_matches")) and not cli.get("custom_endpoint"), "Claude Code 的绕过名单匹配了目标服务", "NO_PROXY 匹配 Claude 或 Anthropic 目标域名。",
          "这些请求可能绕过已设置的代理。只有明确需要直连时才应保留对应条目。",
-         ["若希望经代理访问，使用一站式处理移除 Claude Code 中匹配目标的绕过项。", "其他内部域名条目保留；重开会话后复检。"], "cli-proxy"),
+         ["若希望经代理访问，使用修复方案移除 Claude Code 中匹配目标的绕过项。", "其他内部域名条目保留；重开会话后复检。"], "cli-proxy"),
         ("cli.tls_disabled", cli.get("tls_verification_disabled") is True, "Claude Code 的证书验证被关闭", "NODE_TLS_REJECT_UNAUTHORIZED 被设置为 0。", "这会跳过服务端证书验证，不能用于解决网络证书故障。",
-         ["一站式处理会在 Claude Code 用户配置中恢复证书校验。", "如果使用企业 HTTPS 检查，请取得组织提供的 CA，并配置 NODE_EXTRA_CA_CERTS。", "重开 Claude Code 后复检。"], "cli-tls"),
+         ["修复方案会在 Claude Code 用户配置中恢复证书校验。", "如果使用企业 HTTPS 检查，请取得组织提供的 CA，并配置 NODE_EXTRA_CA_CERTS。", "重开 Claude Code 后复检。"], "cli-tls"),
         ("cli.ca_missing", cli.get("extra_ca_configured") and cli.get("extra_ca_exists") is False, "Claude Code 指定的 CA 文件不存在", "NODE_EXTRA_CA_CERTS 已设置，但没有找到对应文件。", "自定义证书路径失效，可能导致企业代理的证书链不被信任。",
          ["取得组织提供的 CA 文件，修正 NODE_EXTRA_CA_CERTS 指向的本机路径。", "不要下载来源不明的根证书；重开会话后复检。"], None),
         ("cli.endpoint", cli.get("endpoint_valid") is False or cli.get("endpoint_https_or_local") is False, "Claude Code 接口地址格式或协议不合适", "ANTHROPIC_BASE_URL 无法使用，或非本机地址使用了明文 HTTP。", "接口地址需要有效的 HTTP(S) URL；远程服务应使用 HTTPS。",
@@ -234,7 +234,7 @@ def diagnose(report, preferences=None):
     guard = first("baseline.guard")
     if account_used and preferences.get("require_guard") and guard and not guard.get("error") and not (guard.get("registered") and guard.get("enabled") and guard.get("running")):
         add("maintenance.guard", "账号启动要求的守护任务没有运行", "设置中要求守护任务，但本次未确认它启用并运行。", "这一条件会阻止账号启动；守护不是防火墙隔离保证。",
-            ["使用一站式处理安装或修复维护核心；执行前将列出系统设置影响。", "安装器结束后继续复检，以实际运行状态为准。"], "maintenance", "legacy", source="troubleshooting")
+            ["使用修复方案安装或修复维护核心；执行前将列出系统设置影响。", "安装器结束后继续复检，以实际运行状态为准。"], "maintenance", "legacy", source="troubleshooting")
     rule = first("baseline.rules")
     if account_used and preferences.get("require_rules") and status("baseline.rules") in ("warn", "fail"):
         reason = rule.get("reason", "运行规则未满足选定条件。")
@@ -248,7 +248,7 @@ def diagnose(report, preferences=None):
                 ["在代理客户端切换到预期的规则或全局模式，选择真实代理节点。", "需要代理 UDP 时选择明确支持 UDP 的节点；不要把 DIRECT / REJECT 当成代理节点。", "完成后复检，核对实际运行状态。"], "proxy-settings")
         else:
             add("maintenance.rules", "账号启动要求的代理规则不满足", observed, "需要修正运行内核中的规则；静态配置文本存在不能代替实际加载。",
-                ["使用一站式处理调用已安装维护核心修复，再复检运行规则。", "手动处理时，将所列条目放进客户端实际加载的规则，不只在静态文件中写 prepend-rules。"], "maintenance", "legacy")
+                ["使用修复方案调用已安装维护核心修复，再复检运行规则。", "手动处理时，将所列条目放进客户端实际加载的规则，不只在静态文件中写 prepend-rules。"], "maintenance", "legacy")
     elif account_used and preferences.get("require_rules") and status("baseline.rules") == "unknown":
         group_missing = "代理组" in rule.get("reason", "")
         add("startup.rules", "账号启动要求核对规则，但本次没有完成", rule.get("reason", "没有取得可识别的代理运行规则。"),

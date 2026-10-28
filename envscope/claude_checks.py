@@ -5,6 +5,7 @@ process name, ASN label or a successful anonymous request cannot certify a user
 session or a complete traffic path.
 """
 from .legacy import UPSTREAM_COMMIT, UPSTREAM_REPOSITORY
+from .guide import explain_check
 
 
 CHECK_PROBLEMS = {
@@ -98,6 +99,7 @@ def checklist(report, preferences=None):
                      "summary": summary, "scope": scope, "measurement": measurement,
                      "observations": [{"id": f["id"], "title": f["title"], "status": f["status"], "summary": f["summary"]} for f in observed],
                      "remedy": remedy, "upkeep": upkeep, "action": action, "problem_ids": related,
+                     "explanation": explain_check(key, status, bool(related)),
                      "source": UPSTREAM_REPOSITORY + "/blob/" + UPSTREAM_COMMIT + "/core/claude-switch.sh#L770",
                      "implementation": "https://github.com/qudadd/envscope"})
     return {"source_revision": UPSTREAM_COMMIT, "items": rows,

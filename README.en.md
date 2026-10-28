@@ -2,7 +2,17 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS desktop environment toolkit. Alpha v0.4.0.
+A minimal Windows/macOS Claude environment toolkit. Alpha v0.5.0.
+
+First launch offers a skippable three-step lesson, persisted locally across
+restarts and replayable from the sidebar. Results prioritize one actionable
+problem, followed by an actual trial in the user's Claude and optional upkeep.
+All 14 baseline and 18 extended checks remain available; plain-language
+explanations replace the default technical table. Symptom-based help covers
+connection, login, interruptions, certificates, Code installation and MCP.
+Manual confirmation of a reply never changes a measured verdict. Open-source
+tool guidance distinguishes the bundled claude-switcher, the read-only Mihomo
+interface and the separately installed Clash Verge Rev client.
 
 Each of the 14 upstream Claude checks now has an observation, measurement scope,
 remedy and upkeep plan. Reviewed user-scoped Windows tasks / macOS LaunchAgents

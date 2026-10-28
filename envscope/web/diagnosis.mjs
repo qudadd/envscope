@@ -95,7 +95,7 @@ export function initDiagnosis({sessionPromise,retest}) {
   }
   function renderProblem(problem){
     const row=el('section',undefined,'problem');row.dataset.problem=problem.id;
-    row.append(el('h3',problem.title),el('p',problem.observed,'observed'),el('p',problem.cause,'cause'));
+    row.append(el('h3',problem.title),el('p','发生了什么','explain-label'),el('p',problem.observed,'observed'),el('p','为什么需要处理','explain-label'),el('p',problem.cause,'cause'),el('p','接下来这样做','explain-label'));
     const steps=el('ol');for(const step of problem.steps)steps.append(el('li',step));row.append(steps);
     const controls=el('div',undefined,'problem-actions');
     if(labels[problem.action]){
@@ -112,31 +112,34 @@ export function initDiagnosis({sessionPromise,retest}) {
   function renderChecklist(value){
     const items=value.claude_checks?.items||[];
     $('claude-checklist').hidden=!items.length;
-    const labels={pass:'所列范围已核实',warn:'需要核对',fail:'发现不符合项',unknown:'待核实',skipped:'本次未测',info:'仅记录资料',not_configured:'未设比较目标'};
-    const table=el('table'),head=el('thead'),header=el('tr'),body=el('tbody');
-    header.append(el('th','检查及本次结果'),el('th','如何处理'),el('th','长期保持'));head.append(header);table.append(head,body);
+    $('beginner-checks').hidden=!items.length;
+    const list=el('div',undefined,'plain-checks');
     for(const item of items){
-      const row=el('tr');row.dataset.claudeCheck=item.id;
-      const observation=el('td'),remedy=el('td'),upkeep=el('td');
-      observation.append(el('h3',`${item.number}. ${item.title}`),el('p',labels[item.status]||'待核实','check-state'),el('p',item.summary),el('p',item.measurement,'note'));
-      for(const part of item.observations.filter(p=>p.id!==`baseline.${item.id}`).slice(0,2))observation.append(el('p',part.title+'：'+part.summary,'note'));
-      remedy.append(el('p',item.remedy));upkeep.append(el('p',item.upkeep));
+      const row=el('details');row.dataset.claudeCheck=item.id;const summary=el('summary'),explanation=item.explanation||{};
+      summary.append(el('span',`${item.number}. ${explanation.label||item.title}`),el('span',explanation.result||'还不能确认','check-state'));row.append(summary);
+      const observation=el('div',undefined,'check-explanation'),remedy=el('div'),upkeep=el('div');
+      observation.append(el('h3','这是查什么'),el('p',explanation.why||item.measurement),el('h3','当前证据'),el('p',item.summary),el('p',`技术名称：${explanation.term||item.title}。${item.measurement}`,'note'));
+      for(const part of (item.observations||[]).filter(p=>p.id!==`baseline.${item.id}`).slice(0,2))observation.append(el('p',part.title+'：'+part.summary,'note'));
+      remedy.append(el('h3','现在需要做什么'),el('p',explanation.next_step||item.remedy));
+      const advanced=el('details'),advancedTitle=el('summary','具体处理方法');advanced.append(advancedTitle,el('p',item.remedy));remedy.append(advanced);
+      upkeep.append(el('h3','怎样长期保持'),el('p',item.upkeep));
       if(item.action==='solution'&&['warn','fail','unknown'].includes(item.status))remedy.append(button('审核本项处理方案',()=>action(()=>prepare(item.id))));
       else if(item.action==='proxy-test')remedy.append(button('测试已发现代理',()=>action(proxyTest)));
       else if(item.action==='settings')remedy.append(button('核对比较与启动设置',()=>document.querySelector('.tab[data-page="settings"]')?.click()));
-      upkeep.append(button('设置持续维护',()=>document.querySelector('.tab[data-page="upkeep"]')?.click()));
-      row.append(observation,remedy,upkeep);body.append(row);
+      row.append(observation,remedy,upkeep);list.append(row);
     }
-    $('claude-check-rows').replaceChildren(table,link('核对 claude-switcher 的固定版本源码',items[0]?.source||'https://github.com/YOURSJEYO/claude-switcher'));
+    $('claude-check-rows').replaceChildren(list,link('核对 claude-switcher 的固定版本源码',items[0]?.source||'https://github.com/YOURSJEYO/claude-switcher'));
   }
   function render(reportValue){
     report=reportValue;const diagnosis=report.diagnosis;
     if(!diagnosis){$('verdict').textContent='历史结果需要重新分析';$('verdict-note').textContent='这份旧报告没有问题归因，请重新检测以生成处理方案。';return;}
-    $('workspace').dataset.state='complete';$('verdict').textContent=diagnosis.headline;$('verdict-note').textContent=diagnosis.summary;
+    $('workspace').dataset.state='complete';$('verdict').textContent=report.guide?.headline||diagnosis.headline;$('verdict-note').textContent=report.guide?.summary||diagnosis.summary;
     $('coverage-count').textContent=diagnosis.problems.length?`${diagnosis.problems.length} 个问题`:'本次诊断';
-    $('problems').replaceChildren(...diagnosis.problems.map(renderProblem));
-    $('normal-observations').replaceChildren(...diagnosis.normal.map(text=>el('p',text)));
-    if(diagnosis.state==='responding')$('normal-observations').append(link('打开 Claude 网页','https://claude.ai/'));
+    const problemNodes=diagnosis.problems.slice(0,1).map(renderProblem);
+    if(diagnosis.problems.length>1){const rest=el('details',undefined,'other-problems');rest.append(el('summary',`其他 ${diagnosis.problems.length-1} 项需要处理的问题`),...diagnosis.problems.slice(1).map(renderProblem));problemNodes.push(rest);}
+    $('problems').replaceChildren(...problemNodes);
+    const normal=el('details');normal.append(el('summary','已取得的连接回应'),...diagnosis.normal.map(text=>el('p',text)));
+    $('normal-observations').replaceChildren(...(diagnosis.normal.length?[normal]:[]));
     $('coverage-note').textContent=diagnosis.coverage;
     renderChecklist(report);
     $('solution-plan').replaceChildren();$('prepare-solution').hidden=!diagnosis.repairable_count;

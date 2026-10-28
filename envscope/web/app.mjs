@@ -1,6 +1,7 @@
 import {STATUS_TEXT, normalizeIP, isPublicIP, parseCandidate, assessHTTP, assessICE, sharingSnapshot} from "./logic.mjs";
 import {initDesktopControls} from "./controls.mjs";
 import {initDiagnosis} from "./diagnosis.mjs";
+import {initGuide} from "./guide.mjs";
 
 const byId=id=>document.getElementById(id);
 const nodes={start:byId("start"),share:byId("share"),checks:byId("checks"),quit:byId("quit")};
@@ -12,7 +13,7 @@ const sessionPromise=(async()=>{
     if(!response.ok)return null;
     const value=await response.json();
     if(value.mode!=="desktop"||typeof value.token!=="string")return null;
-    byId("mode-note").textContent="汇总 32 项检查，直接给出问题、处理方案与复检结果。";
+    byId("mode-note").textContent="检查连接与配置，给出处理步骤，再帮你保持已经验证的设置。";
     nodes.quit.hidden=false;
     return value;
   } catch {return null;} finally {clearTimeout(timer);}
@@ -75,9 +76,11 @@ function render(snapshot) {
 function renderDesktop(report) {
   byId("checks-title").hidden=false;
   diagnosisUI.render(report);
+  guideUI.render(report);
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
 const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit()});
+const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit(),isBusy:diagnosisUI.isBusy});
 
 async function nativeAudit(session,snapshot) {
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);
@@ -92,6 +95,7 @@ async function nativeAudit(session,snapshot) {
 }
 
 async function runAudit(){
+  document.dispatchEvent(new CustomEvent('envscope-audit-start'));
   nodes.start.disabled=true;nodes.share.disabled=true;lastSnapshot=null;lastReport=null;
   nodes.start.textContent="检测中…";byId("audit-results").setAttribute("aria-busy","true");
   byId("workspace").dataset.state="running";
@@ -115,11 +119,11 @@ async function runAudit(){
       byId("session-state").textContent="正在检测系统网络";
       byId("verdict-note").textContent="浏览器观测已完成，正在合并系统检查。";
       try {lastReport=await nativeAudit(session,lastSnapshot);renderDesktop(lastReport);document.dispatchEvent(new CustomEvent("envscope-audit-complete",{detail:{report_id:lastReport.report_id}}));}
-      catch {byId("verdict-note").textContent="系统检测未完成，已保留浏览器观测；可重新检测。";byId("session-state").textContent="系统检测未完成";}
+      catch {byId("verdict").textContent="系统检测没有完成，请重新检测";byId("verdict-note").textContent="已保留本轮浏览器观测。上次的系统结果不会作为本次证据；仍失败时请重新打开本地程序。";byId("session-state").textContent="系统检测未完成";}
     }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
     nodes.share.disabled=false;
-  } catch {byId("verdict").textContent="观测未完成";byId("verdict-note").textContent="浏览器功能不可用或采集发生错误，不能判定通过。";byId("session-state").textContent="需要重新检测";}
-  finally {nodes.start.disabled=false;nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");}
+  } catch {byId("verdict").textContent="检测没有完成";byId("verdict-note").textContent="本地服务或浏览器探测没有返回有效结果。请重新检测；仍失败时重新打开本地程序。缺失观测不会判定为通过。";byId("session-state").textContent="需要重新检测";}
+  finally {nodes.start.disabled=false;nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");document.dispatchEvent(new CustomEvent('envscope-audit-end',{detail:{has_report:!!lastReport}}));}
 }
 nodes.start.addEventListener("click",()=>{if(!diagnosisUI.isBusy())void runAudit();});
 

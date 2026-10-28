@@ -48,6 +48,10 @@ they never run merely because EnvScope starts or performs its native audit.
 - Mihomo API documentation: https://wiki.metacubex.one/api/. The optional adapter
   reads a documented loopback HTTP interface. No proxy core or implementation is
   linked, copied or bundled.
+- Clash Verge Rev, reviewed revision `3953e125b223defcec28a3c822c292c743fc1b1e`,
+  GPL-3.0: https://github.com/clash-verge-rev/clash-verge-rev. The tool chooser
+  links to this separately installed Windows/macOS client and explains its
+  system-proxy/TUN role. No implementation, artwork or GPL source is bundled.
 - RFC 8489: https://www.rfc-editor.org/info/rfc8489/. Protocol reference.
 - Microsoft Find-NetRoute documentation, Apple route command manual, curl manual
   and Claude Code settings documentation are public-interface references for the

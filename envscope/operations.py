@@ -124,7 +124,7 @@ class Operations:
                 entry.update(supported=True, available=True, requires_confirmation=False, reason="native_read_only")
         return {"legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
                 "settings": self.store.settings(), "history": self.store.history(), "maintenance": self.maintenance.status(),
-                "config_backups": self.config_remedies.list_backups(),
+                "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
@@ -133,7 +133,7 @@ class Operations:
         native_parameters = {"account-label": {"slot", "label"}, "account-switch": {"slot"},
                              "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(),
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
-                             "history-report": {"id"}, "settings-restore": set()}
+                             "history-report": {"id"}, "settings-restore": set(), "learning-complete": {"version"}}
         native_parameters.update({"solution-plan": {"report_id", "check_id"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"},
                                   "maintenance-plan": {"report_id", "interval", "auto_restore"}, "maintenance-enable": {"plan_id"},
                                   "maintenance-disable": set(), "maintenance-status": set(), "maintenance-run": set(),
@@ -141,6 +141,8 @@ class Operations:
         if action in native_parameters and set(params) - native_parameters[action]:
             raise ValueError("unexpected action parameters")
         gate = preflight or (lambda: launch_gate(report, self.store.settings())[0])
+        if action == "learning-complete":
+            return {"state": "completed", "learning": self.store.complete_learning(params.get("version"))}
         if action in ("solution-plan", "solution-open", "maintenance-plan") and (not report or params.get("report_id") != report.get("report_id")):
             return {"state": "retest_required", "reason": "当前显示的不是本机最新检测，请重新检测后处理，不使用历史报告执行修复。"}
         if action == "solution-plan":

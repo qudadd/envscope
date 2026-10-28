@@ -70,4 +70,6 @@ def make_report(findings, policy, mode="audit", preferences=None):
     report["diagnosis"] = diagnose(report, preferences)
     from .claude_checks import checklist
     report["claude_checks"] = checklist(report, preferences)
+    from .guide import usage_guide
+    report["guide"] = usage_guide(report)
     return report
