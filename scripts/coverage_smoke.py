@@ -135,7 +135,7 @@ def main():
                         expect(page.locator('#tool-output')).to_contain_text('已清理 1 个')
                         assert not errors,errors
                         no_legacy.assert_not_called()
-                        results[str(width)]={'portrait_dimensions':8,'features':24,'archive_roundtrip':True,'dmg_fixture_roundtrip':True,'dmg_mismatch_rejected':True,'dmg_cleanup_recovery':True,'wrong_password_no_import':True,'password_cleared':True,'browser_launcher':'fixture-only','real_browser_or_account_launches':0,'page_errors':errors}
+                        results[str(width)]={'portrait_dimensions':8,'features':26,'archive_roundtrip':True,'dmg_fixture_roundtrip':True,'dmg_mismatch_rejected':True,'dmg_cleanup_recovery':True,'wrong_password_no_import':True,'password_cleared':True,'browser_launcher':'fixture-only','real_browser_or_account_launches':0,'page_errors':errors}
                     except Exception:
                         page.screenshot(path=str(out/f'{width}-failure.png'))
                         print(json.dumps({'page_errors':errors,'format':page.locator('#encrypted-format').evaluate('(e)=>e.outerHTML'),'visible_text':page.locator('main').inner_text()[-5000:]},ensure_ascii=False))

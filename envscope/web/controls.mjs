@@ -21,7 +21,9 @@ const button=(text,fn)=>{const b=el("button",text,"link");b.type="button";b.addE
 export async function initDesktopControls({sessionPromise,onReport,download,retest}) {
   const session=await sessionPromise;if(!session)return;
   $("desktop-nav").hidden=false;
-  let catalog=null,busy=false,lastReportId=null;
+  let catalog=null,busy=false,lastReportId=null,statusRevision=0,statusPending=false;
+  document.addEventListener('envscope-audit-start',()=>{statusRevision++;});
+  document.addEventListener('envscope-operation-state',event=>{if(event.detail.busy)statusRevision++;});
   function page(name){
     for(const n of document.querySelectorAll(".page"))n.hidden=n.id!=="page-"+name;
     for(const n of document.querySelectorAll(".tab")){if(n.dataset.page===name)n.setAttribute("aria-current","page");else n.removeAttribute("aria-current");}
@@ -59,7 +61,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
     const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button, #timezone-service-panel button, #timezone-service-panel input, #network-panel button, #network-panel input, #client-panel button, #client-panel input, #client-panel select, #language-panel button')].map(node=>[node,node.disabled]);
     for(const [node] of disabledBefore)node.disabled=true;
-    busy=true;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
+    busy=true;statusRevision++;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     $(output).scrollIntoView({block:'nearest'});
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),/^(archive|snapshot)-/.test(id)?1200000:240000);
     try {
@@ -291,19 +293,22 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   document.addEventListener("envscope-audit-complete",event=>{lastReportId=event.detail?.report_id||null;void refresh().catch(()=>{});});
   document.addEventListener('envscope-maintenance-change',()=>{void refresh().catch(()=>{});});
   setInterval(async()=>{
-    if(document.hidden||($('page-upkeep').hidden&&($('page-audit').hidden||!catalog?.maintenance?.enabled))||busy||$('start').disabled||document.documentElement.dataset.operationBusy==='true')return;
+    if(statusPending||document.hidden||($('page-upkeep').hidden&&($('page-audit').hidden||!catalog?.maintenance?.enabled))||busy||$('start').disabled||document.documentElement.dataset.operationBusy==='true')return;
+    const revision=statusRevision,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);statusPending=true;
     try{
-      const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'maintenance-status',params:{},confirmed:false})});
-      if(response.ok){const value=await response.json();renderUpkeep(value.maintenance);document.dispatchEvent(new CustomEvent('envscope-maintenance-status',{detail:value.maintenance}));}
+      const response=await fetch('/api/status',{signal:controller.signal,headers:{'X-EnvScope-Token':session.token},cache:'no-store'});
+      if(!response.ok)return;
+      const value=await response.json();
+      // A read begun before an action/audit must not paint its older state over
+      // the new result. Read-only polling never acquires the mutation lock.
+      if(revision!==statusRevision||busy||$('start').disabled||document.documentElement.dataset.operationBusy==='true')return;
+      renderUpkeep(value.maintenance);document.dispatchEvent(new CustomEvent('envscope-maintenance-status',{detail:value.maintenance}));
       if(!$('page-upkeep').hidden){
-        const guardResponse=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'guard-status',params:{},confirmed:false})});
-        if(guardResponse.ok){const value=await guardResponse.json();renderProcessGuard(value.guard,catalog?.settings||{});}
-        if(catalog?.timezone_service?.supported){
-          const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'timezone-service-status',params:{},confirmed:false})});
-          if(response.ok)renderTimezoneService(await response.json());
-        }
+        renderProcessGuard(value.process_guard,value.settings);renderTimezoneService(value.timezone_service);
+        renderNetwork(value.system_network,value.settings);renderClient(value.client_repair,value.settings);renderLanguage(value.client_language,value.settings);
       }
     }catch{/* Keep the explicit last completion time; never fabricate a new heartbeat. */}
+    finally{clearTimeout(timer);statusPending=false;}
   },15000);
   try{await refresh();}catch(error){$("backend-note").textContent=error.message;document.dispatchEvent(new CustomEvent('envscope-catalog-error'));}
 }

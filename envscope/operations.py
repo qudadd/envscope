@@ -205,6 +205,13 @@ class Operations:
                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return True
 
+    def background_status(self):
+        """Only read status; no account tree walk, task registration or audit lock."""
+        return {'settings':self.store.settings(),'maintenance':self.maintenance.status(),
+                'process_guard':self.process_guard.status(),'timezone_service':self.timezone_service.status(),
+                'system_network':self.network.status(),'client_repair':self.client_repair.status(),
+                'client_language':self.language_repair.status()}
+
     def catalog(self):
         try:
             accounts = self.accounts.list_accounts()

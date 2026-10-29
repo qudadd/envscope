@@ -7,6 +7,7 @@ import threading
 import unittest
 from unittest.mock import Mock
 from urllib.request import Request,ProxyHandler,build_opener
+from urllib.error import HTTPError
 
 from envscope.accounts import AccountError
 from envscope.client_repair import ClientRepair
@@ -138,6 +139,24 @@ class ClientWorkflowTests(unittest.TestCase):
             self.assertNotIn('fixture-only-token',json.dumps(status))
         finally:
             server.shutdown();server.server_close();thread.join(timeout=3)
+
+    def test_read_only_status_poll_does_not_take_or_release_the_mutation_lock(self):
+        server=make_server(store=self.store,operations=self.ops)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        opener=build_opener(ProxyHandler({}));origin='http://127.0.0.1:'+str(server.server_port)
+        server.audit_lock.acquire()
+        try:
+            request=Request(origin+'/api/status',headers={'X-EnvScope-Token':server.session_token})
+            value=json.loads(opener.open(request,timeout=5).read())
+            self.assertEqual(value['client_repair']['state'],'not_configured');self.assertIn('process_guard',value)
+            self.assertNotIn('accounts',value);self.assertTrue(server.audit_lock.locked())
+            self.assertFalse(self.io.calls or self.scheduler.calls)
+            request=Request(origin+'/api/action',data=json.dumps({'action':'client-status','params':{},'confirmed':False}).encode(),
+                headers={'Content-Type':'application/json','Origin':origin,'X-EnvScope-Token':server.session_token})
+            with self.assertRaises(HTTPError) as rejected:opener.open(request,timeout=5)
+            self.assertEqual(rejected.exception.code,409)
+        finally:
+            server.audit_lock.release();server.shutdown();server.server_close();thread.join(timeout=3)
 
 
 if __name__=='__main__':unittest.main()

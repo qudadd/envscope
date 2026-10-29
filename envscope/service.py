@@ -64,11 +64,11 @@ class DesktopHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/session":
             self.json_response(200, {"token": self.server.session_token, "mode": "desktop", "version": __version__, "release": __release__,
                                      "shell": "native" if getattr(self.server.operations, "desktop_runtime", None) else "browser"})
-        elif (self.path == "/api/catalog" and self.headers.get("X-EnvScope-Token", "").isascii()
+        elif (self.path in ('/api/catalog','/api/status') and self.headers.get("X-EnvScope-Token", "").isascii()
               and secrets.compare_digest(self.headers.get("X-EnvScope-Token", ""), self.server.session_token)):
             try:
-                value = self.server.operations.catalog()
-                value["history"] = [{k: v for k, v in row.items() if k != "address_signature"} for row in value["history"]]
+                value = self.server.operations.background_status() if self.path=='/api/status' else self.server.operations.catalog()
+                if self.path=='/api/catalog':value["history"] = [{k: v for k, v in row.items() if k != "address_signature"} for row in value["history"]]
                 self.json_response(200, value)
             except (ValueError, OSError, AccountError):
                 self.json_response(500, {"error": "catalog_unavailable"})
