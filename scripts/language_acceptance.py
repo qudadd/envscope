@@ -28,7 +28,7 @@ def main():
         return json.loads(subprocess.run([sys.executable,'-c',code,domain],check=True,capture_output=True,text=True,timeout=15).stdout)
     try:
         with tempfile.TemporaryDirectory() as folder:
-            store=StateStore(Path(folder)/'state');store.save_settings({'usage':'desktop','connection_mode':'direct','usage_country':'US','language':'ja-JP'},confirm_environment=True)
+            store=StateStore(Path(folder).resolve()/'state');store.save_settings({'usage':'desktop','connection_mode':'direct','usage_country':'US','language':'ja-JP'},confirm_environment=True)
             io=LanguageIO(backend=prefs,close_desktop=lambda:True,available=True);manager=LanguageRepair(store,io)
             report={'created_at':datetime.now(timezone.utc).isoformat(),'mode':'one-click-desktop','diagnosis':{},
                     'environment':{'fingerprint':fingerprint(store.settings())},'findings':[{'id':'target.region','status':'pass'}]}

@@ -83,6 +83,7 @@ export function renderLanguage(value={},preferences={},locked=false){
   $('language-status').classList.toggle('manual-guidance',pending.has(value.state)||value.state==='invalid');
   $('language-target').textContent='当前目标：'+(preferences.language||'尚未填写应用语言')+'。'+(value.supported===false?
     '此平台请在 Claude 实际支持的设置中确认语言。':'macOS 仅写入 Claude 专用偏好；实际界面是否支持此语言需在应用中确认。');
+  $('language-target').classList.toggle('manual-guidance',value.supported===false&&!!preferences.language);
   const blocked=locked||externalBusy||auditing;
   $('language-prepare').disabled=blocked||!value.supported||!preferences.language||pending.has(value.state)||value.state==='invalid';
   $('language-restore').disabled=blocked||!value.can_restore;

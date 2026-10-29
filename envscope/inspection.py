@@ -127,6 +127,13 @@ def repair_options(report):
             steps = ['本版本尚未接入权威 DNS 出口收集服务，授予更多权限也不能补齐。', '需要验证时，使用自己信任的权威 DNS 检测服务触发随机域名查询，核对其看到的解析来源；系统 DNS 地址不能代替此证据。', '此项保持未验证，不要求为了通过检查而修改系统 DNS。']
         elif key == 'network.route':
             steps = ['本版本尚未实现 Claude 进程与数据包的完整关联。', '需要核实时，在本机用 Wireshark 等工具观察实际 Claude 会话，并结合系统进程连接信息核对接口与目标；不要上传含会话内容的抓包。', '本项保持未验证；系统选路和 TUN 网卡仅提供辅助信息。']
+        elif key=='baseline.language' and needed:
+            system=next(iter(next((row for row in report['findings'] if row['id']=='system.inventory'),{}).get('evidence',[])),{}).get('platform')
+            if system=='Windows':
+                action='manual'
+                steps=['Windows 尚未提供 Claude 专用语言偏好的自动写入接口。',
+                       '在 Claude 的设置中选择它实际支持的语言；若缺少对应选项，先确认应用版本及本地化支持。',
+                       '在实际界面确认语言；系统显示语言不能作为 Claude 语言通过的证据。']
         if f['scope'] == 'not-selected':
             action, needed, steps = 'check', False, ['本次未勾选。先检测本项，再根据实际结果决定是否修改。']
         elif f['status'] == 'pass':
