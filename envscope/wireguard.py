@@ -13,7 +13,7 @@ import platform
 import re
 import time
 
-from .accounts import _safe_chain
+from .accounts import _safe_chain, AccountError
 
 PREFIX = 'WireGuardTunnel$'
 MAX_SERVICES = 16
@@ -220,6 +220,8 @@ class WireGuardReader:
                     row.update(verified=True, pid=config['pid'], created=process['created'], interface=row['tunnel'])
                 except OSError as error:
                     row['error'] = 'permission_denied' if isinstance(error, PermissionError) or getattr(error, 'winerror', None) == 5 else 'service-read-unavailable'
+                except AccountError:
+                    row['error'] = 'unsafe-service-path'
                 except (ValueError, KeyError, TypeError) as error:
                     row['error'] = str(error) if isinstance(error, ValueError) else 'malformed-service-record'
                 finally:

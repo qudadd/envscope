@@ -13,6 +13,7 @@ from envscope.wireguard import (WireGuardReader, WindowsServices, command_identi
                                select_service, finding, valid_service, binary_digest, PREFIX)
 from envscope.process_guard import ProcessGuard, health, validate_baseline
 from envscope.state import StateStore, validate_settings
+from envscope.accounts import AccountError
 from envscope.target_environment import build_findings, plan, fingerprint, FIELDS
 from envscope.model import Finding, Status, make_report
 from envscope.operations import Operations
@@ -139,7 +140,7 @@ class WireGuardTests(unittest.TestCase):
 
     def test_hash_checks_owned_file_and_deadline(self):
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary)/'owned-fixture.bin'; path.write_bytes(b'ENVSCOPE_FIXTURE_ONLY')
+            path = Path(temporary).resolve()/'owned-fixture.bin'; path.write_bytes(b'ENVSCOPE_FIXTURE_ONLY')
             self.assertEqual(binary_digest(path, time.monotonic()+3), hashlib.sha256(path.read_bytes()).hexdigest())
             with self.assertRaises(TimeoutError): binary_digest(path, time.monotonic()-1)
 
@@ -159,6 +160,9 @@ class WireGuardTests(unittest.TestCase):
             self.assertFalse(value['complete']); self.assertNotEqual(select_service(value)[0], 'healthy')
         value = observed(); value['services'][0]['verified'] = 'true'
         self.assertNotEqual(select_service(value)[0], 'healthy')
+        unsafe = self.reader(digest=lambda *args: (_ for _ in ()).throw(AccountError('fixture unsafe path'))).collect()
+        self.assertEqual(unsafe['services'][0]['error'], 'unsafe-service-path')
+        self.assertNotEqual(select_service(unsafe)[0], 'healthy')
 
     def test_target_requires_this_service_and_this_route_not_any_other_vpn(self):
         with tempfile.TemporaryDirectory() as home:
@@ -205,7 +209,7 @@ class WireGuardTests(unittest.TestCase):
 
     def test_service_changes_after_review_cannot_enable_guard(self):
         with tempfile.TemporaryDirectory() as temporary:
-            home = Path(temporary); store = StateStore(home/'state')
+            home = Path(temporary).resolve(); store = StateStore(home/'state')
             settings = target(usage='desktop', mode='tun', client='wireguard', wireguard_service=SERVICE, usage_country='US')
             store.save_settings({k: v for k, v in settings.items() if k != 'environment_confirmed'}, confirm_environment=True)
             io, scheduler = GuardIOFixture(), GuardSchedulerFixture()
@@ -219,7 +223,7 @@ class WireGuardTests(unittest.TestCase):
 
     def test_guard_pins_service_binary_and_stops_on_loss_without_restarting_vpn(self):
         with tempfile.TemporaryDirectory() as temporary:
-            home = Path(temporary); store = StateStore(home/'state')
+            home = Path(temporary).resolve(); store = StateStore(home/'state')
             settings = target(usage='desktop', mode='tun', client='wireguard', wireguard_service=SERVICE, usage_country='US')
             store.save_settings({k: v for k, v in settings.items() if k != 'environment_confirmed'}, confirm_environment=True)
             io, scheduler = GuardIOFixture(), GuardSchedulerFixture()
