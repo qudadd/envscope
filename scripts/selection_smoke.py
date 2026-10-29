@@ -106,6 +106,14 @@ def main():
                             expect(page.locator('[data-inspection="extra.cli_env"]')).to_contain_text('未勾选')
                             page.locator('#checks-repair').click()
                             expect(page.locator('#checks-apply')).to_be_visible()
+                            # A late status refresh must not erase a reviewed
+                            # plan when neither the catalog nor defaults changed.
+                            page.evaluate('''async()=>{
+                              const session=await(await fetch('/api/session')).json();
+                              const catalog=await(await fetch('/api/catalog',{headers:{'X-EnvScope-Token':session.token}})).json();
+                              document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:catalog}));
+                            }''')
+                            expect(page.locator('#checks-apply')).to_be_visible()
                             expect(page.locator('#checks-plan')).to_contain_text(desired)
                             assert not writes
                             page.locator('#page-checks h1').scroll_into_view_if_needed()

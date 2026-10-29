@@ -113,12 +113,13 @@ export function initInspection({run,operate,isBusy,retest}){
     $('all-checks-list').replaceChildren(...(nodes.length?nodes:[el('p',catalog.length?'没有符合条件的项目，试试清除搜索或切换筛选。':'检查目录尚未取得，请检查本地服务连接。','note')]));
   }
   const applyDefaults=config=>{
-    if(!config)return;
+    if(!config)return false;
     const key=JSON.stringify(config.default_checks);
-    if(defaultsKey!==key){defaultsKey=key;selection=new Set(config.default_checks||catalog.map(c=>c.id));initialized=true;}
+    if(defaultsKey!==key){defaultsKey=key;selection=new Set(config.default_checks||catalog.map(c=>c.id));initialized=true;return true;}
+    return false;
   };
   document.addEventListener('envscope-check-preferences-changed',event=>{applyDefaults(event.detail);render();});
-  document.addEventListener('envscope-catalog',event=>{const next=event.detail.checks||catalog;if(JSON.stringify(next)!==JSON.stringify(catalog)){catalog=next;if(!initialized){selection=new Set(catalog.map(c=>c.id));initialized=true;}render();}applyDefaults(event.detail.check_config);render();showRecovery(event.detail.region_recovery);});
+  document.addEventListener('envscope-catalog',event=>{const next=event.detail.checks||catalog;let changed=false;if(JSON.stringify(next)!==JSON.stringify(catalog)){catalog=next;if(!initialized){selection=new Set(catalog.map(c=>c.id));initialized=true;}changed=true;}if(applyDefaults(event.detail.check_config)||changed)render();showRecovery(event.detail.region_recovery);});
   document.addEventListener('envscope-report',event=>{
     report=event.detail.report;phase='complete';source=event.detail.source||'current';
     $('all-checks-context').textContent=({history:'历史报告',maintenance:'后台巡检',current:'本次检测'})[source]+' · '+new Date(report.created_at).toLocaleString()+(report.selection?.mode==='selected'?' · 部分检查':' · 全部检查')+'。未知与未检测不算通过；历史结果不代表当前状态。';render();
