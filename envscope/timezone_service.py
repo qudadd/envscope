@@ -65,8 +65,8 @@ def daemon_bytes(layout):
 
 
 def bundle_worker(root=None,cache=None,*,component='timezone'):
-    if component not in ('timezone','network'):raise ValueError('不支持的系统辅助程序')
-    binary=component+'-helper';label='时区' if component=='timezone' else '网络'
+    if component not in ('timezone','network','components'):raise ValueError('不支持的系统辅助程序')
+    binary=component+'-helper';label={'timezone':'时区','network':'网络','components':'组件迁移'}[component]
     root=Path(root) if root is not None else Path(__file__).resolve().parent/'native-runtime'
     try:
         metadata=root/(binary+'.json')

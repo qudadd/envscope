@@ -9,7 +9,7 @@ from envscope import __release__
 
 
 def build(destination=None, fixture_header=None, *, component='timezone'):
-    if component not in ('timezone','network'):raise ValueError('Unknown native component')
+    if component not in ('timezone','network','components'):raise ValueError('Unknown native component')
     if platform.system()!='Darwin':
         raise RuntimeError('The timezone worker is built only on macOS')
     root=Path(__file__).resolve().parents[1]
@@ -20,6 +20,7 @@ def build(destination=None, fixture_header=None, *, component='timezone'):
     if fixture_header:command+=['-include',str(Path(fixture_header).resolve())]
     command += [str(root/('native/'+component+'_worker.c')),'-framework','CoreFoundation']
     if component=='network':command+=['-framework','SystemConfiguration']
+    if component=='components':command+=['-framework','ServiceManagement']
     command+=['-o',str(binary)]
     try:subprocess.run(command,check=True,capture_output=True)
     except subprocess.CalledProcessError as error:
