@@ -487,8 +487,12 @@ class SolutionPlans:
             return bool(scope & set(keys)) if scope is not None else check_id in (None,summary_id)
         tun_needed=target.get('connection_mode')=='tun' and scope_chosen(('baseline.tun','extra.runtime_tun','target.tun_route'),'tun') and (
             findings.get('baseline.tun',{}).get('status') in ('warn','fail','unknown') or findings.get('target.tun_route',{}).get('status')=='fail')
+        observed_proxies={row.get('proxy_endpoint','').rstrip('/') for row in findings.get('http.egress',{}).get('evidence',[]) if row.get('proxy_endpoint')}
+        expected_proxy=(target.get('target_proxy') or (next(iter(observed_proxies)) if len(observed_proxies)==1 else '')).rstrip('/')
+        listener_offline=bool(expected_proxy) and any(row.get('tcp_accepts') is False and row.get('endpoint','').rstrip('/')==expected_proxy
+            for row in findings.get('extra.proxy_listener',{}).get('evidence',[]))
         startup_needed=target.get('connection_mode') in ('tun','http_proxy') and scope_chosen(('baseline.proxy','extra.proxy_listener','target.path'),'proxy') and (
-            findings.get('baseline.proxy',{}).get('status') in ('warn','fail') or findings.get('extra.proxy_listener',{}).get('status')=='fail')
+            findings.get('baseline.proxy',{}).get('status') in ('warn','fail') or listener_offline)
         if self.client and (tun_needed or startup_needed):
             value=self.client.prepare(report,tun=tun_needed)
             if value.get('state')=='planned':

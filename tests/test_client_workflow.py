@@ -81,6 +81,20 @@ class ClientWorkflowTests(unittest.TestCase):
         report=self.report();value=self.ops.solutions.prepare(report,check_ids=['target.dns'])
         self.assertEqual(value['state'],'guided');self.assertEqual(self.io.calls,[])
         self.assertFalse(self.client.plans);self.assertFalse(self.scheduler.calls)
+        # Real collectors report absent cores as UNKNOWN and refused listeners
+        # as WARN. A stopped, explicitly selected HTTP client is still startable.
+        self.store.save_settings({'connection_mode':'http_proxy','target_proxy':'http://127.0.0.1:7897','protection':'standard','ipv6_mode':'observe'},confirm_environment=True)
+        self.io.running=False;report=self.report()
+        next(f for f in report['findings'] if f['id']=='baseline.proxy')['status']='unknown'
+        listener=next(f for f in report['findings'] if f['id']=='extra.proxy_listener')
+        listener.update(status='warn',evidence=[{'endpoint':'http://127.0.0.1:7897','tcp_accepts':False}])
+        value=self.ops.solutions.prepare(report,check_ids=['extra.proxy_listener'])
+        self.assertTrue(value['staged']);self.assertEqual(self.ops.solutions.apply(value['plan_id'],report,True)['state'],'completed')
+        self.assertIn(('start-proxy',),self.io.calls)
+        # An unrelated configured port must not start a different client.
+        self.io.running=False;listener['evidence'][0]['endpoint']='http://127.0.0.1:9999';calls=list(self.io.calls)
+        self.assertEqual(self.ops.solutions.prepare(report,check_ids=['extra.proxy_listener'])['state'],'guided')
+        self.assertEqual(self.io.calls,calls)
 
     def test_individual_tun_selection_and_recovery_use_the_same_coordinator(self):
         report=self.report()

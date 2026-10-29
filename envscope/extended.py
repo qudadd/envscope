@@ -156,7 +156,7 @@ def extended_checks(inventory, network, local, context):
 GUIDANCE = {"http.egress": "核对代理客户端、当前网络与探测服务响应；可在工具页测试指定代理。", "http.ipv6": "结合 IPv6 配置与实际出口判断；无响应不能证明已关闭。",
             "udp.stun": "确认代理支持 UDP，或核对显式拒绝策略；超时不能判为无旁路。", "dns.leak": "本版本没有权威 DNS 收集服务，此项保留未知。",
             "network.route": "下方目标选路提供系统证据；进程级流量仍需独立验证。", "browser.webrtc": "在实际使用的浏览器重测，核对扩展与 WebRTC 策略。",
-            "baseline.guard": "检查原版守护任务是否启用且运行；缺少时可从维护页安装。", "baseline.rules": "检查内核模式、运行规则顺序、目标代理组及所选节点的 UDP 能力。"}
+            "baseline.guard": "在持续维护预览原生进程守护；提交启动后等待新心跳，再核对指定接口 / 端口及任务归属。", "baseline.rules": "检查内核模式、运行规则顺序、目标代理组及所选节点的 UDP 能力。"}
 
 
 def add_guidance(findings):
