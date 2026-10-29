@@ -202,7 +202,7 @@ def main():
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), name
                 page.get_by_role('button', name='工具', exact=True).click()
                 page.locator('#project-comparison>summary').click()
-                expect(page.locator('#project-comparison')).to_contain_text('仍有维护核心依赖')
+                expect(page.locator('#project-comparison')).to_contain_text('仍需维护核心或手动处理')
                 # A visible, idle page renews activity without running diagnostics.
                 page.clock.install()
                 server.last_activity = time.monotonic() - 901
