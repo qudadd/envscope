@@ -28,7 +28,7 @@ def native_write(key, value, system=None, runner=_run):
         command=([str(Path(os.environ.get('SystemRoot','C:/Windows'))/'System32/tzutil.exe'),'/s',value]
                  if system=='Windows' else ['/usr/sbin/systemsetup','-settimezone',value])
         if system not in ('Windows','Darwin') or runner(command,timeout=15).returncode:
-            raise ValueError('后台没有修改时区的权限；请在系统设置处理，或配置 macOS 原版时区守护')
+            raise ValueError('后台没有修改时区的权限；请在持续维护页授权 macOS 系统时区守护，或在系统设置处理')
     else:
         set_system_value(system,key,value,runner)
 
@@ -86,15 +86,19 @@ def launch_proxy(client,system=None):
 
 
 class Watchdog:
-    def __init__(self,home=None,system=None,reader=None,writer=None,controller=None,clients=None,launcher=None,listener=None,tester=None,sleeper=None):
+    def __init__(self,home=None,system=None,reader=None,writer=None,controller=None,clients=None,launcher=None,listener=None,tester=None,sleeper=None,authority=None):
         self.home=Path(home or Path.home());self.system=system or platform.system()
         self.reader=reader or collect;self.writer=writer or (lambda k,v:native_write(k,v,self.system))
         self.controller=controller or (lambda:discover_controller(self.home,self.system))
         self.clients=clients or (lambda:proxy_apps(self.home,self.system));self.launcher=launcher or (lambda c:launch_proxy(c,self.system))
         self.listener=listener or proxy_alive;self.tester=tester or proxy_works;self.sleep=sleeper or time.sleep
+        self.authority=authority
+        if authority is None and self.system=='Darwin' and platform.system()=='Darwin' and reader is None and writer is None:
+            from .timezone_service import NativeTimezoneIO
+            self.authority=NativeTimezoneIO().inspect
 
     def options(self):
-        return {'clients':self.clients(),'note':'仅重开已安装并明确选择的客户端；不安装、强杀进程或回退直连。macOS 时区写入需要现有系统权限，权限不足时记录待处理。'}
+        return {'clients':self.clients(),'note':'仅重开已安装并明确选择的客户端；不安装、强杀进程或回退直连。macOS 时区可在本页单独授权系统守护；用户任务不会弹出管理员授权。'}
 
     def validate(self,baseline):
         from .region_profiles import profiles
@@ -178,6 +182,15 @@ class Watchdog:
                     drift=not good or row is not None and row['now']!=target['node']
                 else:drift=observed.get(key)!=target
                 if not drift:mark('healthy','批准的'+label+'基线正常');continue
+                if key=='timezone' and self.system=='Darwin' and self.authority:
+                    try:authority=self.authority()
+                    except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):authority={}
+                    if authority.get('registered') and not authority.get('pending') and authority.get('baseline',{}).get('target')==target:
+                        heartbeat=authority.get('status',{});stamp=heartbeat.get('at_epoch')
+                        healthy=(type(stamp) in (int,float) and 0<=now-stamp<180
+                                 and heartbeat.get('state') in ('healthy','restored','repairing','cooldown') and heartbeat.get('initial') is False)
+                        mark('delegated' if healthy else 'attention','时区漂移已交给获授权的系统守护，等待下次 60 秒检查并读回。' if healthy else '已注册系统时区守护，但心跳过期或恢复已暂停；请在本页核对状态并重新批准。')
+                        continue
                 attempts=record.get('attempts',[])
                 if any(not isinstance(t,(int,float)) or t>now for t in attempts):raise ValueError('守护时间记录异常，请核对系统时钟')
                 attempts=[t for t in attempts if now-t<86400]

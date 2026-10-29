@@ -27,7 +27,7 @@ def main():
                 or "__pycache__" in path.parts or name.endswith((".private.json", ".private.jsonl", ".private.bin", ".log", ".pyc"))):
             errors.append("Private/build artifact tracked: " + name)
         file = root / path
-        if file.suffix.lower() in {".py", ".mjs", ".js", ".json", ".md", ".yml", ".yaml", ".ps1", ".sh", ".command", ".txt"}:
+        if file.suffix.lower() in {".py", ".c", ".mjs", ".js", ".json", ".md", ".yml", ".yaml", ".ps1", ".sh", ".command", ".txt"}:
             if pattern.search(file.read_text(encoding="utf-8-sig", errors="replace")):
                 errors.append("Credential-like content requires review: " + name)
     vendor = LegacyBridge()._vendor_integrity()

@@ -41,7 +41,7 @@ def proxy_works(proxy):
 
 
 class Maintenance:
-    def __init__(self, store, remedies=None, scheduler=None, auditor=None, proxy_tester=None, home=None, watchdog=None):
+    def __init__(self, store, remedies=None, scheduler=None, auditor=None, proxy_tester=None, home=None, watchdog=None, timezone_service=None):
         self.store = store
         self.home = Path(home).resolve() if home else Path.home().resolve()
         self.root = store.root / "maintenance"
@@ -51,6 +51,7 @@ class Maintenance:
         self.auditor, self.proxy_tester = auditor, proxy_tester or proxy_works
         from .watchdog import Watchdog
         self.watchdog=watchdog or Watchdog(self.home)
+        self.timezone_service=timezone_service
         self.plans, self.memory = {}, {}
         self.mutex = threading.Lock()
 
@@ -143,6 +144,7 @@ class Maintenance:
             if proxy and self.proxy_tester(proxy) is not True:
                 return {"state": "blocked", "reason": "基线代理的 API TLS 连接尚未验证，不启用自动配置恢复。先测试并修复代理。"}
         baseline,guard_effects={},[]
+        timezone_plan=None
         if watchdog:
             from .regions import region_finding, PARTIAL
             if (not self.store.settings().get('environment_confirmed') or not self.store.settings().get('usage_country')
@@ -151,6 +153,15 @@ class Maintenance:
                     or not any(f['id']=='target.region' and f['status']=='pass' for f in report.get('findings',[]))):
                 return {'state':'blocked','reason':'请先确认官方支持的实际地区，并修复环境后保存守护基线。'}
             baseline,guard_effects=self.watchdog.prepare(self.store.settings(),watchdog)
+            if baseline.get('timezone') and self.timezone_service and self.timezone_service.system=='Darwin':
+                status=self.timezone_service.status()
+                if not (status.get('installed') and status.get('registered') and status.get('owner')
+                        and status.get('target')==baseline['timezone'] and not status.get('needs_update')
+                        and status.get('state') in ('active','waiting')):
+                    timezone_plan=self.timezone_service.prepare(report)
+                    if timezone_plan.get('state')!='planned':return timezone_plan
+                    guard_effects.extend(timezone_plan['effects'])
+                    guard_effects.append('若后续用户巡检任务注册失败，撤销本次时区服务操作并读回旧基线；可能再次请求系统授权，取消时保留恢复入口。')
         schedule = self.scheduler.build(interval)
         previous = self._config()
         current = self.scheduler.inspect(previous.get("schedule"))
@@ -170,7 +181,7 @@ class Maintenance:
         if baseline:effects.append('守护每项至少间隔 5 分钟、24 小时最多尝试恢复 3 次；失败留痕，反复漂移暂停并提示重新审核')
         token = secrets.token_urlsafe(20)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"],
-                              "settings_hash": fingerprint(self.store.settings()), "file_hash": file_hash,
+                              "settings_hash": fingerprint(self.store.settings()), "file_hash": file_hash,"timezone_plan":timezone_plan,
                               "config": {"version": 1, "enabled": False, "interval": interval, "auto_restore": auto_restore,
                                          "approved": approved, "watchdog":baseline,"schedule": schedule, "created_at": utc_now()}}}
         return {"state": "planned", "plan_id": token, "effects": effects,
@@ -192,12 +203,30 @@ class Maintenance:
             del self.plans[token]
             previous = self._config()
             config = {**config, "settings_hash": plan["settings_hash"]}
+            root_plan=plan.get('timezone_plan')
+            if root_plan:
+                result=self.timezone_service.apply(root_plan['plan_id'],True)
+                self._event('timezone_service',result.get('reason','系统时区服务操作已返回'),state=result['state'],nonce=root_plan['transaction_nonce'])
+                if result['state']!='completed':
+                    return {'state':'partial','reason':'系统时区守护未完成，尚未启用本次巡检。'+result.get('reason',''),
+                            'timezone_service':result,'needs_retest':True}
+            elif config.get('watchdog',{}).get('timezone') and self.timezone_service and self.timezone_service.system=='Darwin':
+                root_status=self.timezone_service.status()
+                if not (root_status.get('installed') and root_status.get('registered') and root_status.get('owner')
+                        and root_status.get('target')==config['watchdog']['timezone'] and not root_status.get('pending')):
+                    return {'state':'retest_required','reason':'系统时区守护在预览后变化，请重新生成维护方案。'}
             # Fail closed: a registered job cannot repair until enabled is saved.
-            self._write("config", config)
             try:
+                self._write("config", config)
                 self.scheduler.install(config["schedule"], previous.get("schedule"))
             except (OSError, ValueError):
                 self._event("schedule_failed", "后台注册未确认，持续维护和配置自动恢复保持停用。")
+                if root_plan:
+                    restored=self.timezone_service.rollback_latest(root_plan['transaction_nonce'],True,
+                                                                  unchanged_signature=root_plan['before_signature'])
+                    self._event('timezone_service_compensation','用户任务注册失败后的系统时区服务回滚',state=restored['state'])
+                    return {'state':'failed' if restored['state']=='completed' else 'partial','timezone_service':restored,
+                            'needs_retest':True,'reason':'用户巡检任务未确认注册，未启用本次自动恢复。'+restored.get('reason','')}
                 return {"state": "failed", "reason": "系统未确认后台任务注册成功。未启用自动恢复，请检查任务权限后重新生成方案。"}
             if config.get('watchdog'):
                 approved={k:v for k,v in config['watchdog'].items() if k!='proxy'}
@@ -221,7 +250,8 @@ class Maintenance:
                 self._write("config", config)
             try:
                 self.scheduler.remove(config.get("schedule"))
-                result = {"state": "disabled", "reason": "持续维护已停用，系统任务已移除。保留检测记录和私有备份，不恢复系统设置。"}
+                note='已单独授权的 macOS 系统时区守护需在下方预览停用；本次不改系统时区。' if self.timezone_service and self.timezone_service.system=='Darwin' else '不恢复系统设置。'
+                result = {"state": "disabled", "reason": "持续维护已停用，用户巡检任务已移除。保留检测记录和私有备份。"+note}
             except (OSError, ValueError):
                 result = {"state": "partial", "reason": "自动恢复已停用，但系统任务未确认移除。保留任务文件供核对；后台再次唤起也不会执行恢复。"}
             self._event("disabled", result["reason"])
@@ -244,7 +274,7 @@ class Maintenance:
             waiting_state = "stale" if waiting_age is None or waiting_age < 0 or waiting_age > config.get("interval", 15) * 60 + 180 else "waiting"
             state = ("disabled" if not enabled else "schedule_unverified" if not scheduler.get("registered") else "failed" if stats.get("last_state") == "failed"
                      else waiting_state if elapsed is None else "stale" if elapsed < 0 or elapsed > config["interval"] * 60 + 180
-                     else "attention" if config.get("auto_restore") and stats.get("restore_state") in ("blocked", "unverified", "paused") or any(r.get('state') in ('attention','paused','cooldown') for r in stats.get('watchdog',{}).values()) else "active")
+                     else "attention" if config.get("auto_restore") and stats.get("restore_state") in ("blocked", "unverified", "paused") or any(r.get('state') in ('attention','paused','cooldown','delegated') for r in stats.get('watchdog',{}).values()) else "active")
             events = [dict(event) for event in events[-20:] if isinstance(event, dict)]
             for event in events:
                 if not isinstance(event.get("backups", []), list):

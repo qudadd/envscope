@@ -144,11 +144,12 @@ def discover_controller(home=None, system=None, environ=None):
 
 
 class RegionSetup:
-    def __init__(self, store, reader, home, system=None, writer=None, controller=None):
+    def __init__(self, store, reader, home, system=None, writer=None, controller=None, timezone_service=None):
         self.store, self.reader, self.home = store, reader, home
         self.system = system or platform.system()
         self.writer = writer or (lambda k, v: set_system_value(self.system, k, v))
         self.controller = controller or (lambda: discover_controller(self.home, self.system))
+        self.timezone_service=timezone_service
         self.plans = {}
         self._recovery = None
 
@@ -191,6 +192,17 @@ class RegionSetup:
                     raise ValueError('未读取到原' + label + '，无法建立恢复记录；请先处理读取问题')
                 changes[key] = selected[key]
                 effects.append(label + '：' + before[key] + ' → ' + selected[key])
+        timezone_plan=None
+        if 'timezone' in components and self.system=='Darwin' and self.timezone_service:
+            status=self.timezone_service.status()
+            if status.get('pending') or status.get('state')=='conflict' or status.get('state')=='attention' and 'installed' not in status:
+                return {'state':'blocked','reason':status.get('reason','先处理系统时区守护状态。')}
+            if status.get('installed') and ('timezone' in changes or status.get('target')!=selected['timezone'] or status.get('needs_update')):
+                timezone_plan=self.timezone_service.prepare(report)
+                if timezone_plan.get('state')!='planned':return timezone_plan
+                changes['timezone']=selected['timezone']
+                effects.extend(timezone_plan['effects'])
+                effects.append('同步更新已授权的系统守护基线；撤销地区配置时同时恢复原守护服务、原时区和尝试记录。')
         controller = None
         if 'node' in components:
             if settings.get('connection_mode') == 'direct':
@@ -207,7 +219,8 @@ class RegionSetup:
             return {'state': 'guided', 'reason': '所选配置已经一致，无需写入；出口仍以实际复检为准'}
         token = secrets.token_urlsafe(20)
         record = {'before': before, 'changes': changes, 'group': group, 'identity': controller.identity if controller else None,
-                  'fingerprint': fingerprint(settings), 'report_id': report['report_id'], 'deadline': time.monotonic() + 90}
+                  'fingerprint': fingerprint(settings), 'report_id': report['report_id'], 'deadline': time.monotonic() + 90,
+                  'timezone_plan':timezone_plan}
         self.plans = {token: record}
         return {'state': 'planned', 'plan_id': token, 'effects': effects,
                 'reason': '确认后修改并读回。时区可能触发系统授权；地区格式需重开应用。保留原值供撤销，不修改系统显示语言或实际所在地。自动时区服务可能再次覆盖手动值，需在系统设置核对。'}
@@ -228,6 +241,10 @@ class RegionSetup:
         # Persist intent before the first mutation, so an interrupted process leaves recovery instructions.
         receipt = {k: plan[k] for k in ('before', 'changes', 'group', 'identity')}
         receipt.update(state='in_progress', applied=[])
+        if plan.get('timezone_plan'):
+            root_plan=plan['timezone_plan']
+            receipt['native_timezone']={k:root_plan[k] for k in ('transaction_nonce','before_signature')}
+            receipt['native_timezone']['state']='planned'
         self._save_recovery(receipt)
         steps = []
         for key in ('node', 'timezone', 'locale'):
@@ -237,7 +254,12 @@ class RegionSetup:
                 if key == 'node':
                     controller.select(plan['group'], plan['changes'][key], plan['before'][key])
                 else:
-                    self.writer(key, plan['changes'][key])
+                    if key=='timezone' and plan.get('timezone_plan'):
+                        result=self.timezone_service.apply(plan['timezone_plan']['plan_id'],True)
+                        receipt['native_timezone']['state']=result['state']
+                        self._save_recovery(receipt)
+                        if result['state']!='completed':raise ValueError('系统时区服务操作未完成')
+                    else:self.writer(key, plan['changes'][key])
                     if current_region(self.reader())[key].replace('_', '-').lower() != plan['changes'][key].replace('_', '-').lower():
                         raise ValueError('系统读回尚未符合目标；请重开应用并复检，不能据命令成功判为完成')
                 receipt['applied'].append(key)
@@ -273,6 +295,16 @@ class RegionSetup:
             if key not in record['changes']:
                 continue
             try:
+                if key=='timezone' and record.get('native_timezone'):
+                    if not self.timezone_service:raise ValueError('系统时区服务入口不可用')
+                    native=record['native_timezone']
+                    result=self.timezone_service.rollback_latest(native['transaction_nonce'],True,
+                                                                 unchanged_signature=native.get('before_signature'))
+                    if result['state']!='completed' or current_region(self.reader())[key]!=record['before'][key]:
+                        raise ValueError('原时区与守护基线尚未确认恢复')
+                    native['state']='restored';self._save_recovery(record)
+                    results.append({'item':key,'state':'restored'})
+                    continue
                 if key == 'node':
                     controller = self.controller()
                     if controller.identity != record['identity']:

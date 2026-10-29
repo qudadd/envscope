@@ -15,7 +15,7 @@ import tempfile
 import time
 import uuid
 
-from envscope.timezone_service import Layout,NativeTimezoneIO,render_transaction,render_recovery,privileged_script
+from envscope.timezone_service import Layout,NativeTimezoneIO,render_transaction,render_recovery,render_undo,privileged_script
 from scripts.build_timezone_worker import build
 
 
@@ -115,6 +115,15 @@ case "$2" in Asia/Shanghai|America/New_York|Europe/London) ;; *) exit 2;; esac
             execute(script)
             updated=wait_status(io,lambda x:x['status'].get('initial') is False and x['status'].get('target')=='Europe/London')
             assert updated['baseline']['original']=='Asia/Shanghai';phases.append('updated')
+            # Restore exact previous files and attempt history, then update again.
+            undo_snapshot=snapshot();prior_hashes=undo_snapshot['transaction']['hashes']
+            execute(render_undo(layout,undo_snapshot,worker))
+            undone=io.inspect()
+            assert undone['baseline']['target']=='America/New_York' and undone['hashes']==prior_hashes
+            assert undone['outcome']['state']=='restored' and not undone['pending']
+            assert str((root/'localtime').resolve()).endswith('/America/New_York');phases.append('committed_update_undone')
+            script,_=render_transaction(layout,snapshot(),worker,'install','Europe/London',os.getuid())
+            execute(script)
             # A failed initial apply must restore old files, old timezone and
             # original registration; the failed candidate remains in a backup.
             sudo('/usr/bin/touch '+shlex.quote(str(root/'fail-setter')))
@@ -136,10 +145,16 @@ case "$2" in Asia/Shanghai|America/New_York|Europe/London) ;; *) exit 2;; esac
             execute(script)
             ended=io.inspect();assert not ended['registered'] and not ended['baseline'] and not ended['pending']
             assert str((root/'localtime').resolve()).endswith('/Asia/Shanghai');phases.append('removed_and_restored')
+            execute(render_undo(layout,snapshot(),worker))
+            assert io.inspect()['baseline']['target']=='Europe/London' and io.inspect()['registered']
+            phases.append('uninstall_undone')
+            script,_=render_transaction(layout,snapshot(),worker,'remove',owner_uid=os.getuid(),restore=True)
+            execute(script)
+            assert not io.inspect()['registered'] and str((root/'localtime').resolve()).endswith('/Asia/Shanghai')
             logs='\n'.join(p.read_text() for p in root.glob('*.private.jsonl'))
             (output/'fixture-events.txt').write_text(logs)
             proof.update(state='passed',phases=phases,root_owned_worker=True,configuration_readback=True,
-                         drift_repair=True,update=True,rollback=True,recovery=True,uninstall=True)
+                         drift_repair=True,update=True,rollback=True,recovery=True,uninstall=True,committed_undo=True,uninstall_undo=True)
         finally:
             # Only this UUID-owned service and exact checked root are removed.
             assert root.parent==Path('/Library/PrivilegedHelperTools') and root.name=='io.qudadd.envscope.timezone.ci-'+nonce

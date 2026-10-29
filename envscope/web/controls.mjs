@@ -4,6 +4,7 @@ import {DISCONNECTED, disconnected} from './connection.mjs';
 import {initProcessGuard,renderProcessGuard} from './process_guard_ui.mjs';
 import {initAccountRecovery,renderAccountRecovery} from './account_recovery_ui.mjs';
 import {initRouting,renderRouting} from './routing_ui.mjs';
+import {initTimezoneService,renderTimezoneService} from './timezone_ui.mjs';
 const $=id=>document.getElementById(id);
 const LABELS={install:"安装维护核心与后台保护",uninstall:"卸载原版维护组件",status:"读取原版账号状态",check:"原版概要检测",checkdetail:"原版完整检测",fix:"修复环境", "update-check":"检查维护核心更新","update-apply":"更新维护核心","set-region":"按出口重设系统地区","set-client":"更换原版代理客户端",fingerprint:"设备信息","cli-info":"CLI 安装信息","open-safe":"打开临时浏览器","snapshot-export":"导出加密 DMG","snapshot-import":"导入加密 DMG","diagnose-proxy":"原版代理诊断"};
 import {watchdogSelection} from './watchdog_ui.mjs';
@@ -30,7 +31,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     try{
     const response=await fetch("/api/catalog",{signal:controller.signal,headers:{"X-EnvScope-Token":session.token},cache:"no-store"});
     if(!response.ok)throw new Error("无法读取本机功能列表，请刷新状态或重新打开程序。");
-    catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);renderBackups();$('catalog-error').hidden=true;
+    catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);renderTimezoneService(catalog.timezone_service,busy);renderBackups();$('catalog-error').hidden=true;
     document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{desktop:catalog.desktop,learning:catalog.learning,settings:catalog.settings,maintenance:catalog.maintenance,proxies:catalog.proxies,checks:catalog.checks,features:catalog.features}}));
     const options=[el("option","手动填写")];options[0].value="";
     for(const proxy of catalog.proxies||[]){const option=el("option",proxy.url+" · "+proxy.sources.join(" / "));option.value=proxy.url;options.push(option);}
@@ -54,7 +55,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
-    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button')].map(node=>[node,node.disabled]);
+    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button, #timezone-service-panel button, #timezone-service-panel input')].map(node=>[node,node.disabled]);
     for(const [node] of disabledBefore)node.disabled=true;
     busy=true;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     $(output).scrollIntoView({block:'nearest'});
@@ -68,7 +69,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(id==='archive-choose-file'){if(result.file)$('encrypted-path').value=result.file;$(output).textContent=result.reason||(result.file?'文件位置已选择。':'已取消选择。');}
       else if(['archive-export','archive-import','archive-cleanup','snapshot-export','snapshot-import','browser-cleanup','open-safe'].includes(id))$(output).textContent=[result.reason,result.boundary].filter(Boolean).join('\n');
       else if(['cli-info','fingerprint'].includes(id)&&result.rows)information(result);
-      else if(id.startsWith('maintenance-')||id.startsWith('guard-')||id.startsWith('routing-'))$(output).textContent=result.reason||({planned:'方案已生成，请核对下方影响。',enabled:'持续维护已启用。',disabled:'持续维护已停用。',completed:'已刷新维护结果。',confirmation_required:'请先审核方案并确认。'})[result.state]||'本次操作尚未确认完成。';
+      else if(id.startsWith('maintenance-')||id.startsWith('guard-')||id.startsWith('routing-')||id.startsWith('timezone-service-'))$(output).textContent=result.reason||({planned:'方案已生成，请核对下方影响。',enabled:'持续维护已启用。',disabled:'持续维护已停用。',completed:'已刷新维护结果。',confirmation_required:'请先审核方案并确认。'})[result.state]||'本次操作尚未确认完成。';
       else if(result.state==="completed"&&["settings-save","settings-restore"].includes(id))$(output).textContent=id==="settings-save"?"已保存，后续检测使用新偏好。":"已恢复上次偏好。";
       else if(result.state==="completed"&&id==="account-label")$(output).textContent="账号名称已保存。";
       else if(id.startsWith('account-recovery-'))$(output).textContent=[result.reason,result.manual].filter(Boolean).join('\n');
@@ -87,7 +88,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
         try{await refresh();}catch{$(output).append(el('p','操作已返回，但功能列表刷新失败。请重新打开程序核对状态。','note'));}
       }return result;
     }catch(error){if(error instanceof TypeError){disconnected();$(output).textContent=DISCONNECTED;}else $(output).textContent=error.name==="AbortError"?"等待已超时。操作可能仍在后台执行；请查看实际状态，避免重复执行。":String(error.message);if(/^(archive|snapshot)-/.test(id)){ $(output).classList.add('manual-guidance'); try{await refresh();}catch{} }return null;}
-    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();setParameters();renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);}}
+    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();setParameters();renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);renderTimezoneService(catalog.timezone_service);}}
   }
   function renderAccounts(){
     const value=catalog.accounts;
@@ -188,6 +189,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   }
   initProcessGuard({action,reportId:()=>lastReportId});
   initRouting({action,reportId:()=>lastReportId,retest});
+  initTimezoneService({action,reportId:()=>lastReportId,retest});
   $('upkeep-prepare').addEventListener('click',async()=>{
     $('upkeep-plan').replaceChildren();
     const value=await action('maintenance-plan',{report_id:lastReportId,interval:Number($('upkeep-interval').value),auto_restore:$('upkeep-restore').checked,watchdog:watchdogSelection('upkeep')},'upkeep-output');
@@ -291,6 +293,10 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(!$('page-upkeep').hidden){
         const guardResponse=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'guard-status',params:{},confirmed:false})});
         if(guardResponse.ok){const value=await guardResponse.json();renderProcessGuard(value.guard,catalog?.settings||{});}
+        if(catalog?.timezone_service?.supported){
+          const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'timezone-service-status',params:{},confirmed:false})});
+          if(response.ok)renderTimezoneService(await response.json());
+        }
       }
     }catch{/* Keep the explicit last completion time; never fabricate a new heartbeat. */}
   },15000);

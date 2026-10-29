@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock
 
 from envscope.watchdog import Watchdog, native_write
 from envscope.maintenance import Maintenance
@@ -13,6 +14,18 @@ from scripts.environment_fixtures import report, target
 
 
 class WatchdogTests(unittest.TestCase):
+    def test_authorized_mac_service_owns_timezone_repairs_without_duplicate_writes(self):
+        from datetime import datetime,timezone
+        now=datetime.now(timezone.utc).timestamp()
+        writer=Mock()
+        authority=lambda:{'registered':True,'pending':False,'baseline':{'target':'America/New_York'},
+                          'status':{'at_epoch':now,'state':'healthy','initial':False}}
+        guard=Watchdog(system='Darwin',reader=lambda:{'timezone_iana':'Asia/Shanghai'},writer=writer,authority=authority)
+        stats={};events=[]
+        self.assertFalse(guard.run({'timezone':'America/New_York'},stats,lambda *a,**k:events.append(a),lambda:None))
+        self.assertEqual(stats['watchdog']['timezone']['state'],'delegated')
+        self.assertEqual(stats['watchdog']['timezone']['attempts'],[])
+        writer.assert_not_called()
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.home=Path(self.temp.name).resolve();self.events=[];self.writes=[];self.persisted=[]

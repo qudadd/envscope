@@ -149,6 +149,7 @@ class Operations:
         from .timezone_service import TimezoneService
         from .inventory import collect
         self.timezone_service = TimezoneService(store,lambda:(self.environment_reader or collect)())
+        self.maintenance.timezone_service=self.timezone_service
         from .process_guard import ProcessGuard
         self.process_guard = process_guard or ProcessGuard(store, self.home)
         from .routing import Routing
@@ -157,7 +158,7 @@ class Operations:
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing)
         from .region_setup import RegionSetup
         from .inventory import collect
-        self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home)
+        self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home,timezone_service=self.timezone_service)
         self.inspection_plans = {}
 
     def _open_remedy(self, action):
@@ -230,11 +231,13 @@ class Operations:
         if action.startswith('timezone-service-'):
             allowed={'timezone-service-status':set(),'timezone-service-plan':{'report_id','remove','restore'},
                      'timezone-service-apply':{'plan_id'},'timezone-service-recovery-plan':set(),
-                     'timezone-service-recover':{'plan_id'}}
+                     'timezone-service-recover':{'plan_id'},'timezone-service-undo-plan':set(),'timezone-service-undo':{'plan_id'}}
             if action not in allowed or set(params)-allowed[action]:raise ValueError('时区服务参数无效')
             if action=='timezone-service-status':return self.timezone_service.status()
             if action=='timezone-service-recovery-plan':return self.timezone_service.prepare_recovery()
             if action=='timezone-service-recover':return self.timezone_service.recover(params.get('plan_id'),confirmed)
+            if action=='timezone-service-undo-plan':return self.timezone_service.prepare_undo()
+            if action=='timezone-service-undo':return self.timezone_service.undo(params.get('plan_id'),confirmed)
             if action=='timezone-service-plan':
                 if not params.get('remove',False) and (not report or params.get('report_id')!=report.get('report_id')):
                     return {'state':'retest_required','reason':'请先完成新的环境检测，再申请系统时区守护。'}

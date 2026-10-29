@@ -5,10 +5,14 @@ on:
     branches: [codex/native-timezone-service]
     paths:
       - native/timezone_worker.c
+      - envscope/__init__.py
       - envscope/timezone_service.py
       - scripts/build_timezone_worker.py
       - scripts/timezone_acceptance.py
       - tests/test_timezone_service.py
+      - tests/test_timezone_integration.py
+      - envscope/maintenance.py
+      - envscope/region_setup.py
       - .github/workflows/timezone.yml
 permissions:
   contents: read
@@ -28,7 +32,7 @@ jobs:
       # This isolated component uses the stdlib and CoreFoundation. Full runtime
       # dependencies are verified separately by checks and desktop packages.
       - run: python -m pip install --no-deps .
-      - run: python -m unittest tests.test_timezone_service -q
+      - run: python -m unittest tests.test_timezone_service tests.test_timezone_integration -q
       - name: Compile production worker (no installation)
         run: python -m scripts.build_timezone_worker
       - name: Actual root fixture lifecycle, never real timezone writes

@@ -42,7 +42,14 @@ def main(output=None):
         import cryptography
         result.update(encrypted_archive_roundtrip=True,cryptography_version=cryptography.__version__)
         result['native_dmg_roundtrip'] = 'not_applicable'
+        result['native_timezone_worker'] = 'not_applicable'
         if platform.system() == 'Darwin':
+            from .timezone_service import bundle_worker
+            import subprocess
+            worker=bundle_worker()
+            info=json.loads(subprocess.check_output([worker['path'],'--version'],timeout=10))
+            assert info=={'format':1,'release':__release__,'fixture':False}
+            result['native_timezone_worker']=True
             # Exercise real hdiutil from the frozen application, only in this
             # disposable home. No real Claude credentials or system keychain.
             import shutil

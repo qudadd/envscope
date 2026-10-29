@@ -1,13 +1,14 @@
 # Feature parity and integration audit
 
-## Active full-scope work: 0.15 development
+## Active full-scope work: 0.16 development
 
 [The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
 over historical status tables below. Native process protection is now implemented
 with a separate user task, ten-second checks, approved scope, PID/path/user
 validation, live-worker heartbeat and durable logs. See [its exact scope and
-verification](PROCESS_GUARD.md). Native system network repair, privileged Mac
-timezone service and additional client adapters remain incomplete. The overall parity
+verification](PROCESS_GUARD.md). The native privileged Mac timezone service now has
+reviewed install/update/remove, rollback and recovery paths. Native system network
+repair and additional client adapters remain incomplete. The overall parity
 goal is not achieved. Upstream Windows `set-region` at `223a5cc` was inspected.
 
 Whole-profile account volumes now use normal client exit, APFS copy-on-write
@@ -17,7 +18,17 @@ identity fixtures and a real disposable child-process exit are tested; real
 Claude credentials and server device recognition remain unverified.
 See [account volume scope](ACCOUNT_VOLUMES.md).
 
-## Current scope: 0.15.0 (2026-10-29)
+## Current scope: 0.16.0 (2026-10-29)
+
+0.16 adds a small root-owned native Mac timezone worker, a 60-second LaunchDaemon,
+explicit foreground administrator authorization, protected transaction backups,
+independent readback, rate limits and pending-operation recovery. Region changes
+update the installed guard baseline; undo restores the old files and timezone.
+The one-stop maintenance plan includes required system authorization and compensates
+a failed user-task registration. Root launchd tests use compile-time fixture paths
+on both Mac architectures; they never change the runner's real timezone.
+Actual user authorization dialogs remain a real-device acceptance item.
+See [timezone service scope](TIMEZONE_SERVICE.md).
 
 0.15 adds native macOS DMG compatibility with the original root marker and A–D
 slots. Encrypted-image checks, read-only mounts, bounded profile validation,
@@ -213,7 +224,7 @@ privacy, supported geography, an authenticated account, or packet-level isolatio
 | Exit before exchange | Graceful Claude quit, wait <=15s; `core:1456` | Forced process stop, wait <=15s; `windows/core:753` | Native callback must affirm exit before any profile copy/commit |
 | Snapshot safety | `.new`/`.previous` archive protection, staged load, APFS clone fallback to ditto; `core:1466,:1521` | `robocopy /MIR` without checked exit codes; deletes live DATA before restore | Native verified-copy rollback replaces this Windows path; preserve legacy folder structure |
 | Process guard | Root-owned daemon script, every 10 s, process + Fake-IP TUN; `daemons/claude-bodyguard.sh` and plist | Hidden PowerShell loop, login scheduled task, every 10 s; explicit client modes + TUN; auto/other TUN only | Pinned templates and installer retained via legacy adapter; no claim of native firewall enforcement |
-| Timezone watchdog | Root daemon resets drift every 3600 s; `daemons/tz-watchdog.sh` and plist | Not upstream | Legacy Mac only; Windows equivalent remains a gap |
+| Timezone watchdog | Root daemon resets drift every 3600 s; `daemons/tz-watchdog.sh` and plist | Not upstream | Native Mac root worker every 60 s, reviewed lifecycle/undo and baseline integration; Windows user-task recovery is permission scoped. Legacy concurrent daemon is detected and requires explicit manual disable |
 | Automatic update | User LaunchAgent every 43200 s runs real update; root daemons only compared and reinstall suggested | UI startup check; 24h cache/dismissal; manual check; one-click apply | Legacy paths retained. Native signed whole-product updating is a separate gap |
 | Routing domains | 13 suffixes including Claude, Anthropic, Turnstile, telemetry, payments and support | Same 13 | Retain list and runtime validation; do not infer application success from routing |
 | STUN routing | UDP-only AND rules for 3478/5349/19302; `WEBRTC_POLICY=proxy` or `reject`, persisted | Generic DST-PORT rules for the same ports; no reject-policy switch | Native Windows stronger UDP policy is a gap; do not silently equate the two implementations |

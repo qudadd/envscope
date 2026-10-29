@@ -82,6 +82,9 @@ class TimezoneServiceTests(unittest.TestCase):
         self.assertEqual(self.service.status()['state'],'waiting')
         self.io.value['status']['initial']=False
         self.assertEqual(self.service.status()['state'],'active')
+        self.io.value['status']['observed']='Asia/Shanghai'
+        self.assertEqual(self.service.status()['state'],'attention')
+        self.io.value['status']['observed']='America/New_York'
         self.io.value['status']['at_epoch']=0
         self.assertEqual(self.service.status()['state'],'waiting')
         self.io.value['status']['at_epoch']=1001
@@ -128,6 +131,12 @@ class TimezoneServiceTests(unittest.TestCase):
     def test_windows_has_no_system_service_side_effect(self):
         self.service.system='Windows'
         self.assertEqual(self.service.prepare(self.report)['state'],'not_applicable')
+        self.assertFalse(self.io.scripts)
+    def test_legacy_watchdog_conflict_blocks_new_baseline_but_allows_removal(self):
+        self.installed();self.io.value['legacy_registered']=True
+        self.assertEqual(self.service.status()['state'],'conflict')
+        self.assertEqual(self.service.prepare(self.report)['state'],'blocked')
+        self.assertEqual(self.service.prepare(None,remove=True)['state'],'planned')
         self.assertFalse(self.io.scripts)
     def test_native_authorization_never_receives_admin_password(self):
         runner=Mock(return_value=Mock(returncode=0))

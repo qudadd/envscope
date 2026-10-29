@@ -145,7 +145,15 @@
         <div id="process-guard-plan"></div><div id="process-guard-output" class="solution-output" aria-live="polite"></div>
         <details><summary>进程守护记录</summary><p id="process-guard-journal" class="note"></p><button id="process-guard-logs" class="link">打开守护日志</button><div id="process-guard-events" class="note"></div></details>
       </section>
-      <section class="tool-section"><h2>维护方案</h2><p class="note">先完成一键检测，再以当前设置生成方案。Windows 使用当前用户计划任务，macOS 使用用户 LaunchAgent，无需管理员常驻服务。移动应用目录后需重新启用。</p>
+      <section class="tool-section" id="timezone-service-panel" hidden><h2>macOS 系统时区守护</h2>
+        <p class="note">首次配置申请系统授权，之后每 60 秒检查批准时区。影响整台 Mac 的所有用户；修复后读回验证，连续失败暂停并保留记录。</p>
+        <h3 id="timezone-service-state">尚未读取</h3><p id="timezone-service-status" class="note" role="status"></p><a class="note" href="https://github.com/qudadd/envscope/blob/main/docs/TIMEZONE_SERVICE.md" target="_blank" rel="noreferrer">权限、旧任务冲突与手动处理说明</a>
+        <div class="actions"><button id="timezone-service-prepare">预览安装或更新</button><button id="timezone-service-refresh" class="link">刷新状态</button></div>
+        <label class="checkbox"><input id="timezone-service-restore" type="checkbox">移除时恢复安装前的系统时区</label>
+        <div class="actions"><button id="timezone-service-stop" class="link" disabled>预览停用并移除</button><button id="timezone-service-recover" hidden>预览恢复未完成操作</button><button id="timezone-service-undo" class="link" hidden>预览撤销上次操作</button></div>
+        <div id="timezone-service-plan"></div><div id="timezone-service-output" class="solution-output" aria-live="polite"></div><p id="timezone-service-journal" class="note"></p>
+      </section>
+      <section class="tool-section"><h2>维护方案</h2><p class="note">先完成一键检测，再以当前设置生成方案。Windows 使用当前用户计划任务，macOS 使用用户 LaunchAgent。macOS 系统时区守护在上方单独授权；移动应用目录后需重新启用用户巡检。</p>
         <label>复检间隔<select id="upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label>
         <label class="checkbox"><input id="upkeep-restore" type="checkbox">保持已批准的 Code 代理和 TLS 配置</label>
         <label class="checkbox"><input id="upkeep-guard-timezone" type="checkbox">时区漂移时恢复批准值</label>
@@ -156,7 +164,7 @@
         <button id="upkeep-prepare">生成维护方案</button><div id="upkeep-plan"></div><div id="upkeep-output" class="solution-output" aria-live="polite"></div>
       </section>
       <section class="tool-section"><h2>最近事件</h2><p class="note">此处展示最近 20 条；完整事件按日追加到本机日志，不随界面记录轮替删除。先记录漂移与计划动作，再执行、读回和复检。备份仅存本机。</p><p id="upkeep-journal" class="note"></p><button id="upkeep-open-logs" class="link">打开完整日志目录</button><div id="upkeep-events"><p class="note">尚无维护事件。</p></div></section>
-      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、账号登录和系统授权需本人确认。只有单独批准进程守护才会自动停止 Claude。后台不弹出提权对话框、不安装代理、不切换账号；没有时区写入权限时保留失败记录和手动指引。macOS 可另行配置随附开源维护核心的时区守护。</p></section>
+      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、账号登录和系统授权需本人确认。只有单独批准进程守护才会自动停止 Claude。后台不弹出提权对话框、不安装代理、不切换账号；macOS 系统时区守护需先在上方授权，其他维护任务没有写入权限时保留失败记录和手动指引。</p></section>
     </div>
 
     <div id="page-coverage" class="page" hidden>

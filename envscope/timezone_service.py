@@ -133,10 +133,26 @@ def _expected_script(snapshot):
 
 
 def _receipt(snapshot, action, target=None, original=None):
-    return {'format':1,'phase':'pending','operation':action,'nonce':secrets.token_hex(12),
+    receipt={'format':1,'phase':'pending','operation':action,'nonce':secrets.token_hex(12),
             'before':_zone(snapshot['observed']),'target':_zone(target or snapshot['observed']),
             'original':_zone(original or snapshot['observed']),'registered':snapshot['registered'],
             'hashes':{k:v for k,v in snapshot['hashes'].items() if v is not None},'release':__release__}
+    if snapshot.get('baseline'):receipt['previous_target']=_zone(snapshot['baseline']['target'])
+    return receipt
+
+
+def _outcome_script(receipt, state):
+    data=plistlib.dumps({'format':1,'nonce':receipt['nonce'],'state':state},sort_keys=True)
+    return (f'/usr/bin/printf %s {shlex.quote(_encoded(data))} | /usr/bin/base64 -D > "$ROOT/outcome.plist.next"\n'
+            '/bin/chmod 644 "$ROOT/outcome.plist.next"\n/bin/mv -f "$ROOT/outcome.plist.next" "$ROOT/outcome.plist"\n')
+
+
+def _stable(snapshot):
+    return {k:v for k,v in snapshot.items() if k!='status'}
+
+
+def _signature(snapshot):
+    return _hash(json.dumps(_stable(snapshot),sort_keys=True).encode())
 
 
 def privileged_script(layout,script,worker):
@@ -224,6 +240,7 @@ rollback() {
   if [ "$restore_clock" = 1 ]; then "$PENDING/rollback-worker" --restore-zone @BEFORE@ || ok=0; fi
   if @REGISTERED@; then /bin/launchctl bootstrap system "$DAEMON" || ok=0; fi
   if [ "$ok" = 1 ]; then
+    @ROLLED_BACK@
     /bin/mv "$PENDING" "$ROOT/backup-@NONCE@"
     log rollback_complete
   else
@@ -236,7 +253,7 @@ trap 'code=$?; if [ "$finished" = 0 ]; then rollback; fi; exit "$code"' EXIT
 trap 'exit 130' INT TERM HUP
 log transaction_started
 stop_job
-'''.replace('@BEFORE@',shlex.quote(before)).replace('@REGISTERED@','true' if snapshot['registered'] else 'false').replace('@NONCE@',receipt['nonce'])
+'''.replace('@BEFORE@',shlex.quote(before)).replace('@REGISTERED@','true' if snapshot['registered'] else 'false').replace('@NONCE@',receipt['nonce']).replace('@ROLLED_BACK@',_outcome_script(receipt,'rolled_back'))
     body=header+rollback+f'"$PENDING/rollback-worker" --check-zone {shlex.quote(before)}\n'
     if action=='install':
         body+='''/bin/cp "$PENDING/rollback-worker" "$ROOT/worker.next"
@@ -259,7 +276,7 @@ registered || exit 74
 /bin/rm -f "$DAEMON"
 if registered; then exit 74; fi
 '''
-    body+='''/bin/mv "$PENDING" "$ROOT/backup-@NONCE@"
+    body+=_outcome_script(receipt,'committed')+'''/bin/mv "$PENDING" "$ROOT/backup-@NONCE@"
 finished=1
 trap - EXIT INT TERM HUP
 log transaction_committed
@@ -300,9 +317,28 @@ if [ -f "$PENDING/daemon.old" ]; then /bin/cp -p "$PENDING/daemon.old" "$DAEMON"
 '''
     body+=f'"$PENDING/recovery-worker" --restore-zone {shlex.quote(before)}\n'
     if receipt['registered']:body+='/bin/launchctl bootstrap system "$DAEMON"\nregistered || exit 74\n'
-    body+=f'/bin/mv "$PENDING" "$ROOT/backup-{receipt["nonce"]}"\n'
+    body+=_outcome_script(receipt,'restored')+f'/bin/mv "$PENDING" "$ROOT/backup-{receipt["nonce"]}"\n'
     body+='log recovery_complete\n'
     return body
+
+
+def render_undo(layout,snapshot,worker):
+    receipt=snapshot['transaction']
+    recovery=render_recovery(layout,snapshot,worker)  # Validate before rendering any mutation.
+    if snapshot.get('outcome')!={'format':1,'nonce':receipt['nonce'],'state':'committed'}:
+        raise ValueError('上次操作没有可撤销的提交记录，请先刷新或恢复未完成操作。')
+    body=_header(layout)+_expected_script(snapshot)
+    body+='safe "$ROOT" && [ ! -e "$PENDING" ] && [ ! -L "$PENDING" ] || exit 79\n'
+    for name,value in (('transaction',receipt),('outcome',snapshot['outcome'])):
+        body+=f'safe "$ROOT/{name}.plist" && [ "$(digest "$ROOT/{name}.plist")" = {shlex.quote(_hash(plistlib.dumps(value,sort_keys=True)))} ] || exit 79\n'
+    # The bundled executable is staged and verified again before the compare.
+    body+=f'/bin/cp {shlex.quote(worker["path"])} "$ROOT/undo-worker.next"\n/bin/chmod 755 "$ROOT/undo-worker.next"\n'
+    body+=f'safe "$ROOT/undo-worker.next" && [ "$(digest "$ROOT/undo-worker.next")" = {shlex.quote(worker["sha256"])} ] || exit 79\n'
+    body+=f'"$ROOT/undo-worker.next" --check-zone {shlex.quote(_zone(snapshot["observed"]))}\n/bin/rm -f "$ROOT/undo-worker.next"\n'
+    body+=f'BACKUP="$ROOT/backup-{receipt["nonce"]}"\nsafe "$BACKUP" && safe "$BACKUP/receipt.plist" || exit 79\n'
+    body+=f'[ "$(digest "$BACKUP/receipt.plist")" = {shlex.quote(_hash(plistlib.dumps(receipt,sort_keys=True)))} ] || exit 79\n'
+    body+='/bin/mv "$BACKUP" "$PENDING"\n'
+    return body+recovery
 
 
 class NativeTimezoneIO:
@@ -335,7 +371,7 @@ class NativeTimezoneIO:
             data=self.read(path,2*1024**2 if name=='worker' else 65536)
             hashes[name]=_hash(data) if data is not None else None
         values={}
-        for name in ('baseline','status','transaction'):
+        for name in ('baseline','status','transaction','outcome'):
             body=self.read(root/(name+'.plist'))
             value=plistlib.loads(body) if body is not None else {}
             if not isinstance(value,dict):raise ValueError('时区服务记录格式无效。')
@@ -345,6 +381,13 @@ class NativeTimezoneIO:
         if result.returncode==0:registered=True
         elif 'could not find service' in ((result.stdout or '')+(result.stderr or '')).lower():registered=False
         else:raise ValueError('无法核实系统时区服务是否注册，请检查系统权限。')
+        legacy=False
+        if not self.fixture and self.layout.label==Layout().label and platform.system()=='Darwin':
+            old=self.runner(['/bin/launchctl','print','system/local.tz-watchdog'],timeout=5,
+                            env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','LC_ALL':'C'})
+            if old.returncode==0:legacy=True
+            elif 'could not find service' not in ((old.stdout or '')+(old.stderr or '')).lower():
+                raise ValueError('无法核实旧版时区守护是否运行，未覆盖现有服务。')
         pending=(root/'pending').exists()
         if values['baseline'] and not pending:
             base=values['baseline']
@@ -354,7 +397,7 @@ class NativeTimezoneIO:
             _zone(base.get('target'));_zone(base.get('original'))
         elif not pending and (any(hashes.values()) or registered):
             raise ValueError('存在不完整或未知的同名时区服务，未覆盖。')
-        return {**values,'hashes':hashes,'registered':registered,'pending':pending}
+        return {**values,'hashes':hashes,'registered':registered,'pending':pending,'legacy_registered':legacy}
 
     def execute(self,script):
         script=privileged_script(self.layout,script,self.worker())
@@ -377,6 +420,8 @@ class TimezoneService:
             value=self.io.inspect();base=value['baseline'];heartbeat=value['status']
             if value['pending']:
                 state,reason='recovery_required','上次时区服务操作未完成，请先预览恢复方案。'
+            elif value.get('legacy_registered'):
+                state,reason='conflict','原版 local.tz-watchdog 正在运行，不能同时批准两个时区基线。先停用原版时区守护后再刷新；具体步骤见系统时区守护说明。'
             elif not base:
                 state,reason='not_installed','尚未授权系统时区守护；确认后由 macOS 申请管理员授权。'
             elif base['owner_uid']!=self.uid:
@@ -389,7 +434,7 @@ class TimezoneService:
                   or heartbeat.get('target')!=base['target'] or heartbeat.get('fixture') is not self.io.fixture
                   or heartbeat.get('initial') is not False):
                 state,reason='waiting','尚未收到当前基线的新心跳，请刷新；没有心跳不计为守护正常。'
-            elif heartbeat.get('state') in ('healthy','restored'):
+            elif heartbeat.get('state') in ('healthy','restored') and heartbeat.get('observed')==base['target']:
                 state,reason='active','系统时区基线已读回，后台每 60 秒检查；写入失败会冷却并记录。'
             else:
                 state,reason='attention','时区守护需处理：'+str(heartbeat.get('state','unknown'))+'。可查看记录并重新批准基线。'
@@ -398,6 +443,8 @@ class TimezoneService:
                     'installed':bool(base),'registered':value['registered'],'pending':value['pending'],
                     'original':base.get('original'),'release':base.get('release'),
                     'journal_path':str(self.io.layout.root),'owner':base.get('owner_uid')==self.uid,
+                    'can_undo':not value['pending'] and value.get('transaction',{}).get('owner_uid')==self.uid
+                               and value.get('outcome')=={'format':1,'nonce':value.get('transaction',{}).get('nonce'),'state':'committed'},
                     'needs_update':bool(base) and base.get('release')!=__release__}
         except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):
             return {'supported':True,'state':'attention','reason':'时区服务状态或权限无法核实，未报告正常；请核对系统服务文件与日志。'}
@@ -408,6 +455,8 @@ class TimezoneService:
         observed=_zone(current_region(self.reader())['timezone'])
         snapshot=self.io.inspect();snapshot['observed']=observed
         if snapshot['pending']:return {'state':'recovery_required','reason':'上次操作未完成，请先恢复时区服务。'}
+        if snapshot.get('legacy_registered') and not remove:
+            return {'state':'blocked','reason':'原版 local.tz-watchdog 正在运行。请先按系统时区守护说明停用旧任务，避免两个基线互相覆盖；原文件与账号资料保留。'}
         base=snapshot['baseline']
         if base and base['owner_uid']!=self.uid:return {'state':'blocked','reason':'时区守护属于另一用户，不覆盖其批准基线。'}
         settings=self.store.settings()
@@ -436,34 +485,99 @@ class TimezoneService:
                      '保留原时区、服务备份和本机事件日志，可停用并选择恢复安装前时区。']
         try:worker=self.io.worker()
         except (ValueError,OSError) as exc:return {'state':'guided','reason':str(exc)}
+        script,receipt=render_transaction(self.io.layout,snapshot,worker,'remove' if remove else 'install',target,self.uid,restore)
         token=secrets.token_urlsafe(20)
         self.plans={token:{'deadline':time.monotonic()+90,'fingerprint':fingerprint(settings),
-                           'snapshot':snapshot,'target':target,'remove':remove,'restore':restore,'worker':worker}}
-        return {'state':'planned','plan_id':token,'effects':effects,'reason':'核对后确认；macOS 会在实际操作时申请系统授权。'}
+                           'snapshot':snapshot,'target':target,'remove':remove,'restore':restore,'worker':worker,
+                           'script':script,'receipt':receipt}}
+        return {'state':'planned','plan_id':token,'transaction_nonce':receipt['nonce'],'before_signature':_signature(snapshot),
+                'effects':effects,'reason':'核对后确认；macOS 会在实际操作时申请系统授权。'}
 
     def apply(self,token,confirmed=False):
         if confirmed is not True:return {'state':'confirmation_required'}
         plan=self.plans.get(token) if isinstance(token,str) else None
-        if not plan or plan.get('recovery') or time.monotonic()>plan['deadline'] or plan['fingerprint']!=fingerprint(self.store.settings()):
+        if not plan or plan.get('recovery') or plan.get('undo') or time.monotonic()>plan['deadline'] or plan['fingerprint']!=fingerprint(self.store.settings()):
             return {'state':'retest_required','reason':'方案已过期或目标已改变，请重新预览。'}
         snapshot=self.io.inspect();snapshot['observed']=_zone(current_region(self.reader())['timezone'])
-        stable=lambda value:{k:v for k,v in value.items() if k!='status'}
-        if stable(snapshot)!=stable(plan['snapshot']) or self.io.worker()!=plan['worker']:
+        if _stable(snapshot)!=_stable(plan['snapshot']) or self.io.worker()!=plan['worker']:
             return {'state':'retest_required','reason':'服务、系统时区或辅助程序在预览后发生变化，请重新预览。'}
         del self.plans[token]
-        script,_=render_transaction(self.io.layout,snapshot,plan['worker'],'remove' if plan['remove'] else 'install',
-                                    plan['target'],self.uid,plan['restore'])
         try:
-            self.io.execute(script)
+            self.io.execute(plan['script'])
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
-            return {'state':'partial','status':self.status(),'reason':str(exc)[:240]+' 现有备份和日志保留。'}
+            return {'state':'partial','status':self.status(),'transaction_nonce':plan['receipt']['nonce'],
+                    'needs_retest':True,'reason':str(exc)[:240]+' 现有备份和日志保留。'}
         status=self.status()
         completed=(not status.get('installed') and not status.get('registered') and not status.get('pending')
                    if plan['remove'] else status.get('installed') and status.get('registered') and status.get('target')==plan['target'] and not status.get('pending'))
-        return {'state':'completed' if completed else 'partial','status':status,'needs_retest':True,
+        return {'state':'completed' if completed else 'partial','status':status,'needs_retest':True,'transaction_nonce':plan['receipt']['nonce'],
                 'reason':'时区服务已移除，请复检系统时区。' if completed and plan['remove'] else
                          '时区服务已安装并注册；请刷新确认新心跳，再复检环境。' if completed else
                          '系统操作已返回，但实际状态尚未完整确认，请查看红色状态与恢复记录。'}
+
+    def prepare_undo(self,expected_nonce=None):
+        if self.system!='Darwin':return self.status()
+        snapshot=self.io.inspect();snapshot['observed']=_zone(current_region(self.reader())['timezone'])
+        receipt=snapshot['transaction']
+        if snapshot['pending']:return {'state':'recovery_required','reason':'先恢复未完成的时区服务操作。'}
+        if not receipt or receipt.get('owner_uid')!=self.uid:
+            return {'state':'blocked','reason':'没有属于当前用户的可撤销事务。'}
+        if expected_nonce is not None and receipt.get('nonce')!=expected_nonce:
+            return {'state':'retest_required','reason':'时区服务已有后续操作，未覆盖新的基线。'}
+        worker=self.io.worker()
+        try:script=render_undo(self.io.layout,snapshot,worker)
+        except ValueError as exc:return {'state':'guided','reason':str(exc)}
+        token=secrets.token_urlsafe(20)
+        self.plans={token:{'deadline':time.monotonic()+90,'undo':True,'snapshot':snapshot,'worker':worker,'script':script}}
+        effects=['申请一次系统授权，撤销上次时区服务操作；此设置影响整台 Mac。',
+                 '将系统时区恢复为上次操作前的 '+receipt['before']+'，读回后保留全部备份与事件日志。',
+                 '恢复此前的服务文件、尝试次数和注册状态。']
+        if receipt.get('previous_target'):
+            effects.append('恢复后继续守护旧基线 '+receipt['previous_target']+'；若原时区与旧基线不同，后续巡检会按旧基线处理。')
+        else:effects.append('此前未安装服务，恢复后不再自动保持时区。')
+        return {'state':'planned','plan_id':token,'effects':effects,'reason':'只撤销最新且未变化的操作，不覆盖后续配置。'}
+
+    def undo(self,token,confirmed=False):
+        if confirmed is not True:return {'state':'confirmation_required'}
+        plan=self.plans.get(token) if isinstance(token,str) else None
+        if not plan or not plan.get('undo') or time.monotonic()>plan['deadline']:
+            return {'state':'retest_required','reason':'撤销方案已过期，请重新预览。'}
+        snapshot=self.io.inspect();snapshot['observed']=_zone(current_region(self.reader())['timezone'])
+        if _stable(snapshot)!=_stable(plan['snapshot']) or self.io.worker()!=plan['worker']:
+            return {'state':'retest_required','reason':'服务或时区在预览后变化，未覆盖后续设置。'}
+        del self.plans[token]
+        try:self.io.execute(plan['script'])
+        except (OSError,ValueError,subprocess.SubprocessError) as exc:
+            return {'state':'partial','reason':str(exc)[:240],'status':self.status(),'needs_retest':True}
+        completed=self._restored(self.io.inspect(),plan['snapshot']['transaction'])
+        return {'state':'completed' if completed else 'partial','status':self.status(),'needs_retest':True,
+                'reason':'已恢复原时区及此前的时区守护基线，请复检。' if completed else '撤销后的配置尚未完整读回，请保留恢复记录并复检。'}
+
+    def _restored(self,snapshot,receipt):
+        return (not snapshot['pending'] and snapshot['registered']==receipt['registered']
+                and all(snapshot['hashes'].get(k)==receipt['hashes'].get(k) for k in ('worker','baseline.plist','daemon'))
+                and current_region(self.reader())['timezone']==receipt['before'])
+
+    def rollback_latest(self,nonce,confirmed=False,*,unchanged_signature=None):
+        """Compensate a disclosed parent operation, never a later user's change."""
+        if confirmed is not True:return {'state':'confirmation_required'}
+        if self.system!='Darwin':return self.status()
+        snapshot=self.io.inspect();snapshot['observed']=_zone(current_region(self.reader())['timezone'])
+        receipt=snapshot['transaction']
+        if receipt.get('nonce')!=nonce:
+            if unchanged_signature and _signature(snapshot)==unchanged_signature:
+                return {'state':'completed','reason':'时区服务方案尚未执行，原配置保持不变。'}
+            return {'state':'retest_required','reason':'时区服务已有其他操作，未覆盖后续配置。'}
+        if receipt.get('owner_uid')!=self.uid:return {'state':'blocked','reason':'事务属于另一用户。'}
+        if snapshot['pending']:
+            plan=self.prepare_recovery()
+            return self.recover(plan['plan_id'],True) if plan.get('state')=='planned' else plan
+        outcome=snapshot.get('outcome',{})
+        if outcome.get('nonce')==nonce and outcome.get('state') in ('restored','rolled_back'):
+            return {'state':'completed' if self._restored(snapshot,receipt) else 'partial',
+                    'reason':'此事务已回滚；原配置读回不符时请核对后续系统变化。','needs_retest':True}
+        plan=self.prepare_undo(nonce)
+        return self.undo(plan['plan_id'],True) if plan.get('state')=='planned' else plan
 
     def prepare_recovery(self):
         if self.system!='Darwin':return self.status()
@@ -492,5 +606,6 @@ class TimezoneService:
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
             return {'state':'partial','reason':str(exc)[:240],'status':self.status()}
         status=self.status()
-        return {'state':'completed' if not status.get('pending',True) else 'partial','needs_retest':True,
+        completed=self._restored(self.io.inspect(),plan['receipt'])
+        return {'state':'completed' if completed else 'partial','needs_retest':True,
                 'status':status,'reason':'时区服务恢复操作已返回，请刷新心跳并重新检测环境。'}
