@@ -16,27 +16,35 @@ from .routing_config import load_yaml
 
 
 class LocalController:
-    def __init__(self, origin=None, secret='', unix=None):
-        if bool(origin) == bool(unix):
+    def __init__(self, origin=None, secret='', unix=None,pipe=None):
+        if sum(bool(value) for value in (origin,unix,pipe))!=1:
             raise ValueError('控制接口必须唯一')
         if not isinstance(secret, str) or len(secret) > 4096 or any(ord(c) < 32 or ord(c) > 126 for c in secret):
             raise ValueError('控制接口认证格式无法识别')
         self.origin = validate_controller(origin) if origin else None
         self.unix = str(unix) if unix else None
+        from .windows_pipe import validate_pipe
+        self.pipe=validate_pipe(pipe) if pipe else None
         self.headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
         if secret:
             self.headers['Authorization'] = 'Bearer ' + secret
-        self.identity = hashlib.sha256(((self.origin or self.unix) + '\0' + secret).encode()).hexdigest()
+        self.identity = hashlib.sha256(((self.origin or self.unix or self.pipe) + '\0' + secret).encode()).hexdigest()
 
     def request(self, path, data=None):
-        if path not in ('/configs', '/rules', '/proxies', '/configs?force=true'):
+        if path not in ('/configs', '/rules', '/proxies', '/configs?force=true','/version'):
             raise ValueError('控制接口操作不在允许范围')
         if data is not None and path != '/configs?force=true':
             raise ValueError('此接口仅允许读取')
         body = None if data is None else json.dumps(data).encode()
         connection = None
         try:
-            if self.unix:
+            if self.pipe:
+                from .windows_pipe import NamedPipeSocket
+                connection=http.client.HTTPConnection('localhost',timeout=5)
+                connection.sock=NamedPipeSocket(self.pipe,timeout=5)
+                connection.request('GET' if body is None else 'PUT',path,body,self.headers)
+                response=connection.getresponse()
+            elif self.unix:
                 # Recheck socket ownership before every connection. Unix sockets
                 # are local, but a replaced path must not receive credentials.
                 validate_socket(self.unix)
@@ -96,6 +104,9 @@ def validate_socket(path):
 def from_config(config, system=None):
     system = system or platform.system()
     secret = config.get('secret', '') or ''
+    pipe=config.get('external-controller-pipe')
+    if system=='Windows' and pipe:
+        return LocalController(pipe=pipe,secret=secret)
     unix = config.get('external-controller-unix')
     if system == 'Darwin' and unix:
         if not isinstance(unix, str) or len(unix) > 1000:

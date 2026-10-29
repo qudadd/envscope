@@ -6,8 +6,11 @@ on:
     paths:
       - envscope/client_apps.py
       - envscope/client_config.py
+      - envscope/windows_pipe.py
+      - envscope/local_controller.py
       - scripts/client_lifecycle_acceptance.py
       - tests/test_client*.py
+      - tests/test_windows_pipe.py
       - .github/workflows/client.yml
 permissions:
   contents: read
@@ -25,7 +28,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install .
-      - run: python -m unittest tests.test_client_apps tests.test_client_config -q
+      - run: python -m unittest tests.test_client_apps tests.test_client_config tests.test_windows_pipe -q
       - name: Owned GUI app only, no real proxy or Claude process
         env:
           ENVSCOPE_CLIENT_ACCEPTANCE: '1'
