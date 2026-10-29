@@ -16,7 +16,7 @@ from envscope.state import StateStore
 from envscope.system_network import SystemNetwork,binding_view,signature,validate_snapshot
 from envscope.system_network_macos import MacNetworkIO
 from envscope.target_environment import fingerprint
-from envscope.timezone_service import Layout
+from envscope.timezone_service import Layout,privileged_script
 from scripts.build_timezone_worker import build
 
 
@@ -57,9 +57,9 @@ def main():
                 {'id':'22222222-2222-4222-8222-222222222222','name':'Fixture B','active':True,'ipv6_enabled':True,
                  'config':{'ConfigMethod':'Automatic'}}]}
             data=base64.b64encode(plistlib.dumps(initial)).decode()
-            setup='set -eu\n/bin/mkdir '+shlex.quote(str(root))+'\n/bin/chmod 755 '+shlex.quote(str(root))+'\n'
+            setup='set -eu\n'
             setup+='/usr/bin/printf %s '+shlex.quote(data)+' | /usr/bin/base64 -D > '+shlex.quote(str(root/'fixture.plist'))+'\n/bin/chmod 644 '+shlex.quote(str(root/'fixture.plist'))+'\n'
-            sudo(setup)
+            sudo(privileged_script(layout,setup,worker))
             class FixtureIO(MacNetworkIO):
                 def execute(self,action,payload):
                     content=plistlib.dumps(payload,sort_keys=True);path=folder/'plan.private.bin';path.write_bytes(content)
