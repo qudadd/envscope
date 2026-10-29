@@ -30,6 +30,33 @@ static volatile sig_atomic_t stopped = 0;
 static int initial_mode = 0;
 static void stop_now(int signal_number) { (void)signal_number; stopped = 1; }
 
+static int legacy_clear(int root) {
+#if ENVSCOPE_TZ_FIXTURE
+    struct stat item; return fstatat(root,"legacy-conflict",&item,AT_SYMLINK_NOFOLLOW)<0&&errno==ENOENT;
+#else
+    (void)root;struct stat item;
+    if(lstat("/Library/LaunchDaemons/local.tz-watchdog.plist",&item)==0||errno!=ENOENT)return 0;
+    int fds[2];if(pipe(fds))return 0;pid_t child=fork();
+    if(child<0){close(fds[0]);close(fds[1]);return 0;}
+    if(!child){close(fds[0]);dup2(fds[1],1);dup2(fds[1],2);close(fds[1]);
+        char *const args[]={"/bin/launchctl","print","system/local.tz-watchdog",NULL};
+        char *const env[]={"PATH=/usr/bin:/bin:/usr/sbin:/sbin","LC_ALL=C",NULL};execve(args[0],args,env);_exit(127);}
+    close(fds[1]);int flags=fcntl(fds[0],F_GETFL);int error=flags<0||fcntl(fds[0],F_SETFL,flags|O_NONBLOCK)<0;
+    char buffer[8193];size_t used=0;int code=0,finished=0;
+    for(int i=0;i<250&&!error;i++){
+        ssize_t got;
+        while(used<sizeof(buffer)-1&&(got=read(fds[0],buffer+used,sizeof(buffer)-1-used))>0)used+=(size_t)got;
+        if(used==sizeof(buffer)-1){error=1;break;}
+        pid_t result=waitpid(child,&code,WNOHANG);
+        if(result==child){finished=1;while(used<sizeof(buffer)-1&&(got=read(fds[0],buffer+used,sizeof(buffer)-1-used))>0)used+=(size_t)got;break;}
+        if(result<0&&errno!=EINTR){finished=1;error=1;break;}usleep(20000);
+    }
+    close(fds[0]);buffer[used]=0;
+    if(!finished){kill(child,SIGKILL);while(waitpid(child,&code,0)<0&&errno==EINTR){}}
+    return finished&&!error&&used<sizeof(buffer)-1&&WIFEXITED(code)&&WEXITSTATUS(code)!=0&&strcasestr(buffer,"could not find service")!=NULL;
+#endif
+}
+
 static int protected_stat(int fd, int directory) {
     struct stat st;
     return fstat(fd, &st) == 0 && st.st_uid == 0 && !(st.st_mode & 0022)
@@ -175,7 +202,7 @@ static int publish_status(int root, CFMutableDictionaryRef state, const char *ph
                           const char *observed, const char *target, long long now, int count) {
     if(!save_plist(root,"state.plist",state,0600))return 0;
     CFMutableDictionaryRef status=CFDictionaryCreateMutable(NULL,0,&kCFTypeDictionaryKeyCallBacks,&kCFTypeDictionaryValueCallBacks);
-    put_number(status,CFSTR("format"),1);put_number(status,CFSTR("at_epoch"),now);put_number(status,CFSTR("attempt_count"),count);
+    put_number(status,CFSTR("format"),1);put_number(status,CFSTR("guard_policy"),2);put_number(status,CFSTR("at_epoch"),now);put_number(status,CFSTR("attempt_count"),count);
     put_text(status,CFSTR("state"),phase);put_text(status,CFSTR("observed"),observed);put_text(status,CFSTR("target"),target);
     put_text(status,CFSTR("release"),ENVSCOPE_RELEASE);
     CFDictionarySetValue(status,CFSTR("fixture"),ENVSCOPE_TZ_FIXTURE?kCFBooleanTrue:kCFBooleanFalse);
@@ -241,7 +268,12 @@ int main(int argc, char **argv) {
     }
     CFTypeRef pending=CFDictionaryGetValue(state,CFSTR("pending"));
     if(pending&&CFGetTypeID(pending)!=CFBooleanGetTypeID())return 78;
-    const char *phase=pending==kCFBooleanTrue?"interrupted":equal_zone(observed,target)?"healthy":count>=3?"paused":last&&now-last<300?"cooldown":NULL;
+    const char *phase=!legacy_clear(root)?"legacy_conflict":pending==kCFBooleanTrue?"interrupted":equal_zone(observed,target)?"healthy":count>=3?"paused":last&&now-last<300?"cooldown":NULL;
+    if(phase&&!strcmp(phase,"legacy_conflict")){
+        CFMutableDictionaryRef previous=read_plist(root,"status.plist",1);char old[60]="";
+        if(!previous)return 78;int same=text(previous,CFSTR("state"),old,sizeof(old))&&!strcmp(old,phase);CFRelease(previous);
+        if(!same&&!event(root,phase,observed,target,now))return 74;
+    }
     if(phase){int ok=publish_status(root,state,phase,observed,target,now,count);CFRelease(state);close(lock);close(root);return ok?0:74;}
     if(!event(root,"drift",observed,target,now))return 74;
     CFMutableArrayRef next=CFArrayCreateMutable(NULL,0,&kCFTypeArrayCallBacks);

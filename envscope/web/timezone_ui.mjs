@@ -3,10 +3,10 @@ const el=(tag,text)=>{const node=document.createElement(tag);node.textContent=te
 export function renderTimezoneService(value={},busy=false){
   const panel=$('timezone-service-panel');if(!panel)return;
   panel.hidden=!value.supported;if(panel.hidden)return;
-  const labels={not_installed:'尚未授权',active:'系统时区守护正常',waiting:'等待新心跳',attention:'需要处理',unregistered:'注册状态需恢复',recovery_required:'上次操作需恢复',conflict:'另一用户正在管理'};
+  const labels={not_installed:'尚未授权',active:'系统时区守护正常',waiting:'等待新心跳',attention:'需要处理',unregistered:'注册状态需恢复',recovery_required:'上次操作需恢复',conflict:'旧任务或管理账户存在冲突',outdated:'需要更新系统守护'};
   $('timezone-service-state').textContent=labels[value.state]||'状态待核实';
   $('timezone-service-status').textContent=[value.reason,value.target?'批准时区：'+value.target:'',value.heartbeat_at?'最近心跳：'+new Date(value.heartbeat_at*1000).toLocaleString():'',value.needs_update?'辅助程序有新版本，请预览更新。':''].filter(Boolean).join(' ');
-  $('timezone-service-status').classList.toggle('manual-guidance',['attention','unregistered','recovery_required','conflict'].includes(value.state));
+  $('timezone-service-status').classList.toggle('manual-guidance',['attention','unregistered','recovery_required','conflict','outdated'].includes(value.state));
   $('timezone-service-prepare').disabled=busy||!!value.pending||value.state==='conflict';
   $('timezone-service-stop').disabled=busy||!value.installed||!!value.pending||value.state==='conflict'&&!value.owner;
   $('timezone-service-recover').hidden=!value.pending;

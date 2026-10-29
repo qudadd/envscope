@@ -427,11 +427,8 @@ class NativeTimezoneIO:
         else:raise ValueError('无法核实系统时区服务是否注册，请检查系统权限。')
         legacy=False
         if not self.fixture and self.layout.label==Layout().label and platform.system()=='Darwin':
-            old=self.runner(['/bin/launchctl','print','system/local.tz-watchdog'],timeout=5,
-                            env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','LC_ALL':'C'})
-            if old.returncode==0:legacy=True
-            elif 'could not find service' not in ((old.stdout or '')+(old.stderr or '')).lower():
-                raise ValueError('无法核实旧版时区守护是否运行，未覆盖现有服务。')
+            from .component_inventory import Layout as ComponentsLayout, mac_snapshot, blocking
+            legacy=blocking(mac_snapshot(ComponentsLayout(Path.home(),'Darwin'),os.getuid(),roles=['timezone']), 'timezone')
         pending=(root/'pending').exists()
         if values['baseline'] and not pending:
             base=values['baseline']
@@ -472,12 +469,16 @@ class TimezoneService:
                 state,reason='conflict','系统时区守护由另一用户配置；请联系其本人或系统管理员。'
             elif not value['registered']:
                 state,reason='unregistered','服务文件存在，但系统未确认注册。可预览重新安装。'
+            elif heartbeat and (type(heartbeat.get('guard_policy')) is not int or heartbeat.get('guard_policy')!=2):
+                state,reason='outdated','系统时区守护仍使用旧策略，不能确认已监测旧任务冲突；请预览更新并等待新心跳。'
             elif (type(heartbeat.get('format')) is not int or heartbeat.get('format')!=1
                   or heartbeat.get('release')!=base.get('release')
                   or type(heartbeat.get('at_epoch')) not in (int,float) or not 0<=self.io.clock()-heartbeat['at_epoch']<180
                   or heartbeat.get('target')!=base['target'] or heartbeat.get('fixture') is not self.io.fixture
                   or heartbeat.get('initial') is not False):
                 state,reason='waiting','尚未收到当前基线的新心跳，请刷新；没有心跳不计为守护正常。'
+            elif heartbeat.get('state')=='legacy_conflict':
+                state,reason='conflict','后台检测到旧时区任务重新出现或登记读取失败，已暂停写入。请处理旧任务并复检。'
             elif heartbeat.get('state') in ('healthy','restored') and heartbeat.get('observed')==base['target']:
                 state,reason='active','系统时区基线已读回，后台每 60 秒检查；写入失败会冷却并记录。'
             else:

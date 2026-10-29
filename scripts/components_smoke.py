@@ -18,9 +18,9 @@ class JobsFixture:
     def __init__(self, system):
         self.system=system; self.rows=[role()]; self.receipt={'state':'not_configured','id':''}; self.calls=[]
         if system=='Darwin':
-            self.rows[0].update(mode=0o644,group=20)
-            self.rows += [{**role(),'id':'timezone','title':'旧版时区守护','enabled':False,'running':False,'mode':0o644,'group':20},
-                         {**role(),'id':'update.user','title':'旧版用户更新任务','owned':False,'error':'permission_denied','reason':'隔离场景：读取被拒绝'}]
+            self.rows[0].update(mode=0o644,group=20,label='local.claude-bodyguard')
+            self.rows += [{**role(),'id':'timezone','title':'旧版时区守护','label':'local.tz-watchdog','enabled':False,'running':False,'mode':0o644,'group':20},
+                         {**role(),'id':'update.user','title':'旧版用户更新任务','label':'local.claude-update','owned':False,'error':'permission_denied','reason':'隔离场景：读取被拒绝'}]
     def snapshot(self):return {'format':1,'system':self.system,'actor':'501','rows':deepcopy(self.rows)}
     def status(self):return deepcopy(self.receipt)
     def execute(self, action, payload):
@@ -67,6 +67,7 @@ def main():
                         expect(page.locator('#components-rows .manual-guidance')).to_contain_text('任务计划程序')
                         page.locator('[data-role="timezone"]').uncheck();expect(page.locator('#components-plan')).to_be_empty()
                         page.locator('[data-role="timezone"]').check();page.locator('#components-prepare').click()
+                        expect(page.locator('#components-plan')).to_contain_text('保护间隔');idle()
                     page.locator('#components-panel').screenshot(path=str(out/(system+'-review.png')))
                     page.locator('#components-plan button').click()
                     expect(page.locator('#components-state')).to_contain_text('旧任务已移除',timeout=30000);idle()
@@ -79,6 +80,10 @@ def main():
                     assert not errors,errors
                     assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
                     proof.append({'system':system,'width':width,'review_before_write':True,'select_all':True,'restore':True,'automatic_retest':True,'real_jobs_changed':False})
+                except Exception:
+                    page.locator('#components-panel').screenshot(path=str(out/(system+'-failed.png')))
+                    (out/(system+'-failure.json')).write_text(json.dumps({'calls':jobs.calls,'output':page.locator('#components-output').inner_text(),'errors':errors},indent=2),encoding='utf-8')
+                    raise
                 finally:page.close();server.shutdown();server.server_close();thread.join(3)
         browser.close()
     (out/'results.json').write_text(json.dumps(proof,indent=2),encoding='utf-8');print(json.dumps(proof))

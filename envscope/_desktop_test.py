@@ -44,6 +44,7 @@ def main(output=None):
         result['native_dmg_roundtrip'] = 'not_applicable'
         result['native_timezone_worker'] = 'not_applicable'
         result['native_network_worker'] = 'not_applicable'
+        result['native_components_worker'] = 'not_applicable'
         result['native_language_bindings']='not_applicable'
         result['native_pipe_transport']='not_applicable'
         result['native_wireguard_bindings']='not_applicable'
@@ -70,6 +71,10 @@ def main(output=None):
             info=json.loads(subprocess.check_output([network['path'],'--version'],timeout=10))
             assert info=={'format':1,'release':__release__,'fixture':False}
             result['native_network_worker']=True
+            components=bundle_worker(cache=directory/'native-components-cache',component='components')
+            info=json.loads(subprocess.check_output([components['path'],'--version'],timeout=10))
+            assert info=={'format':1,'release':__release__,'fixture':False}
+            result['native_components_worker']=True
             # Exercise real hdiutil from the frozen application, only in this
             # disposable home. No real Claude credentials or system keychain.
             import shutil

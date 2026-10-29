@@ -81,7 +81,7 @@ class TimezoneServiceTests(unittest.TestCase):
     def test_status_requires_real_fresh_scheduled_heartbeat(self):
         self.installed()
         self.assertEqual(self.service.status()['state'],'waiting')
-        self.io.value['status']={'format':1,'release':__release__,'at_epoch':1000,'state':'healthy','target':'America/New_York','observed':'America/New_York','fixture':False,'initial':True}
+        self.io.value['status']={'format':1,'guard_policy':2,'release':__release__,'at_epoch':1000,'state':'healthy','target':'America/New_York','observed':'America/New_York','fixture':False,'initial':True}
         self.assertEqual(self.service.status()['state'],'waiting')
         self.io.value['status']['initial']=False
         self.assertEqual(self.service.status()['state'],'active')
@@ -94,6 +94,23 @@ class TimezoneServiceTests(unittest.TestCase):
         self.assertEqual(self.service.status()['state'],'waiting')
         self.io.value['status']['at_epoch']=1000;self.io.value['status']['state']='paused'
         self.assertEqual(self.service.status()['state'],'attention')
+
+    def test_legacy_reappearance_or_old_worker_policy_cannot_pass(self):
+        self.installed()
+        self.io.value['status']={'format':1,'guard_policy':2,'release':__release__,'at_epoch':1000,'state':'healthy',
+                                'target':'America/New_York','observed':'America/New_York','fixture':False,'initial':False}
+        self.assertEqual(self.service.status()['state'],'active')
+        self.io.value['legacy_registered']=True
+        self.assertEqual(self.service.status()['state'],'conflict')
+        self.assertEqual(self.service.prepare(self.report)['state'],'blocked');self.assertFalse(self.io.scripts)
+        self.io.value['legacy_registered']=False
+        self.io.value['status']['state']='legacy_conflict'
+        self.assertEqual(self.service.status()['state'],'conflict')
+        self.io.value['status']['at_epoch']=0
+        self.assertEqual(self.service.status()['state'],'waiting')
+        for policy in (None,1,2.0):
+            self.io.value['status'].update(guard_policy=policy,at_epoch=1000,state='healthy')
+            self.assertEqual(self.service.status()['state'],'outdated')
     def test_uninstall_does_not_require_eligible_country(self):
         self.installed();self.store.save_settings({'usage_country':'CN'})
         plan=self.service.prepare(None,remove=True,restore=True)

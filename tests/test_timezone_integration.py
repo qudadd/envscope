@@ -56,7 +56,7 @@ class TransactionFixture(FixtureIO):
                                            'owner_uid':501,'release':__release__},registered=True,
                                   hashes={'worker':'a'*64,'baseline.plist':hashlib.sha256(receipt['target'].encode()).hexdigest(),'daemon':'c'*64})
                 self.inventory['timezone_iana']=receipt['target']
-                self.value['status']={'format':1,'release':__release__,'state':'healthy','at_epoch':self.clock(),
+                self.value['status']={'format':1,'guard_policy':2,'release':__release__,'state':'healthy','at_epoch':self.clock(),
                                       'target':receipt['target'],'observed':receipt['target'],'fixture':False,'initial':False}
             else:
                 self.value.update(baseline={},registered=False,hashes={'worker':None,'baseline.plist':None,'daemon':None})

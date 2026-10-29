@@ -106,6 +106,16 @@ case "$2" in Asia/Shanghai|America/New_York|Europe/London) ;; *) exit 2;; esac
             stamp=first['status']['at_epoch']
             second=wait_status(io,lambda x:x['status'].get('at_epoch',0)>stamp+20,timeout=90)
             proof['automatic_heartbeats']=2;phases.append('periodic_heartbeat')
+            assert second['status']['guard_policy']==2
+            # A separate marker in the owned fixture represents a legacy task
+            # reappearing. Neither the real legacy label nor system clock is used.
+            sudo('/usr/bin/touch '+shlex.quote(str(root/'legacy-conflict'))+'\n/bin/ln -sfn '+shlex.quote(str(root/'zones/Asia/Shanghai'))+' '+shlex.quote(str(root/'localtime')))
+            execute('"$ROOT/worker" --once')
+            conflict=io.inspect()['status'];assert conflict['state']=='legacy_conflict'
+            assert str((root/'localtime').resolve()).endswith('/zones/Asia/Shanghai')
+            sudo('/bin/rm '+shlex.quote(str(root/'legacy-conflict'))+'\n/bin/ln -sfn '+shlex.quote(str(root/'zones/America/New_York'))+' '+shlex.quote(str(root/'localtime')))
+            execute('"$ROOT/worker" --once')
+            assert io.inspect()['status']['state']=='healthy';proof['legacy_conflict_pauses_writes']=True
             # Age only the fixture attempt history, then simulate drift.
             sudo('/bin/rm -f '+shlex.quote(str(root/'state.plist'))+'\n/bin/ln -sfn '+shlex.quote(str(root/'zones/Asia/Shanghai'))+' '+shlex.quote(str(root/'localtime')))
             changed=wait_status(io,lambda x:x['status'].get('state')=='restored',timeout=90)

@@ -42,6 +42,12 @@ def windows(home, result):
             value = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], **kwargs)
             if value.returncode:
                 print('Owned fixture transaction stderr:', value.stderr.decode(errors='replace')[-4000:])
+                # ACLs belong exclusively to this throwaway CI job. Retain the
+                # before/after representation to diagnose scheduler normalization.
+                for file in layout.root.glob('record-*.private.json'):
+                    record=json.loads(file.read_text(encoding='utf-8'))
+                    print('Owned fixture original ACL:', record.get('before',{}).get('security'))
+                print('Owned fixture observed ACL:', io.snapshot()['rows'][0].get('security'))
             return value
         return subprocess.run(args, **kwargs)
     io = WindowsComponents(home, layout=layout, runner=runner)

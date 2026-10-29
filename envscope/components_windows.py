@@ -93,8 +93,11 @@ function Canonical([string]$body) {
  }
  return $xml.OuterXml
 }
+function xS([string]$text) {
+ $d=[Security.AccessControl.RawSecurityDescriptor]::new($text);$bytes=[byte[]]::new($d.BinaryLength);$d.GetBinaryForm($bytes,0);return [Convert]::ToBase64String($bytes)
+}
 function Same($actual,$before,[bool]$exact) {
- if($actual.present -ne $true -or $actual.principal_sid -cne $Actor -or $actual.logon -ne 3 -or $actual.level -ne 0 -or $actual.secure_acl -ne $true -or $actual.enabled -ne $before.enabled -or $actual.sddl -cne $before.security){return $false}
+ if($actual.present -ne $true -or $actual.principal_sid -cne $Actor -or $actual.logon -ne 3 -or $actual.level -ne 0 -or $actual.secure_acl -ne $true -or $actual.enabled -ne $before.enabled -or (xS $actual.sddl) -cne (xS $before.security)){return $false}
  $xml=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($before.definition))
  if($exact){return (Hash $actual.xml) -ceq $before.definition_sha}
  return (Canonical $actual.xml) -ceq (Canonical $xml)
@@ -180,7 +183,9 @@ class WindowsComponents:
         namespaces = ('Security.Principal', 'Security.AccessControl', 'Text', 'IO', 'Xml')
         def compact(source):
             for ns in namespaces: source = source.replace('['+ns+'.', '[')
-            for old, new in (('before', 'b'), ('actual', 'a'), ('directory', 'd'), ('principal', 'p'), ('service', 'svc'), ('folder', 'tf')):
+            for old, new in (('before', 'b'), ('actual', 'a'), ('directory', 'd'), ('principal', 'p'), ('service', 'svc'), ('folder', 'tf'),
+                             ('Actor','a0'),('Root','r0'),('Script','s0'),('Latest','l0'),('TaskName','t0'),('Fixture','f0'),
+                             ('inputPath','i0'),('leasePath','lp'),('lease','lk')):
                 source = re.sub(r'\$'+old+r'\b', '$'+new, source, flags=re.I)
             for old, new in (('NoLinks', 'L'), ('CheckScript', 'C'), ('ReadLast', 'J'), ('ReadTask', 'Q'),
                              ('Canonical', 'K'), ('Publish', 'P'), ('Protect', 'D'), ('Restore', 'R'),
@@ -190,8 +195,8 @@ class WindowsComponents:
         code = ''.join('using namespace System.'+ns+'\n' for ns in namespaces)
         code += "$ErrorActionPreference='Stop';[Console]::OutputEncoding=[UTF8Encoding]::new($false)\n"
         code += "$env:PSModulePath=Join-Path ([Environment]::GetFolderPath('Windows')) 'System32/WindowsPowerShell/v1.0/Modules'\n"
-        code += '$Actor='+quote(self.actor)+';$Fixture='+('$true' if self.fixture else '$false')+';$Root='+root+'\n'
-        code += "$Latest=Join-Path $Root 'latest.json';$TaskName="+quote(self.layout.task)+';$Script='+quote(str(self.layout.script('guard')))+'\n'
+        code += compact('$Actor=')+quote(self.actor)+compact(';$Fixture=')+('$true' if self.fixture else '$false')+compact(';$Root=')+root+'\n'
+        code += compact("$Latest=Join-Path $Root 'latest.json';$TaskName=")+quote(self.layout.task)+compact(';$Script=')+quote(str(self.layout.script('guard')))+'\n'
         code += compact(PROTECT).replace('@RELEASE@', __release__)
         if action == 'status': return code+compact('\nReadLast|ConvertTo-Json -Depth 12 -Compress\n')
         if action not in ('retire', 'restore') or not re.fullmatch('[a-f0-9]{64}', sha or ''): raise ValueError('组件修改参数无效')

@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest.mock import Mock
 from urllib.request import Request, build_opener, ProxyHandler
 from urllib.error import HTTPError
 
@@ -21,6 +22,7 @@ class ComponentsIntegrationTests(unittest.TestCase):
         self.home = Path(self.temp.name).resolve(); self.store = StateStore(self.home/'state')
         self.io = ComponentsFixture(); self.subject = ComponentMigration(self.store, self.home, io=self.io)
         self.ops = Operations(self.store, self.home, components=self.subject, discoverer=lambda: [])
+        self.ops.timezone_service.status = Mock(return_value={'state':'not_applicable','supported':False})
         self.subject.transaction_lock = lambda: self.ops.accounts._lock()
         self.server = make_server(store=self.store, operations=self.ops)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True); self.thread.start()

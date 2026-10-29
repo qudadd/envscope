@@ -65,6 +65,10 @@ jobs:
         env:
           ENVSCOPE_SERVICE_ACCEPTANCE: '1'
         run: python -m scripts.wireguard_acceptance
+      - name: Actual legacy task migration (owned inert jobs only)
+        env:
+          ENVSCOPE_COMPONENTS_ACCEPTANCE: '1'
+        run: python -m scripts.components_acceptance
       - run: python -m scripts.build_desktop
       - name: Frozen Windows smoke
         if: runner.os == 'Windows'

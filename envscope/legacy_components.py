@@ -88,16 +88,20 @@ class ComponentMigration:
                     'reason': '进入持续维护后自动读取旧组件。此处只核对系统任务，账号与原脚本保留。'}
         return {**deepcopy(self.cached[1]), 'cached': True, 'cache_age_seconds': round(max(0, self.clock()-self.cached[0]))}
 
+    @staticmethod
+    def _view(snapshot, receipt):
+        return {'state': receipt.get('state', 'not_configured'), 'receipt': public_receipt(receipt),
+                'rows': [{k: r.get(k) for k in ('id', 'title', 'scope', 'label', 'path', 'script', 'present', 'registered', 'owned', 'running', 'enabled', 'error', 'reason')} for r in snapshot['rows']],
+                'can_restore': bool(receipt.get('id') and receipt.get('state') in (*PENDING, 'committed')),
+                'needs_recovery': receipt.get('state') in PENDING,
+                'reason': '仅核对旧后台任务；账号、脚本与应用资料保留。删除登记不等于新保护已启用，迁移后还需重新检测并审核原生守护。'}
+
     def status(self, fresh=False):
         if not fresh and self.cached and self.clock()-self.cached[0] < 10:
             return {**deepcopy(self.cached[1]), 'cached': True}
         try:
             snapshot, receipt = self._snapshot(), self.io.status()
-            value = {'state': receipt.get('state', 'not_configured'), 'receipt': public_receipt(receipt),
-                     'rows': [{k: r.get(k) for k in ('id', 'title', 'scope', 'label', 'path', 'script', 'present', 'registered', 'owned', 'running', 'enabled', 'error', 'reason')} for r in snapshot['rows']],
-                     'can_restore': bool(receipt.get('id') and receipt.get('state') in (*PENDING, 'committed')),
-                     'needs_recovery': receipt.get('state') in PENDING,
-                     'reason': '仅核对旧后台任务；账号、脚本与应用资料保留。删除登记不等于新保护已启用，迁移后还需重新检测并审核原生守护。'}
+            value = self._view(snapshot, receipt)
         except (OSError, ValueError, AccountError) as error:
             value = {'state': 'unavailable', 'rows': [], 'can_restore': False, 'needs_recovery': False, 'reason': str(error)[:240]}
         self.cached = self.clock(), deepcopy(value)
@@ -186,7 +190,7 @@ class ComponentMigration:
                         ok = ok and row.get('owned') is True and not row.get('error') and all(row.get(k) == original.get(k) for k in keys)
                 else:
                     ok = ok and all(found.get(r, {}).get('present') is False and found[r].get('registered') is False and not found[r].get('error') for r in plan['roles'])
-                self.plans.clear(); self.cached = None
+                self.plans.clear(); self.cached = self.clock(), self._view(live, after)
                 return {'state': 'restored' if ok and plan['restore'] else 'completed' if ok else 'partial', 'retest': True,
                         'reason': '原任务已按保存范围恢复，需重新检测实际状态。' if ok and plan['restore'] else
                                   '旧任务登记已独立读回为移除；资料和恢复副本保留。现在重新检测，再审核原生保护。' if ok else
