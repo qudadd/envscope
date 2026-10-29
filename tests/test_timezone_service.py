@@ -1,14 +1,17 @@
 import copy
 from datetime import datetime,timezone
 import hashlib
+import json
 from pathlib import Path
 import plistlib
+import tempfile
 import unittest
+import zipfile
 from unittest.mock import Mock,patch
 
 from envscope import __release__
 from envscope.state import StateStore
-from envscope.timezone_service import TimezoneService,NativeTimezoneIO,Layout,daemon_bytes,render_transaction,render_recovery
+from envscope.timezone_service import TimezoneService,NativeTimezoneIO,Layout,daemon_bytes,render_transaction,render_recovery,bundle_worker
 from envscope.target_environment import fingerprint
 
 
@@ -152,6 +155,35 @@ class TimezoneServiceTests(unittest.TestCase):
         self.assertEqual(value['ProgramArguments'],[str(Layout().root/'worker'),'--once'])
         self.assertEqual(value['StartInterval'],60)
         self.assertFalse(any('/Users/' in arg for arg in value['ProgramArguments']))
+
+    def test_bundle_payload_keeps_native_bytes_and_repairs_only_own_cache(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder).resolve()/'bundle';root.mkdir();cache=Path(folder).resolve()/'cache'
+            data=b'fixture native bytes, never executed'
+            metadata={'format':1,'release':__release__,'fixture':False,'sha256':hashlib.sha256(data).hexdigest()}
+            (root/'timezone-helper.json').write_text(json.dumps(metadata))
+            with zipfile.ZipFile(root/'timezone-helper.payload.zip','w') as archive:archive.writestr('timezone-helper',data)
+            worker=bundle_worker(root,cache);path=Path(worker['path'])
+            self.assertEqual(path.read_bytes(),data)
+            self.assertEqual(bundle_worker(root,cache),worker)
+            path.chmod(0o600);path.write_bytes(b'corrupted cache')
+            self.assertEqual(bundle_worker(root,cache),worker)
+            self.assertEqual(path.read_bytes(),data)
+            path.chmod(0o600)  # Allow TemporaryDirectory cleanup on Windows.
+            metadata['sha256']='b'*64;(root/'timezone-helper.json').write_text(json.dumps(metadata))
+            with self.assertRaises(ValueError):bundle_worker(root,cache)
+
+    def test_unexpected_or_fixture_payload_is_never_materialized(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder).resolve()/'bundle';root.mkdir();cache=Path(folder).resolve()/'cache'
+            data=b'fixture';metadata={'format':1,'release':__release__,'fixture':True,'sha256':hashlib.sha256(data).hexdigest()}
+            (root/'timezone-helper.json').write_text(json.dumps(metadata))
+            with zipfile.ZipFile(root/'timezone-helper.payload.zip','w') as archive:archive.writestr('timezone-helper',data)
+            with self.assertRaises(ValueError):bundle_worker(root,cache)
+            metadata['fixture']=False;(root/'timezone-helper.json').write_text(json.dumps(metadata))
+            with zipfile.ZipFile(root/'timezone-helper.payload.zip','a') as archive:archive.writestr('../extra',b'not extracted')
+            with self.assertRaises(ValueError):bundle_worker(root,cache)
+            self.assertFalse(cache.exists())
 
 
 if __name__=='__main__':unittest.main()

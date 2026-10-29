@@ -18,7 +18,9 @@ import secrets
 import shlex
 import stat
 import subprocess
+import tempfile
 import time
+import zipfile
 
 from . import __release__
 from .accounts import _safe_chain
@@ -62,21 +64,53 @@ def daemon_bytes(layout):
                           'StandardOutPath':'/dev/null','StandardErrorPath':'/dev/null'},sort_keys=True)
 
 
-def bundle_worker():
-    root=Path(__file__).resolve().parent/'native-runtime'
+def bundle_worker(root=None,cache=None):
+    root=Path(root) if root is not None else Path(__file__).resolve().parent/'native-runtime'
     try:
         metadata=root/'timezone-helper.json'
         if metadata.stat().st_size>65536:raise ValueError('oversized helper metadata')
         manifest=json.loads(metadata.read_text(encoding='utf-8'))
-        path=(root/'timezone-helper').resolve(strict=True)
-    except (OSError,ValueError):
+        payload=root/'timezone-helper.payload.zip'
+        if payload.stat().st_size>2*1024**2:raise ValueError('oversized helper payload')
+        with zipfile.ZipFile(payload) as archive:
+            if archive.namelist()!=['timezone-helper'] or not 0<archive.getinfo('timezone-helper').file_size<=2*1024**2:
+                raise ValueError('invalid helper payload')
+            data=archive.read('timezone-helper')
+    except (OSError,ValueError,zipfile.BadZipFile,RuntimeError):
         raise ValueError('请使用完整 macOS 独立桌面包，本入口需要随附的原生时区辅助程序。') from None
     if (not isinstance(manifest,dict) or type(manifest.get('format')) is not int or manifest.get('format')!=1
             or manifest.get('fixture') is not False or manifest.get('release')!=__release__
             or not isinstance(manifest.get('sha256'),str) or not SHA.fullmatch(manifest['sha256'])
-            or not 0<path.stat().st_size<=2*1024**2
-            or _hash(path.read_bytes())!=manifest['sha256']):
+            or _hash(data)!=manifest['sha256']):
         raise ValueError('随附的时区辅助程序校验失败，请重新获取完整桌面包。')
+    # A compressed data resource keeps PyInstaller from rewriting Mach-O bytes.
+    # Materialize as the ordinary user, then root independently copies/hashes it.
+    uid=os.getuid() if hasattr(os,'getuid') else None
+    base=Path(cache) if cache is not None else Path(tempfile.gettempdir()).resolve()/('envscope-timezone-'+str(uid))
+    _safe_chain(base)
+    base.mkdir(mode=0o700,parents=True,exist_ok=True)
+    for directory in (base,base/manifest['sha256']):
+        _safe_chain(directory)
+        directory.mkdir(mode=0o700,exist_ok=True)
+        info=directory.stat()
+        if not stat.S_ISDIR(info.st_mode) or uid is not None and (info.st_uid!=uid or info.st_mode&0o077):
+            raise ValueError('时区辅助程序缓存权限冲突，未执行。')
+    path=base/manifest['sha256']/'timezone-helper';_safe_chain(path)
+    valid=False
+    if path.exists():
+        info=path.stat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or uid is not None and (info.st_uid!=uid or info.st_mode&0o022)):
+            raise ValueError('时区辅助程序缓存类型或权限冲突，未执行。')
+        valid=info.st_size==len(data) and _hash(path.read_bytes())==manifest['sha256']
+    if not valid:
+        temporary=path.with_name('.helper-'+secrets.token_hex(12))
+        try:
+            descriptor=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_NOFOLLOW',0),0o500)
+            with os.fdopen(descriptor,'wb') as stream:stream.write(data);stream.flush();os.fsync(stream.fileno())
+            os.chmod(temporary,0o500)
+            os.replace(temporary,path)
+        finally:temporary.unlink(missing_ok=True)
+    if _hash(path.read_bytes())!=manifest['sha256']:raise ValueError('时区辅助程序缓存读回不一致，未执行。')
     return {'path':str(path),'sha256':manifest['sha256'],'release':manifest['release']}
 
 

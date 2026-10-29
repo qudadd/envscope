@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 
 
 def main():
@@ -31,7 +32,11 @@ def main():
     if platform.system() == 'Darwin':
         from .build_timezone_worker import build
         native = build()
-        for name in ('timezone-helper','timezone-helper.json'):
+        # Keep the separately signed native worker byte exact. PyInstaller treats
+        # a raw Mach-O data file as a binary and rewrites its code signature.
+        with zipfile.ZipFile(native/'timezone-helper.payload.zip','w',zipfile.ZIP_DEFLATED) as archive:
+            archive.write(native/'timezone-helper','timezone-helper')
+        for name in ('timezone-helper.payload.zip','timezone-helper.json'):
             command.extend(['--add-data',str(native/name)+os.pathsep+'envscope/native-runtime'])
     environment["PYINSTALLER_CONFIG_DIR"] = str(root / "build" / "pyinstaller-cache")
     subprocess.run(command, cwd=root, check=True, env=environment)
@@ -41,8 +46,10 @@ def main():
         assert manifests, 'Native timezone helper missing'
         for metadata in manifests:
             expected = json.loads(metadata.read_text())
-            helper = metadata.with_name('timezone-helper')
-            assert hashlib.sha256(helper.read_bytes()).hexdigest()==expected['sha256'], 'Frozen timezone helper bytes changed'
+            with zipfile.ZipFile(metadata.with_name('timezone-helper.payload.zip')) as archive:
+                assert archive.namelist()==['timezone-helper']
+                payload=archive.read('timezone-helper')
+            assert hashlib.sha256(payload).hexdigest()==expected['sha256'], 'Frozen timezone helper bytes changed'
             assert expected['fixture'] is False, 'Acceptance helper must never ship'
     manifests = list(app.rglob("VENDOR_MANIFEST.json"))
     if not manifests:

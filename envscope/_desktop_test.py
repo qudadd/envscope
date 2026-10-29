@@ -46,7 +46,7 @@ def main(output=None):
         if platform.system() == 'Darwin':
             from .timezone_service import bundle_worker
             import subprocess
-            worker=bundle_worker()
+            worker=bundle_worker(cache=directory/'native-timezone-cache')
             info=json.loads(subprocess.check_output([worker['path'],'--version'],timeout=10))
             assert info=={'format':1,'release':__release__,'fixture':False}
             result['native_timezone_worker']=True
