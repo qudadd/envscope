@@ -113,7 +113,7 @@ class WatchdogTests(unittest.TestCase):
 class IdentityIsolationTests(unittest.TestCase):
     def test_repeated_switches_preserve_each_accounts_device_and_oauth_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);state=root/'state';data=root/'Claude';b=state/'accounts/B'
+            root=Path(tmp).resolve();state=root/'state';data=root/'Claude';b=state/'accounts/B'
             data.mkdir();b.mkdir(parents=True);(state/'current.txt').write_text('A')
             items={'Local State':b'fixture-device-','Local Storage/leveldb/state':b'fixture-oauth-','Cookies':b'fixture-cookie-'}
             for folder,tag in [(data,b'A'),(b,b'B')]:
