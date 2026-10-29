@@ -129,6 +129,14 @@ def _expected_script(snapshot):
             if not SHA.fullmatch(expected):raise ValueError('invalid service checksum')
             lines.extend([f'safe "{path}" || exit 79',f'[ "$(digest "{path}")" = {shlex.quote(expected)} ] || exit 79'])
     lines.append('registered || exit 79' if snapshot['registered'] else 'if registered; then exit 79; fi')
+    # Even an install/remove cycle with the same timezone and no remaining files
+    # is a later operation. Recheck its receipt after the authorization dialog.
+    for name in ('transaction','outcome'):
+        value=snapshot.get(name,{})
+        if value:
+            expected=_hash(plistlib.dumps(value,sort_keys=True))
+            lines.append(f'safe "$ROOT/{name}.plist" && [ "$(digest "$ROOT/{name}.plist")" = {shlex.quote(expected)} ] || exit 79')
+        else:lines.append(f'[ ! -e "$ROOT/{name}.plist" ] && [ ! -L "$ROOT/{name}.plist" ] || exit 79')
     return '\n'.join(lines)+'\n'
 
 
