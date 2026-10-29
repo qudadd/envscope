@@ -18,8 +18,20 @@ from envscope.state import StateStore
 from envscope.target_environment import fingerprint
 from envscope.timezone_service import TimezoneService
 from envscope.watchdog import Watchdog
-from tests.test_maintenance import FakeScheduler
 from tests.test_timezone_service import FixtureIO
+
+
+class FakeScheduler:
+    def __init__(self):self.definition=None;self.calls=[];self.fail=False
+    def build(self,interval):return {'system':'fixture','body':'fixture '+str(interval),'interval':interval}
+    def inspect(self,spec=None):
+        present=self.definition is not None;owned=present and spec==self.definition
+        return {'present':present,'owned':owned,'registered':owned,'state':'registered' if owned else 'missing'}
+    def install(self,spec,previous=None):
+        self.calls.append(('install',spec))
+        if self.fail:raise ValueError('fixture registration failure')
+        self.definition=spec
+    def remove(self,spec):self.calls.append(('remove',spec));self.definition=None
 
 
 class TransactionFixture(FixtureIO):
