@@ -129,11 +129,12 @@ class TimezoneServiceTests(unittest.TestCase):
         self.assertFalse(self.io.scripts)
     def test_native_authorization_never_receives_admin_password(self):
         runner=Mock(return_value=Mock(returncode=0))
-        io=NativeTimezoneIO(runner=runner)
+        io=NativeTimezoneIO(runner=runner,worker=lambda:self.io.binary)
         io.execute("/usr/bin/printf '%s' 'fixture-only'")
         argv=runner.call_args.args[0]
         self.assertEqual(argv[:2],['/usr/bin/osascript','-e'])
         self.assertIn('with administrator privileges',argv[2])
+        self.assertIn('--lifecycle',argv[2])
         self.assertNotIn('password ',argv[2])
     def test_fixed_daemon_command_has_no_user_profile_paths(self):
         value=plistlib.loads(daemon_bytes(Layout()))

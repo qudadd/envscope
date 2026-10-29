@@ -135,6 +135,31 @@ def _receipt(snapshot, action, target=None, original=None):
             'hashes':{k:v for k,v in snapshot['hashes'].items() if v is not None},'release':__release__}
 
 
+def privileged_script(layout,script,worker):
+    """Verify a root-owned stage, then serialize the authorized transaction."""
+    if not isinstance(worker.get('sha256'),str) or not SHA.fullmatch(worker['sha256']):
+        raise ValueError('invalid native helper checksum')
+    stage='stage-'+secrets.token_hex(12)
+    body=_header(layout)+'''
+parent=$(/usr/bin/dirname "$ROOT")
+if [ ! -e "$parent" ] && [ ! -L "$parent" ]; then
+  safe "$(/usr/bin/dirname "$parent")" || exit 79
+  /bin/mkdir "$parent"; /bin/chmod 755 "$parent"; /bin/chmod -N "$parent"
+fi
+safe "$parent" || exit 79
+if [ ! -e "$ROOT" ] && [ ! -L "$ROOT" ]; then /bin/mkdir "$ROOT"; /bin/chmod 755 "$ROOT"; /bin/chmod -N "$ROOT"; fi
+safe "$ROOT" || exit 79
+'''
+    body+=f'STAGE="$ROOT/{stage}"\n/bin/mkdir "$STAGE"\n/bin/chmod 700 "$STAGE"\n/bin/chmod -N "$STAGE"\n'
+    body+='''trap '/bin/rm -f "$STAGE/lock-worker"; /bin/rmdir "$STAGE"' EXIT
+trap 'exit 130' INT TERM HUP
+'''
+    body+=f'/bin/cp {shlex.quote(worker["path"])} "$STAGE/lock-worker"\n/bin/chmod 755 "$STAGE/lock-worker"\n'
+    body+=f'safe "$STAGE/lock-worker" && [ "$(digest "$STAGE/lock-worker")" = {shlex.quote(worker["sha256"])} ] || exit 79\n'
+    body+=f'/usr/bin/printf %s {shlex.quote(_encoded(script.encode()))} | /usr/bin/base64 -D | "$STAGE/lock-worker" --lifecycle\n'
+    return body
+
+
 def render_transaction(layout, snapshot, worker, action, target=None, owner_uid=None, restore=False):
     if action not in ('install','remove'):raise ValueError('invalid timezone operation')
     if type(restore) is not bool:raise ValueError('invalid restore option')
@@ -311,7 +336,8 @@ class NativeTimezoneIO:
             value=plistlib.loads(body) if body is not None else {}
             if not isinstance(value,dict):raise ValueError('时区服务记录格式无效。')
             values[name]=value
-        result=self.runner(['/bin/launchctl','print','system/'+self.layout.label],timeout=5)
+        result=self.runner(['/bin/launchctl','print','system/'+self.layout.label],timeout=5,
+                           env={'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','LC_ALL':'C'})
         if result.returncode==0:registered=True
         elif 'could not find service' in ((result.stdout or '')+(result.stderr or '')).lower():registered=False
         else:raise ValueError('无法核实系统时区服务是否注册，请检查系统权限。')
@@ -327,6 +353,7 @@ class NativeTimezoneIO:
         return {**values,'hashes':hashes,'registered':registered,'pending':pending}
 
     def execute(self,script):
+        script=privileged_script(self.layout,script,self.worker())
         apple='do shell script '+json.dumps(script,ensure_ascii=False)+' with administrator privileges without altering line endings'
         result=self.runner(['/usr/bin/osascript','-e',apple],timeout=150)
         if result.returncode:

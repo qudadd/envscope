@@ -15,7 +15,7 @@ import tempfile
 import time
 import uuid
 
-from envscope.timezone_service import Layout,NativeTimezoneIO,render_transaction,render_recovery
+from envscope.timezone_service import Layout,NativeTimezoneIO,render_transaction,render_recovery,privileged_script
 from scripts.build_timezone_worker import build
 
 
@@ -86,8 +86,19 @@ case "$2" in Asia/Shanghai|America/New_York|Europe/London) ;; *) exit 2;; esac
             sudo(setup)
             def snapshot():
                 value=io.inspect();value['observed']=str((root/'localtime').resolve()).split('/zones/',1)[1];return value
+            def execute(script,check=True):return sudo(privileged_script(layout,script,worker),check)
+            hold=privileged_script(layout,'/usr/bin/touch '+shlex.quote(str(root/'lease-held'))+'\n/bin/sleep 4\n',worker)
+            process=subprocess.Popen(['/usr/bin/sudo','-n','/bin/sh'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            process.stdin.write(hold);process.stdin.close();process.stdin=None
+            deadline=time.monotonic()+10
+            while not (root/'lease-held').exists() and time.monotonic()<deadline:time.sleep(.05)
+            assert (root/'lease-held').exists()
+            assert execute('/usr/bin/printf concurrent',False).returncode!=0
+            _,stderr=process.communicate(timeout=10)
+            assert process.returncode==0,stderr
+            proof['exclusive_lifecycle_lock']=True
             script,_=render_transaction(layout,snapshot(),worker,'install','America/New_York',os.getuid())
-            sudo(script);phases.append('installed')
+            execute(script);phases.append('installed')
             first=wait_status(io,lambda x:x['status'].get('state')=='healthy' and x['status'].get('initial') is False)
             assert first['status']['fixture'] is True
             # A later timestamp must come from the system's StartInterval, not a
@@ -101,14 +112,14 @@ case "$2" in Asia/Shanghai|America/New_York|Europe/London) ;; *) exit 2;; esac
             assert changed['status']['observed']=='America/New_York';phases.append('drift_repaired')
             # Reconfigure a root service, preserving its original timezone.
             script,_=render_transaction(layout,snapshot(),worker,'install','Europe/London',os.getuid())
-            sudo(script)
+            execute(script)
             updated=wait_status(io,lambda x:x['status'].get('initial') is False and x['status'].get('target')=='Europe/London')
             assert updated['baseline']['original']=='Asia/Shanghai';phases.append('updated')
             # A failed initial apply must restore old files, old timezone and
             # original registration; the failed candidate remains in a backup.
             sudo('/usr/bin/touch '+shlex.quote(str(root/'fail-setter')))
             script,_=render_transaction(layout,snapshot(),worker,'install','America/New_York',os.getuid())
-            result=sudo(script,False);assert result.returncode!=0
+            result=execute(script,False);assert result.returncode!=0
             sudo('/bin/rm -f '+shlex.quote(str(root/'fail-setter')))
             rolled=io.inspect();assert not rolled['pending'] and rolled['baseline']['target']=='Europe/London' and rolled['registered']
             assert str((root/'localtime').resolve()).endswith('/Europe/London');phases.append('failed_update_rolled_back')
@@ -116,13 +127,13 @@ case "$2" in Asia/Shanghai|America/New_York|Europe/London) ;; *) exit 2;; esac
             # mutation. Explicit recovery verifies and restores that snapshot.
             script,receipt=render_transaction(layout,snapshot(),worker,'install','America/New_York',os.getuid())
             head=script.split('rollback() {',1)[0]
-            sudo(head)
+            execute(head)
             pending=io.inspect();assert pending['pending']
-            sudo(render_recovery(layout,pending,worker))
+            execute(render_recovery(layout,pending,worker))
             assert not io.inspect()['pending'];phases.append('interruption_recovered')
             # Remove the service and restore its first pre-install value.
             script,_=render_transaction(layout,snapshot(),worker,'remove',owner_uid=os.getuid(),restore=True)
-            sudo(script)
+            execute(script)
             ended=io.inspect();assert not ended['registered'] and not ended['baseline'] and not ended['pending']
             assert str((root/'localtime').resolve()).endswith('/Asia/Shanghai');phases.append('removed_and_restored')
             logs='\n'.join(p.read_text() for p in root.glob('*.private.jsonl'))

@@ -146,6 +146,9 @@ static int set_zone(const char *target) {
     pid_t child=fork();
     if(child<0)return 0;
     if(child==0) {
+        // systemsetup creates public system timezone links. Do not propagate
+        // the installer's private-file umask into that OS command.
+        umask(0022);
         int null=open("/dev/null",O_RDWR);
         if(null>=0){dup2(null,0);dup2(null,1);dup2(null,2);if(null>2)close(null);}
         char *const args[]={(char*)ENVSCOPE_TZ_SETTER,"-settimezone",(char*)target,NULL};
@@ -194,10 +197,21 @@ int main(int argc, char **argv) {
     }
     int probe=argc==2&&!strcmp(argv[1],"--probe");
     int initial=argc==2&&!strcmp(argv[1],"--initial-apply");
+    int lifecycle=argc==2&&!strcmp(argv[1],"--lifecycle");
     initial_mode=initial;
-    if(argc!=2||(!probe&&!initial&&strcmp(argv[1],"--once")))return 77;
+    if(argc!=2||(!probe&&!initial&&!lifecycle&&strcmp(argv[1],"--once")))return 77;
     int root=open(ENVSCOPE_TZ_ROOT,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
     if(root<0||!protected_stat(root,1))return 78;
+    if(lifecycle) {
+        // Root-only installer utility. The application has already obtained
+        // administrator authorization for the concrete stdin script. Keep the
+        // OS lock across exec, including interrupted installer recovery.
+        int lease=openat(root,".lifecycle.lock",O_RDWR|O_CREAT|O_NOFOLLOW,0600);
+        if(lease<0||!protected_stat(lease,0)||flock(lease,LOCK_EX|LOCK_NB))return 75;
+        char *const args[]={"/bin/sh","-s",NULL};
+        char *const env[]={"PATH=/usr/bin:/bin:/usr/sbin:/sbin","LC_ALL=C","HOME=/var/root",NULL};
+        execve("/bin/sh",args,env);return 127;
+    }
     struct stat transaction;
     if(!probe&&!initial&&fstatat(root,"pending",&transaction,AT_SYMLINK_NOFOLLOW)==0)return 75;
     int lock=openat(root,".worker.lock",O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC,0600);
