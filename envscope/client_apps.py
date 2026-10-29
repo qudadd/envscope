@@ -118,14 +118,19 @@ def quit_macos_pid(pid):
     objc=ctypes.CDLL('/usr/lib/libobjc.A.dylib')
     objc.objc_getClass.argtypes=[ctypes.c_char_p];objc.objc_getClass.restype=ctypes.c_void_p
     objc.sel_registerName.argtypes=[ctypes.c_char_p];objc.sel_registerName.restype=ctypes.c_void_p
+    objc.class_getClassMethod.argtypes=[ctypes.c_void_p,ctypes.c_void_p];objc.class_getClassMethod.restype=ctypes.c_void_p
     address=ctypes.cast(objc.objc_msgSend,ctypes.c_void_p).value
     send=ctypes.CFUNCTYPE(ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p)(address)
     send_pid=ctypes.CFUNCTYPE(ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int)(address)
     send_bool=ctypes.CFUNCTYPE(ctypes.c_bool,ctypes.c_void_p,ctypes.c_void_p)(address)
     selector=objc.sel_registerName
+    running_class=objc.objc_getClass(b'NSRunningApplication')
+    running_selector=selector(b'runningApplicationWithProcessIdentifier:')
+    if not running_class or not objc.class_getClassMethod(running_class,running_selector):
+        raise ValueError('系统应用退出接口不可用，请在客户端手动退出后重试')
     pool=send(send(objc.objc_getClass(b'NSAutoreleasePool'),selector(b'alloc')),selector(b'init'))
     try:
-        app=send_pid(objc.objc_getClass(b'NSRunningApplication'),selector(b'applicationWithProcessIdentifier:'),pid)
+        app=send_pid(running_class,running_selector,pid)
         return bool(app and send_bool(app,selector(b'terminate')))
     finally:
         ctypes.CFUNCTYPE(None,ctypes.c_void_p,ctypes.c_void_p)(address)(pool,selector(b'drain'))
