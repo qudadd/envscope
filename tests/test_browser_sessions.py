@@ -205,6 +205,24 @@ class BrowserSessionTests(unittest.TestCase):
         self.assertEqual(browser.resume_cleanup()['state'],'requested')
         worker.assert_called_once_with(self.root)
 
+    @unittest.skipUnless(os.name=='nt','Windows sharing handles')
+    def test_metadata_replace_retries_transient_denial_and_preserves_persistent_failure(self):
+        self.root.parent.mkdir(parents=True)
+        path=self.root.parent/'replace.private.json'
+        _write(path,{'generation':0})
+        replace=os.replace
+        def busy_then_replace(source,destination):
+            if calls.pop(0): raise PermissionError('owned transient sharing fixture')
+            return replace(source,destination)
+        calls=[True,True,False]
+        with patch('envscope.browser_sessions.os.replace',side_effect=busy_then_replace):
+            _write(path,{'generation':1})
+        self.assertEqual(_read(path),{'generation':1})
+        with patch('envscope.browser_sessions.os.replace',side_effect=PermissionError('owned denial fixture')):
+            with self.assertRaises(PermissionError): _write(path,{'generation':2})
+        self.assertEqual(_read(path),{'generation':1})
+        self.assertEqual(list(path.parent.glob('*.part')),[])
+
     def test_worker_launch_is_hidden_detached_and_contains_no_login_url_or_proxy(self):
         with patch('envscope.browser_sessions.subprocess.Popen') as launch:
             start_worker(self.root)

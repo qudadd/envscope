@@ -144,7 +144,10 @@ def _read_descriptor(path):
 def _read_once(path):
     _safe_chain(path)
     before = path.lstat()
-    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > 8192:
+    # A concurrent rename can unlink the inode after lstat selected it. The
+    # descriptor below is authoritative; zero links is safe for this read-only
+    # metadata snapshot, whereas multiple links remain forbidden.
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink > 1 or before.st_size > 8192:
         raise AccountError('临时会话记录不是独立普通文件，资料已保留。')
     fd = _read_descriptor(path)
     with os.fdopen(fd,'rb') as stream:
@@ -179,7 +182,17 @@ def _write(path, value):
             stream.flush();os.fsync(stream.fileno())
         if path.exists():
             _read(path)  # Never replace a link, shared file or unowned record.
-        os.replace(temporary,path)
+        for attempt in range(8):
+            try:
+                os.replace(temporary,path)
+                break
+            except PermissionError:
+                # Windows metadata queries and antivirus can briefly keep a
+                # non-delete-sharing handle. Never rewrite the destination in
+                # place, or hide a persistent denial.
+                if os.name != 'nt' or attempt == 7:
+                    raise
+                time.sleep(.01*(attempt+1))
     finally:
         if temporary.exists():
             temporary.unlink()
