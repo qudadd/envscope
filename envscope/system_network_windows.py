@@ -110,7 +110,7 @@ function Save($path,$value,[bool]$public) {
   $file=[IO.File]::Open($temporary,'CreateNew','Write','None')
   try{$file.Write($bytes,0,$bytes.Length);$file.Flush($true)}finally{$file.Dispose()}
   Protect $temporary $false $public
-  if(Test-Path -LiteralPath $path){Assert-Protected $path;[IO.File]::Replace($temporary,$path,$null)}else{[IO.File]::Move($temporary,$path)}
+  if(Test-Path -LiteralPath $path){Assert-Protected $path;[IO.File]::Replace($temporary,$path,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temporary,$path)}
   Assert-Protected $path
  }finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force}}
 }

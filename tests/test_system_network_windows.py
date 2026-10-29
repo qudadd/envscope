@@ -1,10 +1,14 @@
 """Inspect transport and parse scripts without changing Windows networking."""
 import base64
 import json
+from pathlib import Path
+import platform
+import subprocess
+import tempfile
 import unittest
 from unittest.mock import Mock
 
-from envscope.system_network_windows import WindowsNetworkIO,script
+from envscope.system_network_windows import WindowsNetworkIO,script,powershell
 
 
 class WindowsNetworkTests(unittest.TestCase):
@@ -45,6 +49,23 @@ class WindowsNetworkTests(unittest.TestCase):
                       {'format':True,'state':'committed','id':'a'*32,'fixture':False}):
             runner.return_value.stdout=json.dumps(value).encode()
             with self.assertRaises(ValueError):io.status()
+
+    @unittest.skipUnless(platform.system()=='Windows','PowerShell 5 runtime regression')
+    def test_receipt_replacement_and_event_append_use_only_owned_fixture_files(self):
+        with tempfile.TemporaryDirectory(prefix='envscope-receipts-fixture-') as folder:
+            # Exercise real .NET replacement/flush semantics without UAC, ACL
+            # changes, network functions, or any path outside this test folder.
+            body=script('status',fixture_backend='',fixture_root=Path(folder))
+            body=body.removesuffix('Read-Record | ConvertTo-Json -Depth 30 -Compress\n')
+            body+='\nfunction Protect($path,$directory,$public){}\nfunction Assert-Protected($path){}\n'
+            body+="$r=@{id=('a'*32);format=1;fixture=$true;adapters=@()};Publish $r 'prepared';Publish $r 'committed'"
+            result=subprocess.run([powershell(),'-NoProfile','-NonInteractive','-Command',body],
+                                  capture_output=True,timeout=20)
+            self.assertEqual(result.returncode,0,result.stderr.decode('utf-8',errors='replace'))
+            receipt=json.loads((Path(folder)/'latest.json').read_text())
+            self.assertEqual(receipt['state'],'committed')
+            events=[json.loads(line) for p in Path(folder).glob('events-*.jsonl') for line in p.read_text().splitlines()]
+            self.assertEqual([r['phase'] for r in events],['prepared','committed'])
 
 
 if __name__=='__main__':unittest.main()
