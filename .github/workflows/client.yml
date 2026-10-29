@@ -8,6 +8,10 @@ on:
       - envscope/client_config.py
       - envscope/windows_pipe.py
       - envscope/local_controller.py
+      - envscope/mac_preferences.py
+      - envscope/language_repair.py
+      - scripts/language_acceptance.py
+      - tests/test_language_repair.py
       - scripts/client_lifecycle_acceptance.py
       - tests/test_client*.py
       - tests/test_windows_pipe.py
@@ -28,14 +32,25 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install .
-      - run: python -m unittest tests.test_client_apps tests.test_client_config tests.test_windows_pipe -q
+      - run: python -m unittest tests.test_client_apps tests.test_client_config tests.test_client_repair tests.test_client_workflow tests.test_windows_pipe tests.test_language_repair -q
       - name: Owned GUI app only, no real proxy or Claude process
         env:
           ENVSCOPE_CLIENT_ACCEPTANCE: '1'
         run: python -m scripts.client_lifecycle_acceptance
+      - name: Actual CFPreferences in a unique owned fixture domain only
+        if: runner.os == 'macOS'
+        env:
+          ENVSCOPE_CLIENT_ACCEPTANCE: '1'
+        run: python -m scripts.language_acceptance
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Client-lifecycle-${{ runner.os }}-${{ runner.arch }}
           path: artifacts/client-lifecycle/result.json
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'macOS'
+        with:
+          name: Language-preferences-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/language-acceptance/result.json
+          if-no-files-found: error

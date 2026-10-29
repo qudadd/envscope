@@ -122,7 +122,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None, language_repair=None):
         self.store = store
         self.environment_reader = environment_reader
         from .region_lookup import lookup_region
@@ -162,9 +162,13 @@ class Operations:
             apps=(lambda:[]) if isolated else None,stop_desktop=(lambda:False) if isolated else quit_account_claude),
             root=self.home/'.envscope/client-repair' if isolated else None,
             transaction_lock=lambda:self.accounts._lock())
+        from .language_repair import LanguageRepair,LanguageIO
+        self.language_repair=language_repair or LanguageRepair(store,LanguageIO(
+            available=False if isolated else None,close_desktop=(lambda:False) if isolated else quit_account_claude),
+            root=self.home/'.envscope/client-language' if isolated else None,transaction_lock=lambda:self.accounts._lock())
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing,self.network,
-                                      self.client_repair,self.process_guard)
+                                      self.client_repair,self.process_guard,self.language_repair)
         from .region_setup import RegionSetup
         from .inventory import collect
         self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home,timezone_service=self.timezone_service)
@@ -234,11 +238,23 @@ class Operations:
                 'timezone_service': self.timezone_service.status(),
                 'system_network': self.network.status(),
                 'client_repair': self.client_repair.status(),
+                'client_language': self.language_repair.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action.startswith('language-'):
+            allowed={'language-status':set(),'language-plan':{'report_id'},'language-apply':{'plan_id'},
+                     'language-restore-plan':set(),'language-restore':{'plan_id'}}
+            if action not in allowed or set(params)-allowed[action]:raise ValueError('应用语言参数无效')
+            if action=='language-status':return self.language_repair.status()
+            if action=='language-restore-plan':return self.language_repair.prepare_restore()
+            if action=='language-restore':return self.language_repair.restore(params.get('plan_id'),confirmed)
+            if action=='language-apply':return self.language_repair.apply(params.get('plan_id'),confirmed)
+            if not report or params.get('report_id')!=report.get('report_id'):
+                return {'state':'retest_required','reason':'先完成新的目标检测，再预览应用语言设置。'}
+            return self.language_repair.prepare(report)
         if action.startswith('client-'):
             allowed={'client-options':set(),'client-status':set(),
                      'client-plan':{'report_id','app_id','tun','restart','allow_force'},'client-apply':{'plan_id'},

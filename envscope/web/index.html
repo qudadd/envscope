@@ -142,6 +142,12 @@
         <div class="actions"><button id="client-prepare" disabled>预览客户端修复</button><button id="client-restore" class="link" disabled>预览恢复原状态</button></div>
         <div id="client-plan"></div><div id="client-output" class="solution-output" aria-live="polite"></div>
       </section>
+      <section class="tool-section" id="language-panel"><h2>Claude 应用语言</h2>
+        <p class="note">先在检测目标填写期望语言，再预览本次修改。保留原语言列表与缺省状态，恢复时只处理 Claude 专用语言键。</p>
+        <h3 id="language-state">尚无应用语言修改</h3><p id="language-status" class="note" role="status"></p><p id="language-target" class="note"></p>
+        <div class="actions"><button id="language-prepare" disabled>预览应用语言设置</button><button id="language-restore" class="link" disabled>预览恢复原应用语言</button></div>
+        <div id="language-plan"></div><div id="language-output" class="solution-output" aria-live="polite"></div>
+      </section>
       <section class="tool-section" id="network-panel" hidden><h2>网络设置与恢复</h2>
         <p class="note">按已确认目标修改所选接口，申请本次所需的系统授权。修改会影响该接口上的其他应用；保留原配置与事务记录，失败后可恢复。</p>
         <h3 id="network-state">尚未读取</h3><p id="network-status" class="note" role="status"></p><p id="network-policy" class="note"></p>

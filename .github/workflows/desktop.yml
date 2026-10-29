@@ -45,6 +45,11 @@ jobs:
         env:
           ENVSCOPE_CLIENT_ACCEPTANCE: '1'
         run: python -m scripts.client_lifecycle_acceptance
+      - name: Actual Claude-language primitives (owned preference domain only)
+        if: runner.os == 'macOS'
+        env:
+          ENVSCOPE_CLIENT_ACCEPTANCE: '1'
+        run: python -m scripts.language_acceptance
       - name: Actual macOS network transactions (fixture paths only)
         if: runner.os == 'macOS'
         env:
@@ -79,6 +84,12 @@ jobs:
         with:
           name: Client-evidence-${{ runner.os }}-${{ runner.arch }}
           path: artifacts/client-lifecycle/result.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'macOS'
+        with:
+          name: Language-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/language-acceptance/result.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

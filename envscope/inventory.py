@@ -123,12 +123,10 @@ ConvertTo-Json -InputObject $v -Depth 6 -Compress
             except (OSError, subprocess.TimeoutExpired):
                 pass
             try:
-                value = command_text(["/usr/bin/defaults", "read", "com.anthropic.claudefordesktop", "AppleLanguages"])
-                language = re.search(r"[\"']?([a-z]{2,3}(?:-[A-Za-z0-9]+)*)[\"']?", value)
-                if language:
-                    result["client_language"] = {"value": language[1], "source": "application-preference"}
-            except (OSError, subprocess.TimeoutExpired):
-                pass
+                from .mac_preferences import read_claude_language
+                result['client_language']=read_claude_language()
+            except (OSError,ValueError,RuntimeError):
+                result['client_language']={'value':None,'source':'unavailable','error':'application-preference-unavailable'}
             localtime = str(Path("/etc/localtime").resolve())
             if "/zoneinfo/" in localtime:
                 result["timezone_iana"] = localtime.split("/zoneinfo/", 1)[1]

@@ -132,7 +132,7 @@ class ClientRepair:
         if not isinstance(ident,str) or not re.fullmatch('[a-f0-9]{32}',ident):raise ValueError('客户端修复索引无法核对')
         value=json.loads(read(self.root/ident/'record.private.json') or b'null')
         if (not isinstance(value,dict) or value.get('id')!=ident or type(value.get('version')) is not int or value['version']!=1
-                or value.get('state') not in STATES or not isinstance(value.get('app'),dict)
+                or not isinstance(value.get('state'),str) or value['state'] not in STATES or not isinstance(value.get('app'),dict)
                 or type(value.get('tun')) is not bool or type(value.get('was_running')) is not bool or type(value.get('restart')) is not bool
                 or not isinstance(value.get('owner'),str) or not value['owner']):
             raise ValueError('客户端恢复记录损坏，请保留备份并手动核对')

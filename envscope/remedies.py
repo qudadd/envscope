@@ -426,11 +426,12 @@ class ConfigRemedies:
 
 
 class SolutionPlans:
-    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None, network=None, client=None, guard=None):
+    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None, network=None, client=None, guard=None, language=None):
         self.config, self.legacy, self.discoverer, self.proxy_tester = config, legacy, discoverer, proxy_tester
         self.routing = routing
         self.network = network
         self.client,self.guard=client,guard
+        self.language=language
         self.plans = {}
 
     @staticmethod
@@ -604,6 +605,12 @@ class SolutionPlans:
             if value.get('state')=='planned':
                 network_plan=value['plan_id'];tasks.append('system-network');effects.extend(value['effects'])
             else:manual.append(value['reason'])
+        language_plan=None
+        if self.language and target.get('language') and scope_chosen(('baseline.language',),'language') and findings.get('baseline.language',{}).get('status') in ('warn','fail','unknown'):
+            value=self.language.prepare(report)
+            if value.get('state')=='planned':
+                language_plan=value['plan_id'];tasks.append('language');effects.extend(value['effects'])
+            else:manual.append(value.get('reason','请在系统应用语言设置中核对 Claude。'))
         guard_plan=None
         guard_needed=(scope_chosen(('baseline.guard',),'guard') and findings.get('baseline.guard',{}).get('status') in ('warn','fail','unknown')
                       and (check_id=='guard' or scope is not None and 'baseline.guard' in scope
@@ -646,13 +653,13 @@ class SolutionPlans:
         before["configuration"] = [{"target": c["target"], "after_hash": c["after_hash"], "fields": c.get("fields", [])} for c in changes]
         before["configuration_pending"] = list(manual)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"], "changes": changes,
-                              "tasks": tasks, "routing": route_plan, "system_network":network_plan,'guard':guard_plan, "problems": [p["id"] for p in problems],
+                              "tasks": tasks, "routing": route_plan, "system_network":network_plan,'guard':guard_plan,'language':language_plan, "problems": [p["id"] for p in problems],
                               "before": before, "proxy": chosen if changes and any("HTTPS_PROXY" in c.get("fields", []) for c in changes) else None,
                               "context": context, "repair_json": "trailing_comma" in kinds.get("cli", set())}}
         return {"state": "planned", "plan_id": token, "effects": effects, "manual": manual,
                 "manual_items": manual_items, "connections": connections,
                 "configuration_count": len(changes), "enhance_cli": enhance_cli,
-                "steps": ['注册所选接口 / 端口的进程守护并等待心跳' if t=='guard' else "备份、修改并读回所选系统网络设置" if t=='system-network' else "备份、写入并验证原生路由" if t == 'routing' else "备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
+                "steps": ['保存原值、设置并读回 Claude 专用语言' if t=='language' else '注册所选接口 / 端口的进程守护并等待心跳' if t=='guard' else "备份、修改并读回所选系统网络设置" if t=='system-network' else "备份、写入并验证原生路由" if t == 'routing' else "备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
                 "reason": "确认后执行；配置写入不等于故障已解决，随后自动复检。"}
 
     def apply(self, token, report, confirmed=False):
@@ -686,6 +693,11 @@ class SolutionPlans:
                 value=self.client.apply(plan['client'],True)
                 return {**value,'before':plan['before'],'steps':[{'step':'client',**value}],'backups':backups,
                         'next_review':value.get('state')=='completed','needs_retest':value.get('needs_retest',False)}
+            if task=='language':
+                value=self.language.apply(plan['language'],True)
+                outputs.append({'step':task,**value})
+                if value['state']!='completed':return {**value,'steps':outputs,'backups':backups,'before':plan['before'],'needs_retest':True}
+                continue
             if task=='guard':
                 value=self.guard.enable(plan['guard'],report,True)
                 outputs.append({'step':task,**value})

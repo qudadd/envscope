@@ -239,13 +239,23 @@ def diagnose(report, preferences=None):
     if bind.get("wildcard_bind") or bind.get("loopback_bind") is False:
         add("proxy.controller", "代理控制接口配置为非本机监听", "控制接口的监听地址没有限制为 loopback。", "这扩大了管理接口的配置访问范围；尚未测试其他设备是否可达。",
             ["如果仅用于本机管理，在代理客户端中将 external-controller 设置为 127.0.0.1 上的端口。", "配置控制口认证后复检；不要公开控制口密钥。"], "proxy-settings", certainty="review")
-    for key, pref, label in (("country", "country", "出口国家"), ("timezone", "timezone", "系统时区"), ("locale", "locale", "地区格式"), ("language", "locale", "客户端语言")):
+    for key, pref, label in (("country", "country", "出口国家"), ("timezone", "timezone", "系统时区"), ("locale", "locale", "地区格式"), ("language", "language" if preferences.get('environment_confirmed') else "locale", "客户端语言")):
         f = first("baseline." + key)
         if status("baseline." + key) == "fail" and preferences.get(pref):
             add("target." + key, label + "与您设置的目标不同", f"当前：{f.get('actual', '未取得')}；目标：{f.get('expected', preferences[pref])}。",
                 "这说明与所选偏好不一致，不代表账号风险；不需要美国时区或英语才能使用本工具。",
                 ["如果当前值符合实际需要，在设置页修正比较目标。", "如果确需改变系统偏好，请在对应系统设置中调整后复检。"], "settings", certainty="review")
         verification["target." + key] = "clear" if not preferences.get(pref) or status("baseline." + key) == "pass" else "unverified"
+    if (preferences.get('environment_confirmed') and preferences.get('language') and usage in ('desktop','both')
+        and status('baseline.language') in ('fail','warn','unknown')
+        and not any(p['id']=='target.language' for p in problems)):
+        add('target.language','Claude 应用语言尚未符合目标',by_id.get('baseline.language',{}).get('summary','没有读到专用语言偏好'),
+            '系统语言不代替应用语言；这里只按明确选择的应用目标处理。',
+            ['macOS 可预览只针对 Claude 的语言设置，保留原值与缺省状态。','完成偏好读回后复检，再在 Claude 中确认实际界面支持。'],
+            'maintenance','language',certainty='review')
+    for problem in problems:
+        if problem['id']=='target.language' and preferences.get('environment_confirmed'):
+            problem.update(action='maintenance',repair='language')
     for key in ("http.egress", "http.ipv6", "udp.stun", "browser.webrtc", "browser.http_v4", "browser.http_v6"):
         if status(key) == "fail":
             f = by_id[key]

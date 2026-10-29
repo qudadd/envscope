@@ -26,7 +26,7 @@ export function initDiagnosis({sessionPromise,retest}) {
   const output=$('solution-output');
   function button(text,fn){const b=el('button',text);b.type='button';b.addEventListener('click',fn);return b;}
   function link(text,url){const a=el('a',text,'link');a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
-  function setBusy(value){busy=value;for(const id of ['start','target-edit','target-confirm','target-cancel','prepare-solution','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;for(const node of document.querySelectorAll('#desktop-preferences button'))node.disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';}
+  function setBusy(value){busy=value;for(const id of ['start','target-edit','target-confirm','target-cancel','prepare-solution','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;for(const node of document.querySelectorAll('#desktop-preferences button'))node.disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';document.dispatchEvent(new CustomEvent('envscope-operation-state',{detail:{busy:value}}));}
   async function run(action,params={},confirmed=false){
     const session=await sessionPromise;if(!session)throw new Error('请打开本地桌面程序，再使用处理功能。');
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),240000);
