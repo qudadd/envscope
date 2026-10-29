@@ -229,7 +229,7 @@ def main():
                     page.locator('#connection-retry').click()
                     expect(page.locator('#connection-status')).to_contain_text('已连接')
                 assert not errors, errors
-                summary[str(width)] = {'check_catalog':56, 'information_panels':'passed', 'failure_feedback':'passed', 'history_and_retest':'passed', 'disconnect_reconnect':'passed', 'visible_page_keepalive':'passed', 'keyboard_filters':'passed', 'comparison':'passed', 'page_errors':errors, 'overflow':False}
+                summary[str(width)] = {'check_catalog':57, 'information_panels':'passed', 'failure_feedback':'passed', 'history_and_retest':'passed', 'disconnect_reconnect':'passed', 'visible_page_keepalive':'passed', 'keyboard_filters':'passed', 'comparison':'passed', 'page_errors':errors, 'overflow':False}
                 context.close()
             summary['account_round_trip'] = {'isolated_profile_A_preserved':True,'isolated_profile_B_preserved':True,'callbacks':events,'real_accounts_touched':False}
             (OUT / 'result.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
