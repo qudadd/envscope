@@ -24,7 +24,7 @@ def main():
                              creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if check and value.returncode:raise RuntimeError('Owned Windows fixture failed: '+value.stderr.decode('utf-8',errors='replace')[-1600:])
         return value
-    assert run("$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent());if(-not $p.IsInRole('Administrator')){exit 77}",False).returncode==0
+    assert run("$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent());if(-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){exit 77}",False).returncode==0
     # Production path is read-only. No production write command is evaluated.
     real=WindowsNetworkIO(executable=ps)
     before=real.snapshot();actual_before=binding_view(before,{r['id'] for r in before['adapters']})
