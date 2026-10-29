@@ -192,7 +192,7 @@ rollback() {
   done
   /bin/rm -f "$DAEMON" || ok=0
   if [ -f "$PENDING/daemon.old" ]; then safe "$PENDING/daemon.old" && /bin/cp -p "$PENDING/daemon.old" "$DAEMON" || ok=0; fi
-  "$PENDING/rollback-worker" --restore-zone @BEFORE@ || ok=0
+  if [ "$restore_clock" = 1 ]; then "$PENDING/rollback-worker" --restore-zone @BEFORE@ || ok=0; fi
   if @REGISTERED@; then /bin/launchctl bootstrap system "$DAEMON" || ok=0; fi
   if [ "$ok" = 1 ]; then
     /bin/mv "$PENDING" "$ROOT/backup-@NONCE@"
@@ -202,12 +202,13 @@ rollback() {
   fi
 }
 finished=0
+restore_clock=0
 trap 'code=$?; if [ "$finished" = 0 ]; then rollback; fi; exit "$code"' EXIT
 trap 'exit 130' INT TERM HUP
 log transaction_started
 stop_job
 '''.replace('@BEFORE@',shlex.quote(before)).replace('@REGISTERED@','true' if snapshot['registered'] else 'false').replace('@NONCE@',receipt['nonce'])
-    body=header+rollback
+    body=header+rollback+f'"$PENDING/rollback-worker" --check-zone {shlex.quote(before)}\n'
     if action=='install':
         body+='''/bin/cp "$PENDING/rollback-worker" "$ROOT/worker.next"
 /bin/chmod 755 "$ROOT/worker.next"
@@ -216,6 +217,7 @@ stop_job
         for path,data in [('$ROOT/baseline.plist',plistlib.dumps(new_baseline,sort_keys=True)),('$DAEMON',daemon_bytes(layout))]:
             body+=f'/usr/bin/printf %s {shlex.quote(_encoded(data))} | /usr/bin/base64 -D > "{path}.next"\n/bin/chmod 644 "{path}.next"\n/bin/mv -f "{path}.next" "{path}"\n'
         body+='''/bin/rm -f "$ROOT/state.plist" "$ROOT/status.plist"
+restore_clock=1
 "$ROOT/worker" --initial-apply
 state=$(/usr/libexec/PlistBuddy -c 'Print :state' "$ROOT/status.plist")
 case "$state" in healthy|restored) ;; *) exit 74;; esac
@@ -223,7 +225,7 @@ case "$state" in healthy|restored) ;; *) exit 74;; esac
 registered || exit 74
 '''
     else:
-        if restore:body+=f'"$PENDING/rollback-worker" --restore-zone {shlex.quote(original)}\n'
+        if restore:body+=f'restore_clock=1\n"$PENDING/rollback-worker" --restore-zone {shlex.quote(original)}\n'
         body+='''for name in worker baseline.plist state.plist status.plist; do /bin/rm -f "$ROOT/$name"; done
 /bin/rm -f "$DAEMON"
 if registered; then exit 74; fi

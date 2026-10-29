@@ -75,7 +75,8 @@ static int save_plist(int root, const char *name, CFDictionaryRef value, mode_t 
     if (!data) return 0;
     char stage[100]; snprintf(stage,sizeof(stage),".%s.%d.%u",name,getpid(),arc4random());
     int fd = openat(root,stage,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC,mode);
-    int ok = fd >= 0 && protected_stat(fd,0) && write_all(fd,CFDataGetBytePtr(data),(size_t)CFDataGetLength(data)) && fsync(fd) == 0;
+    int ok = fd >= 0 && protected_stat(fd,0) && fchmod(fd,mode) == 0
+        && write_all(fd,CFDataGetBytePtr(data),(size_t)CFDataGetLength(data)) && fsync(fd) == 0;
     if (fd >= 0) close(fd);
     if (ok) ok = renameat(root,stage,root,name) == 0 && fsync(root) == 0;
     if (!ok) unlinkat(root,stage,0);
@@ -137,7 +138,7 @@ static int event(int root, const char *phase, const char *before, const char *ta
     if(fd<0)return 0;
     int n=snprintf(line,sizeof(line),"{\"at_epoch\":%lld,\"kind\":\"timezone_guard\",\"phase\":\"%s\",\"before\":\"%s\",\"target\":\"%s\",\"fixture\":%s}\n",
         now,phase,before,target,ENVSCOPE_TZ_FIXTURE?"true":"false");
-    int ok=protected_stat(fd,0)&&n>0&&n<(int)sizeof(line)&&write_all(fd,line,(size_t)n)&&fsync(fd)==0;
+    int ok=protected_stat(fd,0)&&fchmod(fd,0644)==0&&n>0&&n<(int)sizeof(line)&&write_all(fd,line,(size_t)n)&&fsync(fd)==0;
     close(fd);return ok;
 }
 

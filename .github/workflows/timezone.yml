@@ -25,7 +25,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install .
+      # This isolated component uses the stdlib and CoreFoundation. Full runtime
+      # dependencies are verified separately by checks and desktop packages.
+      - run: python -m pip install --no-deps .
       - run: python -m unittest tests.test_timezone_service -q
       - name: Compile production worker (no installation)
         run: python -m scripts.build_timezone_worker
