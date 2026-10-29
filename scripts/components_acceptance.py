@@ -85,10 +85,22 @@ def windows(home, result):
                 # Simulate a crash after OS restoration but before the final
                 # public receipt. Retrying must not start a second instance,
                 # even when the original task permits parallel instances.
-                probe="$s=New-Object -ComObject 'Schedule.Service';$s.Connect();[int]$s.GetFolder('\\').GetTask("+quote(marker)+").GetInstances(0).Count"
                 def instances():
-                    return int(command([shell,'-NoProfile','-NonInteractive','-Command',probe]).stdout.decode('utf-8-sig').strip())
-                prior_instances=instances();assert prior_instances>0
+                    # GetInstances is scoped to the caller's security context;
+                    # a limited task can be invisible to an elevated caller.
+                    # Read only this unique owned script's actual processes.
+                    import psutil
+                    own=psutil.Process().username();found=set()
+                    for proc in psutil.process_iter(['pid','username','cmdline','create_time'],ad_value=None):
+                        info=proc.info;args=info.get('cmdline') or []
+                        if info.get('username')==own and len(args)==8 and args[-2].casefold()=='-file' and os.path.normcase(args[-1])==os.path.normcase(str(source)):
+                            found.add((info['pid'],info['create_time']))
+                    return found
+                deadline=time.monotonic()+15
+                prior_instances=instances()
+                while not prior_instances and time.monotonic()<deadline:
+                    time.sleep(.2);prior_instances=instances()
+                assert prior_instances, 'Owned fixture script process not observed'
                 receipt=io.status();assert len(receipt['id'])==32
                 files=[layout.root/'latest.json',layout.root/('record-'+receipt['id']+'.private.json')]
                 script="$ErrorActionPreference='Stop';"
@@ -99,7 +111,7 @@ def windows(home, result):
                 plan=subject.prepare(restore=True);assert plan['state']=='planned',plan
                 assert subject.apply(plan['plan_id'],True)['state']=='restored'
                 restored_instances=instances()
-                assert restored_instances==prior_instances, (prior_instances,restored_instances)
+                assert restored_instances==prior_instances, (sorted(prior_instances),sorted(restored_instances))
             if not running: command([shell, '-NoProfile', '-NonInteractive', '-Command', 'Enable-ScheduledTask -TaskName '+quote(marker)+'|Out-Null'])
         result['checks'] = ['actual COM read/stop/delete/create/readback', 'actor SID and DACL verified',
                             'strict boolean consent', 'disabled and stopped stay disabled', 'original running task resumes',
