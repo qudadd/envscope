@@ -6,6 +6,7 @@ import {initInspection} from "./inspection.mjs";
 import {initDesktopApp} from "./desktop.mjs";
 import {initConnection, disconnected} from "./connection.mjs";
 import {initTargetEnvironment} from './target.mjs';
+import {initWatchdogForms} from './watchdog_ui.mjs';
 import {initCoverage, browserEnvironment} from './coverage.mjs';
 
 const byId=id=>document.getElementById(id);
@@ -89,6 +90,7 @@ function renderDesktop(report,source='current') {
 }
 const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
 const targetUI=initTargetEnvironment({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy});
+initWatchdogForms(diagnosisUI.run);
 initInspection({run:diagnosisUI.run,operate:diagnosisUI.operate,isBusy:diagnosisUI.isBusy,retest:checks=>runAudit({checks})});
 document.addEventListener('envscope-target-changed',()=>{lastReport=null;lastSnapshot=null;nodes.share.disabled=true;byId('qualification').hidden=true;byId('verdict').textContent='目标已更新，等待本轮检测';});
 initDesktopApp({run:diagnosisUI.run,operate:diagnosisUI.operate});

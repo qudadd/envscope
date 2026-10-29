@@ -46,7 +46,8 @@ def main():
                                 writes.append(['node', node])
                         controller = Controller()
                         legacy = LegacyBridge(home=home, runner=Mock(side_effect=AssertionError('No vendor execution')))
-                        ops = Operations(store, home, legacy=legacy, discoverer=lambda: [], environment_reader=lambda: inventory)
+                        ops = Operations(store, home, legacy=legacy, discoverer=lambda: [], environment_reader=lambda: inventory,
+                                         region_lookup=lambda params: {'state': 'unavailable', 'reason': '离线夹具'})
                         ops.regions = RegionSetup(store, lambda: inventory, home, system, writer, lambda: controller)
                         ops.config_remedies.environ = {}
                         def auditor(*args, **kwargs):

@@ -5,6 +5,9 @@ PROFILES = (
     ('us-new-york', '美国 · 纽约', 'US', 'America/New_York', 'Eastern Standard Time', 'en-US'),
     ('us-chicago', '美国 · 芝加哥', 'US', 'America/Chicago', 'Central Standard Time', 'en-US'),
     ('us-denver', '美国 · 丹佛', 'US', 'America/Denver', 'Mountain Standard Time', 'en-US'),
+    ('us-phoenix', '美国 · 菲尼克斯', 'US', 'America/Phoenix', 'US Mountain Standard Time', 'en-US'),
+    ('us-anchorage', '美国 · 安克雷奇', 'US', 'America/Anchorage', 'Alaskan Standard Time', 'en-US'),
+    ('us-honolulu', '美国 · 檀香山', 'US', 'Pacific/Honolulu', 'Hawaiian Standard Time', 'en-US'),
     ('jp-tokyo', '日本 · 东京', 'JP', 'Asia/Tokyo', 'Tokyo Standard Time', 'ja-JP'),
     ('sg-singapore', '新加坡', 'SG', 'Asia/Singapore', 'Singapore Standard Time', 'en-SG'),
     ('tw-taipei', '中国台湾 · 台北', 'TW', 'Asia/Taipei', 'Taipei Standard Time', 'zh-TW'),
@@ -21,7 +24,7 @@ PROFILES = (
 
 def profiles(system):
     return [dict(id=key, label=label, country=country, timezone=windows if system == 'Windows' else iana,
-                 locale=locale if system == 'Windows' else locale.replace('-', '_'), iana=iana)
+                 locale=locale if system == 'Windows' else locale.replace('-', '_'), language=locale, iana=iana)
             for key, label, country, iana, windows, locale in PROFILES]
 
 

@@ -7,6 +7,7 @@ dist/
 .pytest_cache/
 .env
 *.private.json
+*.private.jsonl
 reports/
 artifacts/
 *.log

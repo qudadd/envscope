@@ -55,7 +55,7 @@ def main():
                 if action == 'permission-help':
                     return permission_help(kwargs.get('report'), params, self.home, self.accounts.data_dir, kwargs.get('confirmed'), runner=opener, system='Windows')
                 return super().run(action, params, **kwargs)
-        operations = FixtureOperations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))))
+        operations = FixtureOperations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),region_lookup=lambda params: {'state':'unavailable','reason':'离线夹具'})
         operations.desktop_runtime = DesktopFixture()
         def audit(*args, **kwargs):
             findings = [Finding(c['id'], c['title'], Status.PASS, '离线测试观测', 'test-fixture') for c in check_catalog() if c['group'] in ('baseline', 'extra')]

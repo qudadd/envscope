@@ -365,6 +365,10 @@ class AccountManager:
                     or ":" in value or any(ord(c) < 32 for c in value)):
                 raise AccountError("Retention entries must be safe relative profile paths.")
             relative = Path(*parts)
+            # An upstream retention file must never merge authentication or
+            # local identity state into another account's complete profile.
+            if parts[0].lower() != 'skills':
+                raise AccountError('账号隔离禁止跨账号保留身份、Cookie、凭据或设置；keep-in-workspace.txt 仅允许 skills/ 下的通用技能文件。请调整清单后重试。')
             if relative not in paths:
                 paths.append(relative)
         return paths
@@ -480,11 +484,19 @@ class AccountManager:
                 # Restoring the same archived account is a safe recovery path.
                 if current != slot or not target.exists():
                     raise RecoveryRequired("The current live profile is missing; restore its existing snapshot first.")
+            from .event_log import append_event
+            transaction=uuid.uuid4().hex
+            def record(phase):
+                append_event(self.state_dir/'account-events',{'at':datetime.now(timezone.utc).isoformat(),'kind':'account_exchange',
+                             'transaction':transaction,'phase':phase,'previous':original_current,'slot':slot})
+            record('requested')
             try:
                 stopped = self.stop_app()
             except Exception as exc:
+                record('exit_failed')
                 raise AccountError("Application termination failed; profile data was preserved.") from exc
             if stopped is not True:
+                record('exit_unconfirmed')
                 raise AccountError("Application exit was not confirmed; profile data was preserved.")
             live_stage = self.data_dir.with_name(self.data_dir.name + ".new")
             live_previous = self.data_dir.with_name(self.data_dir.name + ".previous")
@@ -505,9 +517,10 @@ class AccountManager:
                     live_stage.mkdir(parents=True, mode=0o700)
                     _manifest(live_stage)
                 self._merge_retained(live_stage, keep_paths)
-                _atomic_text(self.journal_file, json.dumps({"schema_version": 1, "slot": slot,
+                _atomic_text(self.journal_file, json.dumps({"schema_version": 1, "transaction":transaction, "slot": slot,
                                                           "previous": original_current, "archived": current,
                                                           "state": "staged"}) + "\n")
+                record('staged_and_verified')
                 if archive:
                     if archive.exists():
                         os.replace(archive, archive_previous)
@@ -520,6 +533,8 @@ class AccountManager:
                 os.replace(live_stage, self.data_dir)
                 live_committed = True
                 self._write_current(slot, originals)
+                if self._read_current()!=slot:raise AccountError('Current account marker did not read back')
+                record('committed')
                 committed = True
             except Exception as exc:
                 rollback_errors = []
@@ -550,7 +565,9 @@ class AccountManager:
                     except Exception as cleanup_exc:
                         rollback_errors.append(cleanup_exc)
                 if rollback_errors:
+                    record('recovery_required')
                     raise RecoveryRequired("Operation failed and recovery copies were retained; inspect the transaction journal and .new/.previous paths.") from exc
+                record('rolled_back')
                 raise AccountError("Account exchange failed; original profile, snapshot and current marker were restored.") from exc
             if committed:
                 try:
@@ -558,6 +575,7 @@ class AccountManager:
                     if archive_previous:
                         _remove_staging(archive_previous)
                     self.journal_file.unlink()
+                    record('cleanup_complete')
                 except Exception as exc:
                     raise RecoveryRequired("The exchange committed, but backup cleanup needs review; the application was not launched.") from exc
             return self._launch({"slot": slot, "previous": original_current, "changed": True}, preflight, checked_at)

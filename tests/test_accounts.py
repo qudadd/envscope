@@ -364,9 +364,9 @@ class AccountTests(unittest.TestCase):
         (target / "settings.json").write_text("B old settings")
         (target / "skills").mkdir()
         (target / "skills" / "own.txt").write_text("B skill")
-        self.manager.keep_file.write_text("# optional\nsettings.json\nskills/\nmissing.json\n")
+        self.manager.keep_file.write_text("# optional\nskills/\nskills/missing.json\n")
         self.manager.switch("B", self.preflight)
-        self.assertEqual((self.data / "settings.json").read_text(), "shared settings")
+        self.assertEqual((self.data / "settings.json").read_text(), "B old settings")
         self.assertEqual((self.data / "skills" / "shared.txt").read_text(), "shared skill")
         self.assertEqual((self.data / "skills" / "own.txt").read_text(), "B skill")
         self.assertEqual((target / "settings.json").read_text(), "B old settings")
@@ -388,7 +388,7 @@ class AccountTests(unittest.TestCase):
 
     def test_retention_failure_keeps_live_data_and_prevents_launch(self):
         self.seed()
-        self.manager.keep_file.write_text("settings.json")
+        self.manager.keep_file.write_text("skills/")
         with patch.object(self.manager, "_merge_retained", side_effect=OSError("fixture merge failure")):
             with self.assertRaises(AccountError):
                 self.manager.switch("B", self.preflight)

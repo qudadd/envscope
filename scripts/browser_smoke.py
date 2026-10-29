@@ -79,7 +79,7 @@ def main():
     def never_run(*args, **kwargs):
         raise AssertionError("Smoke test must never execute the original backend")
     handoff_events = []
-    operations = FixtureOperations(store, directory.name, legacy=LegacyBridge(platform_name='Windows', home=directory.name, runner=never_run),
+    operations = FixtureOperations(store, directory.name, region_lookup=lambda params: {'state':'unavailable','reason':'离线夹具'}, legacy=LegacyBridge(platform_name='Windows', home=directory.name, runner=never_run),
                                    discoverer=lambda: [{"url": "http://127.0.0.1:7897", "sources": ["离线夹具"], "connection_verified": False}],
                                    launcher=lambda: handoff_events.append('launch') or True, restart_stopper=lambda: handoff_events.append('quit') or True)
     operations.config_remedies.environ = {}

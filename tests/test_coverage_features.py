@@ -223,7 +223,7 @@ class EnvironmentCoverageTests(unittest.TestCase):
                 indexed = {r['id']:r['state'] for r in rows}
                 self.assertEqual(indexed['guard'],'needs_core')
                 self.assertEqual(indexed['browser'],'needs_browser')
-                self.assertEqual(indexed['watchdog'],'not_upstream' if system=='Windows' else 'needs_core')
+                self.assertEqual(indexed['watchdog'],'native')
 
     def test_passive_cli_inventory_finds_conflicts_without_executing_entrypoints(self):
         with tempfile.TemporaryDirectory() as directory:

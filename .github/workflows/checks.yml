@@ -50,3 +50,5 @@ jobs:
       - run: python -m scripts.target_environment_smoke
       - run: python -m scripts.coverage_smoke
       - run: python -m scripts.selection_smoke
+      - run: python -m scripts.region_lookup_smoke
+      - run: python -m scripts.watchdog_smoke

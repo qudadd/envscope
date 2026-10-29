@@ -3,6 +3,7 @@ import {describeProxy} from './diagnosis.mjs';
 import {DISCONNECTED, disconnected} from './connection.mjs';
 const $=id=>document.getElementById(id);
 const LABELS={install:"安装维护核心与后台保护",uninstall:"卸载原版维护组件",status:"读取原版账号状态",check:"原版概要检测",checkdetail:"原版完整检测",fix:"修复环境", "update-check":"检查维护核心更新","update-apply":"更新维护核心","set-region":"按出口重设系统地区","set-client":"更换原版代理客户端",fingerprint:"设备信息","cli-info":"CLI 安装信息","open-safe":"打开临时浏览器","snapshot-export":"导出加密 DMG","snapshot-import":"导入加密 DMG","diagnose-proxy":"原版代理诊断"};
+import {watchdogSelection} from './watchdog_ui.mjs';
 const VERDICTS={blocked:"发现策略违反",incomplete:"检测尚不完整",review:"需要复核",clear_in_scope:"配置范围内通过"};
 const STATES={completed:"操作完成",started:"已提交启动请求，请查看外部窗口",failed:"操作未完成",blocked:"操作已阻止",confirmation_required:"需要确认",unsupported:"当前系统不支持",unavailable:"维护核心尚未就绪",rejected:"输入未通过验证"};
 Object.assign(LABELS,{'legacy-cli-info':'原版 CLI 详细检查（macOS）','legacy-fingerprint':'原版设备详细检查（macOS）'});
@@ -135,13 +136,17 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     if(!value)return;
     const states={disabled:'尚未启用持续维护',active:'最近一轮巡检已完成',attention:'巡检已完成，配置保持需要处理',waiting:'已注册，等待首次巡检',stale:'巡检已超期',failed:'最近一轮没有完成',schedule_unverified:'系统任务状态未确认',invalid:'维护记录无法核实'};
     $('upkeep-state').textContent=states[value.state]||'维护状态待核实';
-    $('upkeep-status').textContent=[value.completed_at?'最近完成：'+new Date(value.completed_at).toLocaleString():'还没有完成记录。',value.enabled?`每 ${value.interval} 分钟复检。`:'',value.has_report?`${value.problem_count} 个待处理问题。`:'',value.auto_restore?(value.restore_note||'配置保持已选择，等待首次执行。'):'配置保持未开启。',value.reason].filter(Boolean).join(' ');
+    $('upkeep-status').textContent=[value.completed_at?'最近完成：'+new Date(value.completed_at).toLocaleString():'还没有完成记录。',value.enabled?`每 ${value.interval} 分钟复检。`:'',value.has_report?`${value.problem_count} 个待处理问题。`:'',value.auto_restore?(value.restore_note||'Code 配置保持已选择，等待首次执行。'):'Code 配置保持未开启。',value.reason].filter(Boolean).join(' ');
     const e=value.egress_48h||{};$('upkeep-egress').textContent=`48 小时有效出口观测 ${e.observations||0} 次，集合变化 ${e.changes||0} 次；变化本身不判定为账号风险。`;
+    $('upkeep-watchdog-state').textContent=value.watchdog_enabled?Object.entries(value.watchdog||{}).map(([k,v])=>`${({timezone:'时区',locale:'地区格式',proxy:'代理'})[k]||k}：${v.note||'等待首次巡检'}`).join('；')||'守护已批准，等待首次巡检。':'系统与代理守护尚未开启。';
+    $('upkeep-watchdog-state').classList.toggle('manual-guidance',Object.values(value.watchdog||{}).some(v=>['attention','paused'].includes(v.state)));
+    $('upkeep-journal').textContent=value.journal_path?'完整事件日志（按日追加，停用后保留）：'+value.journal_path:'';
     $('upkeep-run').disabled=!value.enabled;$('upkeep-stop').disabled=!value.enabled&&!value.scheduler?.present;$('upkeep-report').disabled=!value.has_report;
     $('quit').textContent=catalog.desktop?.mode==='native'?(value.enabled?'退出软件，定时维护继续':'退出 EnvScope'):(value.enabled?'结束界面，维护继续':'结束本地服务');
     const [t,body]=table(['时间','发生了什么','操作']);
     for(const event of [...value.events||[]].reverse()){
       const row=el('tr');cell(row,new Date(event.at).toLocaleString());cell(row,event.text);const controls=cell(row,'');
+      if(event.before!==undefined){const detail=el('details');detail.append(el('summary','查看变更'),el('p','原值：'+String(event.before)),el('p','批准目标：'+String(event.target)));controls.append(detail);}
       for(const backup of event.backups||[]){const undo=button((backup.availability==='undone'?'已撤销 ':backup.availability==='changed'?'文件已变化，保留备份 ':'停用并撤销 ')+backup.label,async()=>{
         const result=await action('maintenance-undo',{backup_id:backup.id},'upkeep-output',true);
         if(result?.state==='completed')$('upkeep-output').textContent=result.reason;
@@ -164,7 +169,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   }
   $('upkeep-prepare').addEventListener('click',async()=>{
     $('upkeep-plan').replaceChildren();
-    const value=await action('maintenance-plan',{report_id:lastReportId,interval:Number($('upkeep-interval').value),auto_restore:$('upkeep-restore').checked},'upkeep-output');
+    const value=await action('maintenance-plan',{report_id:lastReportId,interval:Number($('upkeep-interval').value),auto_restore:$('upkeep-restore').checked,watchdog:watchdogSelection('upkeep')},'upkeep-output');
     if(value?.state!=='planned')return;
     const list=el('ul');for(const effect of value.effects)list.append(el('li',effect));
     const apply=button('确认启用持续维护',async()=>{
@@ -175,6 +180,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   });
   $('upkeep-run').addEventListener('click',async()=>{await action('maintenance-run',{},'upkeep-output');});
   $('upkeep-refresh').addEventListener('click',async()=>{await action('maintenance-status',{},'upkeep-output');});
+  $('upkeep-open-logs').addEventListener('click',()=>action('maintenance-logs',{},'upkeep-output'));
   $('upkeep-stop').addEventListener('click',async()=>{await action('maintenance-disable',{},'upkeep-output',true);$('upkeep-plan').replaceChildren();});
   $('upkeep-report').addEventListener('click',async()=>{
     const value=await action('maintenance-report',{},'upkeep-output');

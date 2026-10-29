@@ -5,4 +5,4 @@ recursive-include licenses *.txt
 recursive-include scripts *.py
 recursive-include tests *.py *.mjs
 recursive-include .github *.md *.yml
-global-exclude __pycache__ *.py[cod] *.private.json
+global-exclude __pycache__ *.py[cod] *.private.json *.private.jsonl

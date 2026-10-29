@@ -1,5 +1,6 @@
 // Human-facing diagnosis and a reviewed plan -> execute -> recheck workflow.
 // Only fixed API actions and server-issued plan/backup IDs reach the backend.
+import {watchdogSelection} from './watchdog_ui.mjs';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const labels={"config-desktop":"备份并打开桌面配置","config-cli":"备份并打开 Code 配置","clock-settings":"打开日期与时间设置","storage-settings":"打开存储设置","proxy-settings":"打开系统代理设置","hosts-file":"打开 hosts 文件"};
@@ -136,13 +137,13 @@ export function initDiagnosis({sessionPromise,retest}) {
     $('flow-upkeep-stop').hidden=!value.enabled&&!value.scheduler?.present;
   }
   $('flow-upkeep-prepare').addEventListener('click',()=>action(async()=>{
-    const value=await run('maintenance-plan',{report_id:report?.report_id,interval:Number($('flow-upkeep-interval').value),auto_restore:$('flow-upkeep-restore').checked});
+    const value=await run('maintenance-plan',{report_id:report?.report_id,interval:Number($('flow-upkeep-interval').value),auto_restore:$('flow-upkeep-restore').checked,watchdog:watchdogSelection('flow-upkeep')});
     $('flow-upkeep-plan').replaceChildren();$('flow-upkeep-output').textContent=value.reason||'';
     if(value.state!=='planned')return;
     const list=el('ul');for(const effect of value.effects)list.append(el('li',effect));
-    const settings=JSON.stringify([$('flow-upkeep-interval').value,$('flow-upkeep-restore').checked]);
+    const settings=JSON.stringify([$('flow-upkeep-interval').value,$('flow-upkeep-restore').checked,watchdogSelection('flow-upkeep')]);
     $('flow-upkeep-plan').append(el('h3','长期保持方案'),list,button('确认启用长期保持',()=>action(async()=>{
-      if(settings!==JSON.stringify([$('flow-upkeep-interval').value,$('flow-upkeep-restore').checked])){$('flow-upkeep-output').textContent='保持选项已变化，请重新预览方案。';$('flow-upkeep-plan').replaceChildren();return;}
+      if(settings!==JSON.stringify([$('flow-upkeep-interval').value,$('flow-upkeep-restore').checked,watchdogSelection('flow-upkeep')])){$('flow-upkeep-output').textContent='保持选项已变化，请重新预览方案。';$('flow-upkeep-plan').replaceChildren();return;}
       const result=await run('maintenance-enable',{plan_id:value.plan_id},true);$('flow-upkeep-output').textContent=result.reason||'请核对维护状态。';$('flow-upkeep-plan').replaceChildren();
       if(result.state==='enabled')setFlowStage('keep','长期保持已启用，实际执行时间和状态见下方。');
       document.dispatchEvent(new CustomEvent('envscope-maintenance-change'));

@@ -22,7 +22,7 @@ def main(output=None):
         directory = Path(directory).resolve()
         store = StateStore(Path(directory) / 'state')
         store._write('desktop-preferences.private.json', {'check_updates': False})
-        operations = Operations(store, directory, discoverer=lambda: [], legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),
+        operations = Operations(store, directory, discoverer=lambda: [], region_lookup=lambda params: {'state':'unavailable','reason':'Offline native fixture'}, legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),
                                 environment_reader=lambda: {'platform':platform.system(),'locale':'en-US','network':{'timezone_id':'UTC'}})
         assert operations.legacy._vendor_integrity()['verified'], 'Bundled upstream bytes and filenames must survive installation'
         # Exercise the packaged cryptography/OpenSSL runtime on disposable data.
@@ -69,6 +69,9 @@ def main(output=None):
                 result['native_window'] = True
                 result['select_all_control'] = read_js("document.getElementById('checks-select-all')?.textContent === '全选' && !!document.getElementById('checks-repair') && !!document.getElementById('target-region-profile')")
                 assert result['select_all_control'], 'Selective checks and region presets must ship in the native UI'
+                result['watchdog_controls']=read_js("!!document.getElementById('upkeep-guard-timezone') && !!document.getElementById('upkeep-guard-proxy')")
+                result['ip_lookup_control']=read_js("!!document.getElementById('target-read-ip')")
+                assert result['watchdog_controls'] and result['ip_lookup_control']
                 assert runtime.ready.wait(5), 'Tray did not initialize'
                 result['tray'] = True
                 ids = read_js("[...document.querySelectorAll('[id]')].map(n=>n.id)")

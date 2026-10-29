@@ -31,7 +31,8 @@ def main():
                     store = StateStore(home / 'state')
                     inventory = {'platform':'Windows','release':'11','locale':'zh-CN','network':{'timezone_id':'China Standard Time'}}
                     legacy = LegacyBridge(home=home, runner=Mock(side_effect=AssertionError('No vendor execution')))
-                    ops = Operations(store, home, legacy=legacy, discoverer=lambda: [], environment_reader=lambda: inventory)
+                    ops = Operations(store, home, legacy=legacy, discoverer=lambda: [], environment_reader=lambda: inventory,
+                                     region_lookup=lambda params: {'state': 'unavailable', 'reason': '离线夹具'})
                     ops.config_remedies.environ = {}
                     calls = []
                     def auditor(*args, **kwargs):

@@ -38,7 +38,7 @@ def main():
         (manager.data_dir / 'fixture.txt').write_text('ACCOUNT_A_FIXTURE', encoding='utf-8')
         def no_legacy(*a, **kw):
             raise AssertionError('Never execute the original backend')
-        operations = Operations(store, home, account_manager=manager, discoverer=lambda: [],
+        operations = Operations(store, home, account_manager=manager, discoverer=lambda: [], region_lookup=lambda params: {'state':'unavailable','reason':'离线夹具'},
                                 legacy=LegacyBridge(home=home, runner=no_legacy),
                                 launcher=lambda: events.append('launch') or True)
         operations.config_remedies.environ = {}

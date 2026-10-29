@@ -1,6 +1,16 @@
 # Feature parity and integration audit
 
-## Current scope: 0.11.0 (2026-10-29)
+## Current scope: 0.12.0 (2026-10-29)
+
+IP lookup now filters city presets by the observed exit country and suggests
+timezone/locale/language only with explicit evidence and user confirmation.
+The native Watchdog adds approved timezone/locale recovery, reopening a selected
+offline proxy client, node restoration with a TLS recheck, cooldown and durable
+daily event logs. Background elevation is not performed; macOS privileged
+timezone recovery still requires the legacy service or manual action.
+Account exchanges preserve complete per-account directories; retention is now
+restricted to `skills/` to prevent cross-account identity/session mixing.
+[Current details and limits](WATCHDOG_AND_IDENTITIES.md).
 
 The 55-row catalogue now supports full selection, filtering, individual and
 batch checks with explicit dependencies, and reviewed batch repairs. It includes
@@ -220,13 +230,11 @@ is checked against a SHA256 file-tree manifest before commitment; no code path
 recursively deletes the live DATA path. A per-state OS lock serializes native
 account writers.
 
-Optional `keep-in-workspace.txt` is compatible with the upstream allowlist. It
-defaults off, ignores comments/empty/missing entries, and copies selected files
-or merges directories only into the disposable staged target. Account-specific
-snapshots remain untouched. Invalid absolute/traversal/drive paths refuse the
-operation. Legacy `keep-stage` leftovers are preserved and block new switching.
-Only generic settings/skills should be listed; listing credential, cookie or
-device-identity paths intentionally shares those files across accounts.
+As of 0.12, optional `keep-in-workspace.txt` defaults off and is intentionally
+restricted to `skills/` paths. Identity, session, Cookie and settings paths refuse
+the exchange before stopping the application. This narrows upstream retention
+to preserve account isolation. Staging, traversal/link refusal and preservation
+of legacy `keep-stage` leftovers remain in place.
 
 On an exception during copy/commit/marker update, rollback restores the original
 live tree, previous snapshot and markers. Cleanup/rollback failure leaves

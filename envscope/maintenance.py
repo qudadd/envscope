@@ -1,7 +1,7 @@
 """Persistent native checks and opt-in, narrowly scoped config drift recovery.
 
-The scheduled worker never opens a browser, switches an account, installs a
-proxy, changes OS networking/locale, or executes upstream installers/repairs.
+The scheduled worker never switches accounts, installs a proxy, elevates or
+executes upstream installers. Explicitly approved watchdog baselines are separate.
 """
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -41,7 +41,7 @@ def proxy_works(proxy):
 
 
 class Maintenance:
-    def __init__(self, store, remedies=None, scheduler=None, auditor=None, proxy_tester=None, home=None):
+    def __init__(self, store, remedies=None, scheduler=None, auditor=None, proxy_tester=None, home=None, watchdog=None):
         self.store = store
         self.home = Path(home).resolve() if home else Path.home().resolve()
         self.root = store.root / "maintenance"
@@ -49,6 +49,8 @@ class Maintenance:
         self.remedies = remedies or ConfigRemedies(self.home, self.home / "Library/Application Support/Claude")
         self.scheduler = scheduler or UserScheduler(self.home, self.root)
         self.auditor, self.proxy_tester = auditor, proxy_tester or proxy_works
+        from .watchdog import Watchdog
+        self.watchdog=watchdog or Watchdog(self.home)
         self.plans, self.memory = {}, {}
         self.mutex = threading.Lock()
 
@@ -114,15 +116,20 @@ class Maintenance:
             raise ValueError("维护方案无效，自动恢复未执行；请重新生成方案")
         if config["auto_restore"]:
             validate_guard(config.get("approved"))
+        self.watchdog.validate(config.get('watchdog',{}))
         return config
 
     def _event(self, kind, text, **details):
         events = self._read("events", [])
         if not isinstance(events, list):
             events = []
-        self._write("events", (events + [{"at": utc_now(), "kind": kind, "text": text, **details}])[-100:])
+        event={"at": utc_now(), "kind": kind, "text": text, **details}
+        if not self.data.memory:
+            from .event_log import append_event
+            append_event(self.root/'events',event)
+        self._write("events", (events + [event])[-100:])
 
-    def prepare(self, report, interval=15, auto_restore=False):
+    def prepare(self, report, interval=15, auto_restore=False, watchdog=None):
         if type(interval) is not int or interval not in INTERVALS or type(auto_restore) is not bool:
             raise ValueError("请选择 5、15 或 60 分钟，以及明确的配置保持选项")
         if not SolutionPlans._current(report):
@@ -135,14 +142,23 @@ class Maintenance:
             proxy = approved.get("HTTPS_PROXY") or approved.get("https_proxy")
             if proxy and self.proxy_tester(proxy) is not True:
                 return {"state": "blocked", "reason": "基线代理的 API TLS 连接尚未验证，不启用自动配置恢复。先测试并修复代理。"}
+        baseline,guard_effects={},[]
+        if watchdog:
+            from .regions import region_finding, PARTIAL
+            if (not self.store.settings().get('environment_confirmed') or not self.store.settings().get('usage_country')
+                    or region_finding([],self.store.settings()).status==Status.FAIL
+                    or self.store.settings().get('usage_country') in PARTIAL
+                    or not any(f['id']=='target.region' and f['status']=='pass' for f in report.get('findings',[]))):
+                return {'state':'blocked','reason':'请先确认官方支持的实际地区，并修复环境后保存守护基线。'}
+            baseline,guard_effects=self.watchdog.prepare(self.store.settings(),watchdog)
         schedule = self.scheduler.build(interval)
         previous = self._config()
         current = self.scheduler.inspect(previous.get("schedule"))
         if current.get("present") is None or current.get("present") and not current.get("owned"):
             return {"state": "blocked", "reason": "同名后台任务存在冲突或无法核对权限；不会覆盖，请先处理任务状态。"}
         effects = [f"为当前用户注册每 {interval} 分钟一次的原生巡检，登录后由系统调度；退出 EnvScope 页面后仍可运行",
-                   "每轮联系已列出的公共诊断端点，保存本机脱敏结果、最近 100 条事件和 48 小时出口变化统计",
-                   "不会在后台启动安装器、切换账号、停止 Claude 或改动系统网络、时区及地区格式",
+                   "每轮联系已列出的公共诊断端点，保存本机脱敏结果和 48 小时出口变化；完整事件按日追加到本机日志，界面展示最近记录",
+                   "后台不提权、不安装程序、不切换账号、不停止 Claude；仅执行下方明确批准的恢复动作",
                    "后台不测浏览器 ICE、浏览器扩展或账号登录，使用前仍可点击一键检测"]
         if auto_restore:
             effects.extend(["仅保持 Claude Code 用户配置中的以下 5 个字段；其他配置按当前文件保留",
@@ -150,11 +166,13 @@ class Maintenance:
                             "24 小时最多自动恢复 3 次，反复变化后暂停恢复并记录原因；更换代理前先停用并重新生成方案",
                             "原文件备份可能含认证信息，仅存本机 ~/.envscope/config-backups；撤销前先停用维护"])
             effects.extend(key + "：" + ("保持未设置，新出现时移除" if value is None else value) for key, value in approved.items())
+        effects.extend(guard_effects)
+        if baseline:effects.append('守护每项至少间隔 5 分钟、24 小时最多尝试恢复 3 次；失败留痕，反复漂移暂停并提示重新审核')
         token = secrets.token_urlsafe(20)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"],
                               "settings_hash": fingerprint(self.store.settings()), "file_hash": file_hash,
                               "config": {"version": 1, "enabled": False, "interval": interval, "auto_restore": auto_restore,
-                                         "approved": approved, "schedule": schedule, "created_at": utc_now()}}}
+                                         "approved": approved, "watchdog":baseline,"schedule": schedule, "created_at": utc_now()}}}
         return {"state": "planned", "plan_id": token, "effects": effects,
                 "reason": "审核后确认启用。开发或试用不会自动替你安装后台任务。"}
 
@@ -168,6 +186,8 @@ class Maintenance:
         config = plan["config"]
         if config["auto_restore"] and digest(_read(self.remedies.paths["cli"]) or b"") != plan["file_hash"]:
             return {"state": "retest_required", "reason": "Code 配置在预览后变化，未启用旧基线。"}
+        if config.get('watchdog') and not self.watchdog.unchanged(config['watchdog']):
+            return {'state':'retest_required','reason':'守护基线在预览后变化，请重新检测并生成方案。'}
         with self._lock():
             del self.plans[token]
             previous = self._config()
@@ -179,6 +199,12 @@ class Maintenance:
             except (OSError, ValueError):
                 self._event("schedule_failed", "后台注册未确认，持续维护和配置自动恢复保持停用。")
                 return {"state": "failed", "reason": "系统未确认后台任务注册成功。未启用自动恢复，请检查任务权限后重新生成方案。"}
+            if config.get('watchdog'):
+                approved={k:v for k,v in config['watchdog'].items() if k!='proxy'}
+                if 'proxy' in config['watchdog']:
+                    p=config['watchdog']['proxy'];approved['proxy']={k:p[k] for k in ('url','group','node') if k in p}
+                    if p.get('client'):approved['proxy']['client']={k:p['client'][k] for k in ('label','path','sha256')}
+                self._event('watchdog_approved','已明确批准本次守护基线',approved=approved,interval=config['interval'])
             config["enabled"] = True
             self._write("config", config)
             self._write("stats", {"repair_times": [], "repair_paused": False})
@@ -218,7 +244,7 @@ class Maintenance:
             waiting_state = "stale" if waiting_age is None or waiting_age < 0 or waiting_age > config.get("interval", 15) * 60 + 180 else "waiting"
             state = ("disabled" if not enabled else "schedule_unverified" if not scheduler.get("registered") else "failed" if stats.get("last_state") == "failed"
                      else waiting_state if elapsed is None else "stale" if elapsed < 0 or elapsed > config["interval"] * 60 + 180
-                     else "attention" if config.get("auto_restore") and stats.get("restore_state") in ("blocked", "unverified", "paused") else "active")
+                     else "attention" if config.get("auto_restore") and stats.get("restore_state") in ("blocked", "unverified", "paused") or any(r.get('state') in ('attention','paused','cooldown') for r in stats.get('watchdog',{}).values()) else "active")
             events = [dict(event) for event in events[-20:] if isinstance(event, dict)]
             for event in events:
                 if not isinstance(event.get("backups", []), list):
@@ -227,6 +253,8 @@ class Maintenance:
                                     for backup in event.get("backups", []) if isinstance(backup, dict)]
             return {"state": state, "enabled": enabled, "interval": config.get("interval", 15),
                     "auto_restore": config.get("auto_restore", False), "repair_paused": stats.get("repair_paused", False),
+                    "watchdog":stats.get('watchdog',{}),"watchdog_enabled":bool(config.get('watchdog')),
+                    "journal_path":str(self.root/'events'),
                     "scheduler": scheduler, "completed_at": stats.get("completed_at"),
                     "started_at": stats.get("started_at"), "last_state": stats.get("last_state"),
                     "restore_state": stats.get("restore_state"), "restore_note": stats.get("restore_note", ""),
@@ -313,12 +341,23 @@ class Maintenance:
                                                    browser=None, baseline_config=preferences)
                 from .regions import region_finding
                 region = region_finding(findings,preferences)
-                if config['auto_restore'] and region.status == Status.FAIL:
+                watchdog_changed=False
+                if (config['auto_restore'] or config.get('watchdog')) and region.status == Status.FAIL:
                     stats.update(repair_paused=True,restore_state='paused',restore_note='本轮官方地区条件不合格，已暂停配置恢复；只读巡检继续。')
-                    self._event('restore_paused','官方地区条件不合格，未改写 Code 配置。')
+                    if config.get('watchdog'):
+                        stats['watchdog_paused']=True
+                        stats['watchdog']={k:{'state':'paused','note':'官方地区条件不合格，自动守护暂停；需重新批准基线'} for k in config['watchdog']}
+                    self._event('restore_paused','官方地区条件不合格，未执行自动配置恢复。')
                 else:
+                    if config.get('watchdog'):
+                        if stats.get('watchdog_paused') or config.get('settings_hash')!=fingerprint(preferences):
+                            stats['watchdog_paused']=True
+                            stats['watchdog']={k:{'state':'paused','note':'目标设置变化，需重新批准守护基线'} for k in config['watchdog']}
+                            self._event('watchdog_paused','检测目标已变化，未执行旧守护基线。')
+                        else:
+                            watchdog_changed=self.watchdog.run(config['watchdog'],stats,self._event,lambda:self._write('stats',stats))
                     self._restore(config,stats)
-                    if stats.get('restore_state') in ('restored','unverified'):
+                    if watchdog_changed or stats.get('restore_state') in ('restored','unverified'):
                         findings = (self.auditor or audit)(policy, desktop_transport(preferences), online=True, stun=True, ipv6=True,
                                                            browser=None, baseline_config=preferences)
                 signature, key = self.data._signature([f.to_dict() for f in findings])

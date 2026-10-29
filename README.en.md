@@ -2,13 +2,22 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS Claude environment toolkit. Alpha v0.9.0.
+A minimal Windows/macOS Claude environment toolkit. Alpha v0.12.0.
 
 Confirm the intended application, connection mode and comparison targets once,
-then run a scoped check, review repairs and recheck automatically. Timezone and
-locale default to the computer's current values. Original measurements remain
+then run a scoped check, review repairs and recheck automatically. Exit-IP lookup
+filters city choices and suggests timezone, locale and language targets; the
+declared physical location is kept separate. Original measurements remain
 visible; unrelated checks no longer block the selected use case. See the
 [target environment and simulation coverage](docs/TARGET_ENVIRONMENT.md).
+
+An optional Watchdog restores approved system/configuration baselines, reopens
+a selected offline proxy client, verifies recovery and keeps daily local logs.
+Background elevation is not attempted; macOS timezone permissions may require
+manual action or the separately installed upstream privileged service. Account
+switching preserves separate full profiles and restricts cross-profile retention
+to explicitly selected `skills/` files. It does not guarantee server-side device
+identity or portability of OS credentials. [Current scope](docs/WATCHDOG_AND_IDENTITIES.md).
 
 The desktop package now uses an independent native window and a tray/menu-bar
 entry. Closing can keep it in the background; launching twice activates the

@@ -38,7 +38,7 @@ def main():
                     source = manager.accounts_dir/'B';source.mkdir()
                     (source/'fixture.txt').write_text('PRIVATE_SESSION_FIXTURE')
                     no_legacy = Mock(side_effect=AssertionError('Do not run vendor code'))
-                    operations = Operations(store,home,account_manager=manager,discoverer=lambda:[],legacy=LegacyBridge('Windows',home,runner=no_legacy))
+                    operations = Operations(store,home,account_manager=manager,discoverer=lambda:[],legacy=LegacyBridge('Windows',home,runner=no_legacy),region_lookup=lambda params: {'state':'unavailable','reason':'离线夹具'})
                     executable = home/'fake-browser';executable.write_text('NOT_EXECUTABLE')
                     process = Mock();process.poll.return_value=None
                     launcher = Mock(return_value=process)

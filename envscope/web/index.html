@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.11.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.12.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="coverage">环境全览</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -42,13 +42,14 @@
           <label>使用方式<select name="usage" required><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版与 Code</option><option value="web">Claude 网页</option></select></label>
           <label>连接方式<select name="connection_mode" required><option value="direct">直连</option><option value="http_proxy">HTTP / 系统代理</option><option value="tun">TUN / VPN</option></select></label>
           <label>实际使用地区<input name="usage_country" list="region-codes" maxlength="2" pattern="[A-Za-z]{2}" required placeholder="选择或填写地区代码" title="填写实际所在地的两个字母代码，例如 CN、RU、US"></label>
-          <label>期望配置地区与城市<select name="region_profile" id="target-region-profile"><option value="">自定义 / 仅观察</option></select></label>
+          <label>期望配置地区与城市<select name="region_profile" id="target-region-profile"><option value="">先选择实际地区</option></select></label>
           <label>目标时区<input name="timezone" maxlength="100" placeholder="选择城市后自动填写"></label>
           <label>目标地区格式<input name="locale" maxlength="100" placeholder="选择城市后自动填写"></label>
         </div>
+        <div class="target-ip"><p id="target-ip-status" class="note" role="status">填写实际地区后，按所选连接读取出口 IP 并筛选城市。</p><button id="target-read-ip" class="link" type="button">重新读取 IP</button></div>
         <datalist id="region-codes"><option value="CN" label="中国大陆 · 官方不支持"></option><option value="RU" label="俄罗斯 · 官方不支持"></option><option value="HK" label="中国香港 · 未列入支持名单"></option><option value="MO" label="中国澳门 · 未列入支持名单"></option><option value="US" label="美国"></option><option value="JP" label="日本"></option><option value="SG" label="新加坡"></option><option value="TW" label="中国台湾 · 官方名单单列"></option><option value="GB" label="英国"></option><option value="DE" label="德国"></option><option value="FR" label="法国"></option><option value="KR" label="韩国"></option><option value="CA" label="加拿大"></option><option value="AU" label="澳大利亚"></option></datalist>
         <p class="note">填写实际所在地，不能用代理出口代替。中国大陆（CN）、俄罗斯（RU）不在官方支持名单中，地区条件将判为不合格。<a href="https://support.claude.com/en/articles/8461763-where-can-i-access-claude" target="_blank" rel="noopener noreferrer">Claude 地区名单</a> · <a href="https://platform.claude.com/docs/en/api/supported-regions" target="_blank" rel="noopener noreferrer">API 地区名单</a>（核对于 2026-10-28）。</p>
-        <p class="note">选择期望城市后填写对应的出口国家、时区和地区格式。美国等多时区国家需选城市；可改为自定义。留空仅观察。配置目标不会替代实际所在地，时区差异本身不代表账号风险。</p>
+        <p class="note">通过 Cloudflare 和 IPinfo 读取出口 IPv4，服务会看到请求来源。按 IP 国家筛选城市，选择后匹配时区、语言与地区格式；未能定位时可手动选择。IP 不会改写实际所在地，保存目标不会修改系统。</p>
         <div id="target-code-fields" class="form-grid" hidden>
           <label>Code 接口<select name="provider"><option value="anthropic">Anthropic 官方</option><option value="custom">自定义接口</option><option value="bedrock">Amazon Bedrock</option><option value="vertex">Google Vertex</option><option value="foundry">Microsoft Foundry</option></select></label>
           <label>认证方式<select name="auth_mode"><option value="existing">保留现有登录</option><option value="subscription">Claude 订阅登录</option><option value="api_key">API Key</option><option value="managed">云平台 / 组织管理</option></select></label>
@@ -93,6 +94,7 @@
       </section>
       <section id="flow-upkeep" class="flow-upkeep" hidden aria-labelledby="flow-upkeep-title"><h2 id="flow-upkeep-title">保持本次设置</h2><p class="note">确认 Claude 能实际回复后，可在这里启用定时复检。关闭界面后继续运行，随时可停用。</p><p id="flow-upkeep-status" class="note" aria-live="polite">尚未启用。</p>
         <div class="inline-upkeep-options"><label>复检间隔<select id="flow-upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label><label class="checkbox"><input id="flow-upkeep-restore" type="checkbox">同时保持已经验证的 Code 配置</label></div>
+        <details><summary>系统与代理 Watchdog</summary><label class="checkbox"><input id="flow-upkeep-guard-timezone" type="checkbox">时区漂移时恢复批准值</label><label class="checkbox"><input id="flow-upkeep-guard-locale" type="checkbox">地区格式漂移时恢复批准值</label><label class="checkbox"><input id="flow-upkeep-guard-proxy" type="checkbox">守护已验证的本机代理与节点</label><button id="flow-upkeep-guard-load" class="link" type="button">读取可重开的客户端</button><label>代理离线时<select id="flow-upkeep-guard-client"><option value="">不重开客户端，仅恢复可读取节点</option></select></label><p id="flow-upkeep-guard-note" class="note">只恢复明确批准的基线；后台权限不足时转为手动处理。启用前请先验证代理、时区和地区格式。</p></details>
         <p class="note">配置保持仅恢复已审核字段，恢复前先备份；反复变化会暂停。更换代理前先停用，再生成新方案。</p><div class="actions"><button id="flow-upkeep-prepare">预览长期保持方案</button><button id="flow-upkeep-stop" class="link" hidden>停用定时复检与配置保持</button></div><div id="flow-upkeep-plan"></div><p id="flow-upkeep-output" class="solution-output" role="status"></p>
       </section>
       <details id="symptom-help" class="help-section"><summary>Claude 仍不能用？按现象排查</summary><label>我遇到的情况<select id="symptom"><option value="connect">一直转圈，或提示无法连接</option><option value="login">打不开登录，或反复要求登录</option><option value="interrupt">原来能用，后来经常中断</option><option value="certificate">提示证书或安全连接错误</option><option value="code">Claude Code 命令找不到或设置不生效</option><option value="mcp">Claude 能回复，但某个 MCP 工具不能用</option></select></label><div id="symptom-advice"></div></details>
@@ -124,18 +126,22 @@
       <div class="actions"><button id="checks-return" class="link">返回一键检测与修复</button></div>
     </div>
     <div id="page-upkeep" class="page" hidden>
-      <h1>持续维护</h1><p class="subtle">定期复检，记录变化。可选保持已经验证的 Code 配置，关闭页面后仍由系统调度。</p>
-      <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p>
+      <h1>持续维护</h1><p class="subtle">定期检查，按批准基线恢复配置、时区或代理，记录每次变化。关闭界面后继续运行。</p>
+      <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p><p id="upkeep-watchdog-state" class="note" role="status"></p>
         <div class="actions"><button id="upkeep-run" disabled>立即复检</button><button id="upkeep-report" disabled>查看最近一次巡检</button><button id="upkeep-refresh" class="link">刷新状态</button><button id="upkeep-stop" class="link" disabled>停用并移除任务</button></div>
       </section>
       <section class="tool-section"><h2>维护方案</h2><p class="note">先完成一键检测，再以当前设置生成方案。Windows 使用当前用户计划任务，macOS 使用用户 LaunchAgent，无需管理员常驻服务。移动应用目录后需重新启用。</p>
         <label>复检间隔<select id="upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label>
         <label class="checkbox"><input id="upkeep-restore" type="checkbox">保持已批准的 Code 代理和 TLS 配置</label>
-        <p class="note">配置保持默认关闭。启用后只恢复预览中列出的 5 个字段，保留其他设置；每次先备份，24 小时最多恢复 3 次。更换代理前先停用，再生成新方案。</p>
+        <label class="checkbox"><input id="upkeep-guard-timezone" type="checkbox">时区漂移时恢复批准值</label>
+        <label class="checkbox"><input id="upkeep-guard-locale" type="checkbox">地区格式漂移时恢复批准值</label>
+        <label class="checkbox"><input id="upkeep-guard-proxy" type="checkbox">守护已验证的本机代理与节点</label>
+        <button id="upkeep-guard-load" class="link" type="button">读取可重开的客户端</button><label>代理离线时<select id="upkeep-guard-client"><option value="">不重开客户端，仅恢复可读取节点</option></select></label><p id="upkeep-guard-note" class="note">只恢复明确批准的基线；后台权限不足时转为手动处理。代理在线但上游失败时不会反复重启。</p>
+        <p class="note">自动恢复默认关闭。Code 只恢复预览中的 5 个字段并先备份；系统与代理按上述勾选范围守护。每项 24 小时最多尝试 3 次，更换目标前先停用并审核新方案。</p>
         <button id="upkeep-prepare">生成维护方案</button><div id="upkeep-plan"></div><div id="upkeep-output" class="solution-output" aria-live="polite"></div>
       </section>
-      <section class="tool-section"><h2>最近事件</h2><p class="note">本机保留最近 100 条事件，此处展示最近 20 条。备份可能含认证信息，仅存本机；撤销会先停用维护，当前文件又被修改时拒绝覆盖。</p><div id="upkeep-events"><p class="note">尚无维护事件。</p></div></section>
-      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、实际账号登录与权限需在使用时确认。后台不复用旧浏览器观测，不自动安装代理、切换账号、修改时区或停止 Claude；进程守护由随附开源维护核心另行安装。</p></section>
+      <section class="tool-section"><h2>最近事件</h2><p class="note">此处展示最近 20 条；完整事件按日追加到本机日志，不随界面记录轮替删除。先记录漂移与计划动作，再执行、读回和复检。备份仅存本机。</p><p id="upkeep-journal" class="note"></p><button id="upkeep-open-logs" class="link">打开完整日志目录</button><div id="upkeep-events"><p class="note">尚无维护事件。</p></div></section>
+      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、账号登录和系统授权需本人确认。后台不弹出提权对话框、不安装代理、不切换账号或停止 Claude；没有时区写入权限时保留失败记录和手动指引。macOS 可另行配置随附开源维护核心的时区守护。</p></section>
     </div>
 
     <div id="page-coverage" class="page" hidden>
@@ -147,7 +153,8 @@
     </div>
 
     <div id="page-accounts" class="page" hidden>
-      <h1>账号</h1><p class="subtle">为 Claude 桌面版保存不同的本机登录资料。这里只管理存档，登录仍在 Claude 中完成。</p>
+      <h1>账号</h1><p class="subtle">按账号封存完整本地资料目录，校验后载入对应存档；切换不调用登出接口，也不重新生成已有本地设备标识。</p>
+      <details><summary>数据隔离与切换记录</summary><p class="note">各账号保存其目录内已有的会话、设备标识与本地状态。交换前退出 Claude，逐文件校验暂存副本，再以目录重命名提交；失败回滚，未完成事务保留恢复资料并停止启动。切换事件按日保存在 ~/.claude-switcher/account-events，不记录凭据内容。跨账号保留仅限显式选择的 skills/ 文件。</p><p class="note">系统钥匙串、系统凭据库和服务端会话状态不等于资料目录内容，登录过期仍可能需要本人重新认证。本功能不保证服务端设备判断、账号稳定性或跨机器登录迁移。</p></details>
       <section class="account-guide" aria-label="账号使用步骤"><h2>第一次怎样使用</h2><ol><li>只有一个账号：正常在 Claude 登录即可，无需添加槽位。</li><li>需要多个账号：先给 A 命名，检测通过后点“保存当前资料到 A”。</li><li>给 B 命名，点“首次登录”；现有资料会保留在 A，在新打开的 Claude 中登录自己的另一个账号。</li><li>以后用“切换并打开”返回已有存档。请先保存工作；切换会退出桌面应用。</li></ol><p class="note">A、B 是资料文件夹的代号，不是邮箱或已注册账号。添加名称不会创建 Claude 账号，也不会登录。Claude Code 和浏览器的登录不随此处切换。</p><button id="account-check" class="link">检测启动条件</button></section>
       <p id="account-readiness" class="note" role="status">先检测环境；切换时还会重新检测。</p><button id="account-view-checks" class="link">查看启动条件与处理办法</button>
       <p id="account-note" class="note"></p><div id="account-list"></div>

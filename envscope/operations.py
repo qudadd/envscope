@@ -81,9 +81,11 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None):
         self.store = store
         self.environment_reader = environment_reader
+        from .region_lookup import lookup_region
+        self.region_lookup = region_lookup or lookup_region
         # Resolve only the trusted home alias (macOS /var temp paths or a
         # relocated home); account/configuration children remain link-checked.
         self.home = (Path(home) if home is not None else Path.home()).resolve()
@@ -110,14 +112,20 @@ class Operations:
 
     def _open_remedy(self, action):
         system = platform.system()
-        if action.startswith("config-"):
+        if action == 'maintenance-logs':
+            from .accounts import _safe_chain
+            path=self.maintenance.root/'events';_safe_chain(path)
+            if not path.is_dir():return False
+        elif action.startswith("config-"):
             path = self.config_remedies.backup_for_editor(action.removeprefix("config-"))
         elif action == "hosts-file":
             path = Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/drivers/etc/hosts" if system == "Windows" else Path("/private/etc/hosts")
         else:
             path = None
         if system == "Windows":
-            if path:
+            if path and action=='maintenance-logs':
+                command=[str(Path(os.environ.get('WINDIR','C:/Windows'))/'explorer.exe'),str(path)]
+            elif path:
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/notepad.exe"), str(path)]
             else:
                 uri = {"clock-settings": "ms-settings:dateandtime", "storage-settings": "ms-settings:storagesense",
@@ -126,7 +134,7 @@ class Operations:
                     return False
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "explorer.exe"), uri]
         elif system == "Darwin":
-            command = ["/usr/bin/open", "-e", str(path)] if path else ["/usr/bin/open", "-b", "com.apple.systempreferences"]
+            command = ["/usr/bin/open", str(path)] if action=='maintenance-logs' else ["/usr/bin/open", "-e", str(path)] if path else ["/usr/bin/open", "-b", "com.apple.systempreferences"]
         else:
             return False
         subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -267,6 +275,15 @@ class Operations:
             if params:
                 raise ValueError('unexpected browser parameters')
             return self.isolated_browser.cleanup()
+        if action == 'environment-location':
+            return self.region_lookup(params)
+        if action == 'watchdog-options':
+            if params:raise ValueError('unexpected watchdog parameters')
+            return self.maintenance.watchdog.options()
+        if action=='maintenance-logs':
+            if params:raise ValueError('unexpected log parameters')
+            opened=self.remedy_opener(action)
+            return {'state':'opened' if opened else 'unavailable','reason':'已打开完整日志目录。日志仅在本机保存。' if opened else '尚未生成日志目录，或系统未能打开；完成一次巡检后重试。'}
         if action == 'environment-suggest':
             if params:
                 raise ValueError('unexpected action parameters')
@@ -289,7 +306,7 @@ class Operations:
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
                              "history-report": {"id"}, "settings-restore": set(), "learning-complete": {"version"}}
         native_parameters.update({"solution-plan": {"report_id", "check_id", "enhance_cli", "proxy"}, "solution-apply": {"plan_id"}, "solution-undo": {"backup_id"}, "solution-open": {"problem_id", "report_id"},
-                                  "maintenance-plan": {"report_id", "interval", "auto_restore"}, "maintenance-enable": {"plan_id"},
+                                  "maintenance-plan": {"report_id", "interval", "auto_restore", "watchdog"}, "maintenance-enable": {"plan_id"},
                                   "maintenance-disable": set(), "maintenance-status": set(), "maintenance-run": set(),
                                   "maintenance-report": set(), "maintenance-undo": {"backup_id"}})
         if action in native_parameters and set(params) - native_parameters[action]:
@@ -325,7 +342,7 @@ class Operations:
         if action == "solution-plan":
             return self.solutions.prepare(report, params.get("check_id"), params.get("enhance_cli", False), params.get("proxy"))
         if action == "maintenance-plan":
-            return self.maintenance.prepare(report, params.get("interval", 15), params.get("auto_restore", False))
+            return self.maintenance.prepare(report, params.get("interval", 15), params.get("auto_restore", False),params.get('watchdog'))
         if action == "maintenance-enable":
             return self.maintenance.enable(params.get("plan_id"), report, confirmed)
         if action == "maintenance-disable":
