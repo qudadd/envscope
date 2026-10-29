@@ -75,7 +75,9 @@ function Flush-Dns {
                                 'diagnosis':{},'findings':[{'id':'target.region','status':'pass'}],
                                 'environment':{'fingerprint':fingerprint(store.settings())}}
             plan=manager.prepare(report(),flush_dns=True)
-            assert manager.apply(plan['plan_id'],True)['state']=='completed'
+            applied=manager.apply(plan['plan_id'],True)
+            if applied['state']!='completed':print(json.dumps({'phase':'initial_apply','result':applied,'record':io.status()}),flush=True)
+            assert applied['state']=='completed'
             assert all(not r['ipv6_enabled'] for r in io.snapshot()['adapters']);phases.append('applied_and_read_back')
             # Private history is protected, while ordinary UI can read latest metadata.
             ident=io.status()['id'];private=root/('record-'+ident+'.private.json')

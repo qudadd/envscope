@@ -192,6 +192,13 @@ try {
   if($plan.flush_dns){try{Flush-Dns;$record.dns_flush='completed'}catch{$record.dns_flush='unverified';Publish $record 'partial';throw 'DNS flush not confirmed'}}
   Publish $record 'committed'
  }
+}catch{
+ try {
+  $code=[string]$_.FullyQualifiedErrorId
+  if($code.Length -gt 160){$code='system_operation_failed'}
+  Save (Join-Path $Root 'failure.json') @{format=1;data_sha='@DATA_SHA@';code=$code} $true
+ }catch{}
+ throw
 }finally{
  if(Test-Path -LiteralPath $inputPath){Remove-Item -LiteralPath $inputPath -Force}
  $lease.Dispose()
@@ -203,13 +210,14 @@ def quote(value):return "'"+str(value).replace("'","''")+"'"
 
 
 def script(mode,*,data_file=None,data_sha=None,fixture_backend=None,fixture_root=None):
-    if mode not in ('snapshot','status','apply','restore'):raise ValueError('不支持的系统网络操作')
+    if mode not in ('snapshot','status','failure','apply','restore'):raise ValueError('不支持的系统网络操作')
     if (fixture_backend is None)!=(fixture_root is None):raise ValueError('Incomplete fixture')
     root=quote(str(fixture_root)) if fixture_root else "(Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'EnvScope/network')"
     value=COMMON.replace('@FIXTURE@','$true' if fixture_backend is not None else '$false').replace('@ROOT@',root)
     value=value.replace('@BACKEND@',BACKEND if fixture_backend is None else fixture_backend)
     if mode=='snapshot':return value+"\nRead-Network | ConvertTo-Json -Depth 30 -Compress\n"
     if mode=='status':return value+"\nRead-Record | ConvertTo-Json -Depth 30 -Compress\n"
+    if mode=='failure':return value+"\n$p=Join-Path $Root 'failure.json';Assert-Protected $p;[IO.File]::ReadAllText($p,[Text.Encoding]::UTF8)\n"
     if not isinstance(data_sha,str) or len(data_sha)!=64 or any(c not in '0123456789abcdef' for c in data_sha):raise ValueError('网络修改摘要无效')
     return value+TRANSACTION.replace('@ACTION@',mode).replace('@DATA_FILE@',quote(data_file)).replace('@DATA_SHA@',data_sha).replace('@RELEASE@',__release__)
 
@@ -261,4 +269,11 @@ class WindowsNetworkIO:
                       "$process=Start-Process @options;exit $process.ExitCode")
             result=self.runner([self.executable,'-NoProfile','-NonInteractive','-Command',launcher],input=encoded.encode(),
                                capture_output=True,timeout=150,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-            if result.returncode:raise ValueError('系统授权取消或网络修改未确认完成，请刷新恢复记录；没有按命令返回判定修复成功。')
+            if result.returncode:
+                detail=''
+                try:
+                    failure=self._read('failure');code=failure.get('code','')
+                    if failure.get('data_sha')==hashlib.sha256(data).hexdigest() and isinstance(code,str) and len(code)<=160:
+                        detail=' 记录代码：'+code
+                except (OSError,ValueError):pass
+                raise ValueError('系统授权取消或网络修改未确认完成，请刷新恢复记录；没有按命令返回判定修复成功。'+detail)
