@@ -127,6 +127,17 @@ class TimezoneIntegrationTests(unittest.TestCase):
         self.assertFalse(self.scheduler.calls)
         self.assertFalse(self.maintenance._config().get('enabled'))
 
+    def test_config_write_failure_still_compensates_privileged_install(self):
+        plan=self.maintenance.prepare(self.report,5,watchdog={'timezone':True})
+        original=self.maintenance._write
+        def write(name,value):
+            if name=='config':raise OSError('fixture full disk')
+            return original(name,value)
+        self.maintenance._write=write
+        self.assertEqual(self.maintenance.enable(plan['plan_id'],self.report,True)['state'],'failed')
+        self.assertFalse(self.root.status()['installed'])
+        self.assertFalse(self.scheduler.calls)
+
     def test_target_change_and_restart_undo_restore_old_guard_together(self):
         self.install();old_hashes=copy.deepcopy(self.io.value['hashes'])
         self.choose('us-los-angeles')

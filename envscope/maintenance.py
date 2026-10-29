@@ -220,13 +220,19 @@ class Maintenance:
                 self._write("config", config)
                 self.scheduler.install(config["schedule"], previous.get("schedule"))
             except (OSError, ValueError):
-                self._event("schedule_failed", "后台注册未确认，持续维护和配置自动恢复保持停用。")
                 if root_plan:
-                    restored=self.timezone_service.rollback_latest(root_plan['transaction_nonce'],True,
-                                                                  unchanged_signature=root_plan['before_signature'])
-                    self._event('timezone_service_compensation','用户任务注册失败后的系统时区服务回滚',state=restored['state'])
+                    try:
+                        restored=self.timezone_service.rollback_latest(root_plan['transaction_nonce'],True,
+                                                                      unchanged_signature=root_plan['before_signature'])
+                    except (OSError,ValueError,subprocess.SubprocessError):
+                        restored={'state':'partial','reason':'系统时区服务回滚未完整确认，请使用恢复入口核对。'}
+                    try:
+                        self._event('timezone_service_compensation','用户任务注册失败后的系统时区服务回滚',state=restored['state'])
+                    except (OSError,ValueError):
+                        restored={**restored,'reason':restored.get('reason','')+' 用户巡检日志未能写入，系统服务备份与日志仍保留。'}
                     return {'state':'failed' if restored['state']=='completed' else 'partial','timezone_service':restored,
                             'needs_retest':True,'reason':'用户巡检任务未确认注册，未启用本次自动恢复。'+restored.get('reason','')}
+                self._event("schedule_failed", "后台注册未确认，持续维护和配置自动恢复保持停用。")
                 return {"state": "failed", "reason": "系统未确认后台任务注册成功。未启用自动恢复，请检查任务权限后重新生成方案。"}
             if config.get('watchdog'):
                 approved={k:v for k,v in config['watchdog'].items() if k!='proxy'}

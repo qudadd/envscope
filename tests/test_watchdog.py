@@ -26,6 +26,18 @@ class WatchdogTests(unittest.TestCase):
         self.assertEqual(stats['watchdog']['timezone']['state'],'delegated')
         self.assertEqual(stats['watchdog']['timezone']['attempts'],[])
         writer.assert_not_called()
+    def test_mac_guard_never_competes_with_changed_pending_or_unknown_root_baseline(self):
+        states=[{'registered':True,'baseline':{'target':'Europe/London'}},
+                {'registered':False,'pending':True},{'registered':False,'legacy_registered':True},ValueError('unreadable')]
+        for value in states:
+            with self.subTest(value=value):
+                writer=Mock();authority=Mock(side_effect=value) if isinstance(value,Exception) else Mock(return_value=value)
+                guard=Watchdog(system='Darwin',reader=lambda:{'timezone_iana':'Asia/Shanghai'},writer=writer,authority=authority)
+                stats={}
+                self.assertFalse(guard.run({'timezone':'America/New_York'},stats,lambda *a,**k:None,lambda:None))
+                self.assertEqual(stats['watchdog']['timezone']['state'],'attention')
+                self.assertEqual(stats['watchdog']['timezone']['attempts'],[])
+                writer.assert_not_called()
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.home=Path(self.temp.name).resolve();self.events=[];self.writes=[];self.persisted=[]

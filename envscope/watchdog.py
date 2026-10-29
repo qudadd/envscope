@@ -184,8 +184,13 @@ class Watchdog:
                 if not drift:mark('healthy','批准的'+label+'基线正常');continue
                 if key=='timezone' and self.system=='Darwin' and self.authority:
                     try:authority=self.authority()
-                    except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):authority={}
-                    if authority.get('registered') and not authority.get('pending') and authority.get('baseline',{}).get('target')==target:
+                    except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):
+                        mark('attention','系统时区服务状态无法核实，未并发写入；请在持续维护页核对。');continue
+                    if authority.get('pending') or authority.get('legacy_registered'):
+                        mark('attention','系统时区服务有未完成操作或旧任务冲突，请先在持续维护页处理。');continue
+                    if authority.get('baseline') and (not authority.get('registered') or authority['baseline'].get('target')!=target):
+                        mark('attention','系统时区守护与用户任务的基线不一致或尚未注册；未覆盖，请重新批准本次维护方案。');continue
+                    if authority.get('registered'):
                         heartbeat=authority.get('status',{});stamp=heartbeat.get('at_epoch')
                         healthy=(type(stamp) in (int,float) and 0<=now-stamp<180
                                  and heartbeat.get('state') in ('healthy','restored','repairing','cooldown') and heartbeat.get('initial') is False)
