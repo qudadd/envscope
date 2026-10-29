@@ -8,6 +8,7 @@ import plistlib
 import subprocess
 import tempfile
 import unittest
+import os
 from unittest.mock import Mock, patch
 
 from envscope.component_inventory import Layout, mac_definition, mac_snapshot, blocking, windows_definition, windows_snapshot, LABELS
@@ -108,6 +109,28 @@ class ComponentTests(unittest.TestCase):
         self.assertIn('PSModulePath', body); self.assertIn('RegisterTask(', body); self.assertIn('DeleteTask(', body)
         self.assertNotIn('Invoke-Expression', body); self.assertNotIn('Remove-Item -Recurse', body)
         self.assertNotIn('Stop-Process', body); self.assertNotIn('Set-TimeZone', body)
+
+    @unittest.skipUnless(os.name=='nt','Windows descriptor math only; no jobs or filesystem ACLs change')
+    def test_descriptor_math_preserves_meaning_and_rejects_real_permission_changes(self):
+        from envscope.components_windows import TRANSACTION
+        from envscope.system_network_windows import powershell
+        source=TRANSACTION[TRANSACTION.index('function xS('):TRANSACTION.index('function Same(')]
+        source+="""
+$before='O:BAG:SYD:(A;ID;FA;;;BA)(A;ID;FA;;;SY)(A;;FR;;;BU)'
+$after='O:BAG:SYD:AI(A;;FR;;;BU)(A;ID;FA;;;BA)(A;ID;FA;;;SY)'
+$deny='O:BAG:SYD:(D;;FW;;;BU)(A;;FR;;;BU)'
+@{equivalent=((xS $before) -ceq (xS $after));
+ wider=((xS $before) -ceq (xS $after.Replace('FR;;;BU','FA;;;BU')));
+ owner=((xS $before) -ceq (xS $after.Replace('O:BA','O:SY')));
+ protected=((xS $before) -ceq (xS $after.Replace('D:AI','D:PAI')));
+ inherited=((xS $before) -ceq (xS $after.Replace('A;ID;FA;;;SY','A;;FA;;;SY')));
+ deny=((xS $deny) -ceq (xS 'O:BAG:SYD:(A;;FR;;;BU)(D;;FW;;;BU)'))}|ConvertTo-Json -Compress
+"""
+        encoded=base64.b64encode(source.encode('utf-16-le')).decode()
+        value=subprocess.run([powershell(),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],capture_output=True,timeout=10)
+        self.assertEqual(value.returncode,0,value.stderr.decode(errors='replace'))
+        self.assertEqual(json.loads(value.stdout.decode('utf-8-sig')),
+                         {'equivalent':True,'wider':False,'owner':False,'protected':False,'inherited':False,'deny':False})
 
     def test_mac_definition_rejects_wrong_owner_command_extra_environment_and_domain(self):
         layout = Layout(self.home, 'Darwin')

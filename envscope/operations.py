@@ -176,7 +176,7 @@ class Operations:
             replacements=self._component_replacements)
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing,self.network,
-                                      self.client_repair,self.process_guard,self.language_repair)
+                                      self.client_repair,self.process_guard,self.language_repair,self.components)
         from .region_setup import RegionSetup
         from .inventory import collect
         self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home,timezone_service=self.timezone_service)

@@ -94,10 +94,19 @@ function Canonical([string]$body) {
  return $xml.OuterXml
 }
 function xS([string]$text) {
- $d=[Security.AccessControl.RawSecurityDescriptor]::new($text);$bytes=[byte[]]::new($d.BinaryLength);$d.GetBinaryForm($bytes,0);return [Convert]::ToBase64String($bytes)
+ $d=[Security.AccessControl.RawSecurityDescriptor]::new($text)
+ if($null -eq $d.DiscretionaryAcl -or $null -ne $d.SystemAcl){return $text}
+ $parts=@()
+ foreach($ace in $d.DiscretionaryAcl){
+  if($ace.AceType -ne [Security.AccessControl.AceType]::AccessAllowed){return $text}
+  $bytes=[byte[]]::new($ace.BinaryLength);$ace.GetBinaryForm($bytes,0);$parts += [Convert]::ToBase64String($bytes)
+ }
+ $parts=[string[]]$parts;[Array]::Sort($parts,[StringComparer]::Ordinal)
+ $flags=[int]$d.ControlFlags -band (-bnot [int][Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInherited)
+ return $d.Owner.Value+'|'+$d.Group.Value+'|'+$flags+'|'+$d.DiscretionaryAcl.Revision+'|'+($parts -join ',')
 }
 function Same($actual,$before,[bool]$exact) {
- if($actual.present -ne $true -or $actual.principal_sid -cne $Actor -or $actual.logon -ne 3 -or $actual.level -ne 0 -or $actual.secure_acl -ne $true -or $actual.enabled -ne $before.enabled -or (xS $actual.sddl) -cne (xS $before.security)){return $false}
+ if($actual.present -ne $true -or $actual.principal_sid -cne $Actor -or $actual.logon -ne 3 -or $actual.level -ne 0 -or $actual.secure_acl -ne $true -or $actual.roundtrip_acl -ne $true -or $actual.enabled -ne $before.enabled -or (xS $actual.sddl) -cne (xS $before.security)){return $false}
  $xml=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($before.definition))
  if($exact){return (Hash $actual.xml) -ceq $before.definition_sha}
  return (Canonical $actual.xml) -ceq (Canonical $xml)
@@ -111,10 +120,7 @@ function Restore($r) {
   $created=$folder.RegisterTask($TaskName,$xml,50,$Actor,$null,3,$r.before.security)
   $created.SetSecurityDescriptor($r.before.security,16)
  }
- $live=ReadTask;if(-not(Same $live $r.before $false)){
-  $xml=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($r.before.definition))
-  throw ('restore readback; acl='+($live.sddl -ceq $r.before.security)+'; definition='+((Canonical $live.xml) -ceq (Canonical $xml)))
- }
+ $live=ReadTask;if(-not(Same $live $r.before $false)){throw 'restore readback'}
  if($r.before.running -and $r.before.enabled){
   $service=New-Object -ComObject 'Schedule.Service';$service.Connect();[void]$service.GetFolder('\').GetTask($TaskName).Run($null)
   $until=[DateTime]::UtcNow.AddSeconds(10);do{$live=ReadTask;if($live.state -eq 4 -or $live.instances -gt 0){break};Start-Sleep -Milliseconds 200}while([DateTime]::UtcNow -lt $until)
@@ -185,7 +191,8 @@ class WindowsComponents:
             for ns in namespaces: source = source.replace('['+ns+'.', '[')
             for old, new in (('before', 'b'), ('actual', 'a'), ('directory', 'd'), ('principal', 'p'), ('service', 'svc'), ('folder', 'tf'),
                              ('Actor','a0'),('Root','r0'),('Script','s0'),('Latest','l0'),('TaskName','t0'),('Fixture','f0'),
-                             ('inputPath','i0'),('leasePath','lp'),('lease','lk')):
+                             ('inputPath','i0'),('leasePath','lp'),('lease','lk'),('descriptor','ds'),
+                             ('roundtrip','rr'),('parts','aa'),('bytes','bb'),('flags','ff')):
                 source = re.sub(r'\$'+old+r'\b', '$'+new, source, flags=re.I)
             for old, new in (('NoLinks', 'L'), ('CheckScript', 'C'), ('ReadLast', 'J'), ('ReadTask', 'Q'),
                              ('Canonical', 'K'), ('Publish', 'P'), ('Protect', 'D'), ('Restore', 'R'),
@@ -200,7 +207,10 @@ class WindowsComponents:
         code += compact(PROTECT).replace('@RELEASE@', __release__)
         if action == 'status': return code+compact('\nReadLast|ConvertTo-Json -Depth 12 -Compress\n')
         if action not in ('retire', 'restore') or not re.fullmatch('[a-f0-9]{64}', sha or ''): raise ValueError('组件修改参数无效')
-        read = compact(WINDOWS_READ).replace('@TASK@', quote(self.layout.task)).replace('@ACTOR@', quote(self.actor))
+        # The enclosing immutable program already sets both values. Retain the
+        # headers for standalone reads, without duplicating them in this body.
+        read = WINDOWS_READ.replace("$ErrorActionPreference='Stop'\n",'').replace('[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)\n','')
+        read = compact(read).replace('@TASK@', quote(self.layout.task)).replace('@ACTOR@', quote(self.actor))
         code += compact('\nfunction ReadTask { $data=& {\n')+read+'\n};return ($data|ConvertFrom-Json) }\n'
         return code+compact(TRANSACTION).replace('@RELEASE@', __release__).replace('@ACTION@', action).replace('@INPUT@', quote(input_path)).replace('@SHA@', sha)
 

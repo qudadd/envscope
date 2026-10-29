@@ -125,6 +125,31 @@ class ClientWorkflowTests(unittest.TestCase):
         self.assertEqual(self.client.apply(plan['plan_id'],True)['state'],'completed')
         with self.ops.accounts._lock():pass
 
+    def test_one_stop_migrates_legacy_before_client_and_then_reviews_new_guard(self):
+        from envscope.legacy_components import ComponentMigration
+        from tests.test_components import ComponentsFixture
+        jobs=ComponentsFixture();self.guard_io.old_guard=True
+        execute=jobs.execute
+        def retire(action,payload):
+            execute(action,payload);self.guard_io.old_guard=action!='retire'
+        jobs.execute=retire
+        self.ops.components=ComponentMigration(self.store,self.home,io=jobs,transaction_lock=lambda:self.ops.accounts._lock())
+        self.ops.solutions.components=self.ops.components
+        report=self.report();plan=self.ops.solutions.prepare(report)
+        self.assertEqual(plan['state'],'planned');self.assertTrue(plan['staged'])
+        self.assertTrue(any('保护间隔' in effect for effect in plan['effects']))
+        self.assertFalse(self.io.calls or self.scheduler.calls or jobs.calls)
+        self.assertEqual(self.ops.solutions.apply(plan['plan_id'],report,'true')['state'],'confirmation_required')
+        result=self.ops.solutions.apply(plan['plan_id'],report,True)
+        self.assertEqual(result['state'],'completed');self.assertTrue(result['next_review'])
+        self.assertFalse(self.io.calls or self.scheduler.calls);self.assertEqual(len(jobs.calls),1)
+        current=self.report();plan=self.ops.solutions.prepare(current)
+        self.assertTrue(any('enable_tun_mode' in effect for effect in plan['effects']))
+        self.assertEqual(self.ops.solutions.apply(plan['plan_id'],current,True)['state'],'completed')
+        current=self.report();plan=self.ops.solutions.prepare(current)
+        self.assertTrue(any('监测网卡' in effect for effect in plan['effects']))
+        self.assertFalse(self.scheduler.calls)
+
     def test_explicit_test_home_does_not_discover_or_close_installed_applications(self):
         ops=Operations(self.store,self.home,discoverer=lambda:[])
         self.assertEqual(ops.run('client-options',{})['apps'],[])

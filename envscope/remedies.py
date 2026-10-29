@@ -426,12 +426,13 @@ class ConfigRemedies:
 
 
 class SolutionPlans:
-    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None, network=None, client=None, guard=None, language=None):
+    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None, network=None, client=None, guard=None, language=None, components=None):
         self.config, self.legacy, self.discoverer, self.proxy_tester = config, legacy, discoverer, proxy_tester
         self.routing = routing
         self.network = network
         self.client,self.guard=client,guard
         self.language=language
+        self.components=components
         self.plans = {}
 
     @staticmethod
@@ -485,6 +486,21 @@ class SolutionPlans:
         scope=set(check_ids) if check_ids is not None else None
         def scope_chosen(keys,summary_id):
             return bool(scope & set(keys)) if scope is not None else check_id in (None,summary_id)
+        guard_needed=(scope_chosen(('baseline.guard',),'guard') and findings.get('baseline.guard',{}).get('status') in ('warn','fail','unknown')
+                      and (check_id=='guard' or scope is not None and 'baseline.guard' in scope
+                           or 'baseline.guard' in report.get('environment',{}).get('required',[])
+                           or any(p['id']=='maintenance.guard' for p in problems)))
+        if (self.components and self.guard and guard_needed and target.get('usage',report.get('usage')) in ('desktop','both')
+                and self.guard.current(report)):
+            migration=self.components.prepare(['guard'] if scope is not None or check_id is not None else None)
+            if migration.get('state')=='planned' and 'guard' in migration.get('roles',[]):
+                token=secrets.token_urlsafe(20)
+                self.plans={token:{'deadline':time.monotonic()+90,'report_id':report['report_id'],'changes':[],
+                    'tasks':['components'],'components':migration['plan_id'],'problems':[p['id'] for p in problems],
+                    'before':{'problems':[{'id':p['id'],'title':p['title']} for p in problems]},'proxy':None,'context':{},'repair_json':False}}
+                return {'state':'planned','plan_id':token,'effects':migration['effects'],'manual':[],
+                    'manual_items':[],'connections':[],'configuration_count':0,'steps':['保存并停用已识别的旧后台任务'],
+                    'staged':True,'reason':'先停用旧任务并自动复检，再审核后续客户端修复和原生保护；不会同时启用两个守护。'}
         tun_needed=target.get('connection_mode')=='tun' and scope_chosen(('baseline.tun','extra.runtime_tun','target.tun_route'),'tun') and (
             findings.get('baseline.tun',{}).get('status') in ('warn','fail','unknown') or findings.get('target.tun_route',{}).get('status')=='fail')
         observed_proxies={row.get('proxy_endpoint','').rstrip('/') for row in findings.get('http.egress',{}).get('evidence',[]) if row.get('proxy_endpoint')}
@@ -616,10 +632,6 @@ class SolutionPlans:
                 language_plan=value['plan_id'];tasks.append('language');effects.extend(value['effects'])
             else:manual.append(value.get('reason','请在系统应用语言设置中核对 Claude。'))
         guard_plan=None
-        guard_needed=(scope_chosen(('baseline.guard',),'guard') and findings.get('baseline.guard',{}).get('status') in ('warn','fail','unknown')
-                      and (check_id=='guard' or scope is not None and 'baseline.guard' in scope
-                           or 'baseline.guard' in report.get('environment',{}).get('required',[])
-                           or any(p['id']=='maintenance.guard' for p in problems)))
         if self.guard and guard_needed:
             value=self.guard.prepare_from_report(report) if not tun_needed else {'reason':'先修复并重新检测 TUN，随后根据实际接口预览进程守护。'}
             if value.get('state')=='planned':
@@ -693,6 +705,10 @@ class SolutionPlans:
         for task in plan["tasks"]:
             if task == "config":
                 continue
+            if task=='components':
+                value=self.components.apply(plan['components'],True)
+                return {**value,'before':plan['before'],'steps':[{'step':'components',**value}],'backups':backups,
+                        'next_review':value.get('state')=='completed','needs_retest':bool(value.get('retest') or value.get('state')=='partial')}
             if task=='client':
                 value=self.client.apply(plan['client'],True,report)
                 return {**value,'before':plan['before'],'steps':[{'step':'client',**value}],'backups':backups,

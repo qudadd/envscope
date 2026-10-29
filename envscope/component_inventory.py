@@ -182,8 +182,10 @@ $principal=$task.Definition.Principal
 $sid=try{([Security.Principal.NTAccount]::new([string]$principal.UserId)).Translate([Security.Principal.SecurityIdentifier]).Value}catch{([Security.Principal.SecurityIdentifier]::new([string]$principal.UserId)).Value}
 $sddl=[string]$task.GetSecurityDescriptor(7);$descriptor=[Security.AccessControl.RawSecurityDescriptor]::new($sddl)
 $secure=$null -ne $descriptor.DiscretionaryAcl
+$roundtrip=$secure
 foreach($ace in $descriptor.DiscretionaryAcl){if($ace.AceType -eq 'AccessAllowed' -and $ace.SecurityIdentifier.Value -notin @($actor,'S-1-5-18','S-1-5-32-544') -and ($ace.AccessMask -band 0x500d0116)){$secure=$false}}
-@{present=$true;registered=$true;actor=$actor;xml=[string]$task.Xml;sddl=$sddl;task_owner=$descriptor.Owner.Value;secure_acl=$secure;principal_sid=$sid;logon=[int]$principal.LogonType;level=[int]$principal.RunLevel;enabled=[bool]$task.Enabled;state=[int]$task.State;instances=[int]$task.GetInstances(0).Count}|ConvertTo-Json -Depth 8 -Compress
+foreach($ace in $descriptor.DiscretionaryAcl){if($ace.AceType -ne 'AccessAllowed'){$roundtrip=$false}}
+@{present=$true;registered=$true;actor=$actor;xml=[string]$task.Xml;sddl=$sddl;task_owner=$descriptor.Owner.Value;secure_acl=$secure;roundtrip_acl=$roundtrip;principal_sid=$sid;logon=[int]$principal.LogonType;level=[int]$principal.RunLevel;enabled=[bool]$task.Enabled;state=[int]$task.State;instances=[int]$task.GetInstances(0).Count}|ConvertTo-Json -Depth 8 -Compress
 '''
 
 
@@ -231,6 +233,8 @@ def windows_snapshot(layout, sid=None, *, runner=subprocess.run, parse_args=None
                     or data.get('secure_acl') is not True or type(data.get('enabled')) is not bool
                     or data.get('state') not in (1, 3, 4) or type(data.get('instances')) is not int):
                 raise ValueError('旧任务账户、权限或运行状态不在识别范围')
+            if data.get('roundtrip_acl') is not True:
+                raise ValueError('任务含拒绝或特殊访问规则，无法保证自动恢复其顺序；请在任务计划程序中保留定义后手动处理')
             raw = data['xml'].encode('utf-8'); windows_definition(raw, layout, parse_args=parse_args or WindowsServices().argv)
             source = read_regular(layout.script('guard'), limit=1024*1024)
             if source is None: raise ValueError('旧任务脚本缺失')
