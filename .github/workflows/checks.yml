@@ -64,3 +64,4 @@ jobs:
       - run: python -m scripts.timezone_service_smoke
       - run: python -m scripts.system_network_smoke
       - run: python -m scripts.client_repair_smoke
+      - run: python -m scripts.language_smoke

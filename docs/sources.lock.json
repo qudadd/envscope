@@ -1,6 +1,6 @@
 {
-  "reviewed_on": "2026-10-28",
-  "collector": "Scrapling 0.4.15, research only",
+  "reviewed_on": "2026-10-29",
+  "collector": "Scrapling 0.4.15 research captures; primary API and documentation review",
   "sources": [
     {
       "repository": "YOURSJEYO/claude-switcher",
@@ -284,6 +284,26 @@
       "url": "https://code.claude.com/docs/en/microsoft-foundry",
       "reviewed_on": "2026-10-28",
       "role": "official Foundry provider flag and actual-session verification; no source copied"
+    },
+    {
+      "id": "client-tun-preferences",
+      "repository": "clash-verge-rev/clash-verge-rev",
+      "revision": "4337bd85758d54d7b9044b2da3c9ac1176eae1f3",
+      "release": "v2.5.8",
+      "reviewed_on": "2026-10-29",
+      "role": "GUI-owned enable_tun_mode and local IPC control configuration; no GPL implementation or binary copied"
+    },
+    {
+      "id": "native-application-language",
+      "url": "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/UserDefaults/AccessingPreferenceValues/AccessingPreferenceValues.html",
+      "reviewed_on": "2026-10-29",
+      "role": "typed application preference domains, synchronization and readback; original interface bindings, no document body copied"
+    },
+    {
+      "id": "pipe-client-sqos",
+      "url": "https://learn.microsoft.com/en-us/windows/win32/ipc/impersonating-a-named-pipe-client",
+      "reviewed_on": "2026-10-29",
+      "role": "named-pipe client impersonation restrictions; no implementation copied"
     }
   ]
 }

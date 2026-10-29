@@ -101,6 +101,7 @@ def discover_apps(home=None,system=None,environ=None,registry=None,*,mac_roots=N
     result={}
     for mode,label,path,bundle in candidates:
         try:
+            if system=='Windows' and str(path).startswith(('\\\\','//')):continue
             if not path.is_absolute():continue
             _safe_chain(path)
             if not path.is_file():continue

@@ -1,5 +1,21 @@
 # 验证记录
 
+## 0.18 开发验证（2026-10-29）
+
+本机 Python 542 项中 540 通过、2 项按平台能力跳过；新增客户端事务、分阶段一键 / 所选
+修复、唯一实际目标接口、账号互斥、命名管道和应用语言恢复。JavaScript、全套离线
+浏览器、包与三架构冻结程序仍按发布关卡执行，最终结果以对应发布 Actions 为准。
+
+`scripts.client_repair_smoke` 验证三个桌面宽度的客户端选择、确认前只读、退出受阻、
+本次强制选项、自动复检、新接口守护方案、失败恢复。`scripts.language_smoke` 验证
+Windows 手动标红、Mac 一键语言设置、ByHost / 缺省恢复、写入失败和重建协调器后的
+中断恢复。所有写入均为临时目录或伪偏好，无真实代理 / Claude 资料改变。
+
+`scripts.client_lifecycle_acceptance` 只编译运行自己拥有的 Cocoa / WinForms 临时程序；
+`scripts.language_acceptance` 仅在两种 Mac 架构 CI 写入唯一测试应用域，另一个进程
+独立读取并恢复，核对真实 Claude 和全局语言未变。不能据此声称真实 VPN 授权、驱动、
+GUI 重生成或 Claude 实际界面 / 登录已验证。具体范围见 [客户端修复](CLIENT_REPAIR.md)。
+
 0.8 的独立软件生命周期、更新与权限流程见 [桌面验收矩阵](DESKTOP_ACCEPTANCE.md)。
 
 日期：2026-10-28。版本：0.7.1 Alpha。执行环境：Windows x64，Python 3.13.5、Node.js、PyInstaller 6.22.3。

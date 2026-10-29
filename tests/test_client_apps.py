@@ -5,7 +5,7 @@ import plistlib
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock,patch
 
 from envscope.client_apps import AppLifecycle,discover_apps,file_hash
 
@@ -50,6 +50,16 @@ class ClientAppTests(unittest.TestCase):
         result=discover_apps(self.home,'Windows',{},paths)
         self.assertEqual(len(result),1);self.assertEqual(result[0]['path'],str(self.path))
         self.assertNotIn('sha256',result[0]);self.assertFalse(self.runner.called or self.launcher.called)
+
+    def test_registry_network_or_device_paths_are_rejected_before_filesystem_access(self):
+        paths=lambda:[('clash-verge','Clash Verge',Path(value),None) for value in
+                      (r'\\server\share\clash-verge.exe',r'\\?\C:\Clash Verge\clash-verge.exe',r'\\.\C:\Clash Verge\clash-verge.exe')]
+        from envscope.accounts import _safe_chain
+        def inspect(path):
+            self.assertFalse(str(path).startswith(('\\\\','//')))
+            return _safe_chain(path)
+        with patch('envscope.client_apps._safe_chain',side_effect=inspect):
+            self.assertEqual(discover_apps(self.home,'Windows',{},paths),[])
 
     def test_macos_discovery_reads_bundle_executable_and_rejects_traversal(self):
         app=self.home/'Applications/Shadowrocket.app/Contents';(app/'MacOS').mkdir(parents=True)

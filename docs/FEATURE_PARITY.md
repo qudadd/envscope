@@ -1,6 +1,6 @@
 # Feature parity and integration audit
 
-## Active full-scope work: 0.16 development
+## Active full-scope work: 0.18 development
 
 [The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
 over historical status tables below. Native process protection is now implemented
@@ -8,8 +8,10 @@ with a separate user task, ten-second checks, approved scope, PID/path/user
 validation, live-worker heartbeat and durable logs. See [its exact scope and
 verification](PROCESS_GUARD.md). The native privileged Mac timezone service now has
 reviewed install/update/remove, rollback and recovery paths. Native system network
-repair and additional client adapters remain incomplete. The overall parity
-goal is not achieved. Upstream Windows `set-region` at `223a5cc` was inspected.
+repair is implemented in 0.17. Version 0.18 adds reviewed client lifecycle,
+persistent Clash Verge TUN repair and typed Mac Claude-language transactions.
+Legacy component migration and real-device acceptance remain incomplete; the
+overall parity goal is not achieved. Upstream HEAD `223a5cc` was rechecked.
 
 Whole-profile account volumes now use normal client exit, APFS copy-on-write
 where supported, commit readback and a v2 journal with reviewed recovery UI.
@@ -18,15 +20,22 @@ identity fixtures and a real disposable child-process exit are tested; real
 Claude credentials and server device recognition remain unverified.
 See [account volume scope](ACCOUNT_VOLUMES.md).
 
-## Current scope: 0.16.0 (2026-10-29)
+## Current scope: 0.18.0 (2026-10-29)
+
+0.18 stages client repair before a fresh audit and subsequent native guard plans.
+It preserves preference comments/fields, exact program identity, original startup
+state, typed language arrays and missing/ByHost keys. Confirmed actions, rollback,
+durable pending recovery and selected-check UI use the same native coordinators.
+Windows named-pipe and Mac CFPreferences/owned GUI acceptance are separate from
+real VPN or Claude UI claims. See [client scope](CLIENT_REPAIR.md).
 
 0.17 adds native Windows/macOS IPv6 interface selection and DNS cache flush.
 The one-stop and selected-check workflows review exact effects before foreground
 OS authorization, preserve protected originals, independently read back changes,
 and expose rollback and interrupted recovery. Cache contents cannot be undone;
 settings readback never substitutes for DNS, connectivity or egress evidence.
-See [network scope and recovery](SYSTEM_NETWORK.md). Client-specific persistent
-TUN, language and legacy component migration remain incomplete.
+See [network scope and recovery](SYSTEM_NETWORK.md). Additional client-specific
+TUN controls and legacy component migration remain guided or incomplete.
 
 0.16 adds a small root-owned native Mac timezone worker, a 60-second LaunchDaemon,
 explicit foreground administrator authorization, protected transaction backups,

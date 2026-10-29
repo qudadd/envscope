@@ -122,3 +122,13 @@ termination use [psutil](https://github.com/giampaolo/psutil), BSD-3-Clause.
 It is a runtime dependency; the desktop build includes its distribution license.
 Source use follows the [official API reference](https://psutil.readthedocs.io/).
 No psutil process operation runs merely from importing EnvScope.
+
+## Native client and language interfaces
+
+Version 0.18 independently implements public OS process / preference APIs and
+the documented local Mihomo control protocol. Clash Verge Rev 2.5.8, revision
+`4337bd85758d54d7b9044b2da3c9ac1176eae1f3`, was reviewed to understand its
+`enable_tun_mode` preference and IPC configuration. No GPL implementation,
+binary or artwork is distributed. Apple AppKit/Core Foundation and Microsoft
+named-pipe documentation are interface references, not bundled source. See
+[exact scope and sources](docs/CLIENT_REPAIR.md).
