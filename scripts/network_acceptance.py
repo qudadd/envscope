@@ -109,7 +109,14 @@ def main():
             assert (root/'fixture.plist').stat().st_mtime_ns==before;phases.append('dns_only_has_no_network_rewrite')
             proof.update(state='passed',phases=phases,configuration_readback=True,original_configuration_preserved=True,
                          interrupted_recovery=True,failed_write_rollback=True,dns_failure_visible=True,dns_only_is_scoped=True)
-            (output/'fixture-events.txt').write_text('\n'.join(p.read_text() for p in root.glob('*.private.jsonl')))
+        logs=[]
+        for path in root.glob('*.private.jsonl'):
+            info=path.stat()
+            assert info.st_uid==0 and info.st_mode&0o777==0o600 and info.st_nlink==1
+            logs.append(subprocess.check_output(['sudo','/bin/cat',str(path)],timeout=10).decode())
+        assert logs
+        proof['private_event_log']=True
+        (output/'fixture-events.txt').write_text('\n'.join(logs))
     finally:
         assert root.parent==Path('/Library/PrivilegedHelperTools') and root.name=='io.qudadd.envscope.network.ci-'+nonce
         sudo('/bin/rm -rf '+shlex.quote(str(root)),False)
