@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "envscope"
-version = "0.13.0"
+version = "0.14.0"
 description = "Minimal desktop environment checks, guarded accounts and practical maintenance tools"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "envscope/vendor/claude_switcher/LICENSE"]
 authors = [{name = "EnvScope contributors"}]
-dependencies = ["cryptography>=46,<51", "psutil>=7.2,<8"]
+dependencies = ["cryptography>=46,<51", "psutil>=7.2,<8", "ruamel.yaml>=0.19.1,<0.20"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",

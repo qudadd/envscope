@@ -121,7 +121,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None):
         self.store = store
         self.environment_reader = environment_reader
         from .region_lookup import lookup_region
@@ -146,8 +146,10 @@ class Operations:
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
         from .process_guard import ProcessGuard
         self.process_guard = process_guard or ProcessGuard(store, self.home)
+        from .routing import Routing
+        self.routing = routing or Routing(store, self.home, environ={} if home is not None else None)
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
-                                      lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}))
+                                      lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing)
         from .region_setup import RegionSetup
         from .inventory import collect
         self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home)
@@ -209,12 +211,28 @@ class Operations:
                 "settings": self.store.settings(), "environment": environment_summary(self.store.settings()), "history": self.store.history(), "maintenance": self.maintenance.status(), "process_guard": self.process_guard.status(),
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
                 'features':feature_catalog(legacy,browser), 'isolated_browser':browser,
-                'region_recovery': self.regions.public_recovery(),
+                'region_recovery': self.regions.public_recovery(), 'routing': self.routing.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action.startswith('routing-'):
+            allowed = {'routing-options': set(), 'routing-plan': {'report_id', 'group'},
+                       'routing-apply': {'plan_id'}, 'routing-undo-plan': set(), 'routing-undo': {'plan_id'}}
+            if action not in allowed or set(params) - allowed[action]:
+                raise ValueError('路由配置参数无效')
+            if action == 'routing-options':
+                return self.routing.options()
+            if action == 'routing-plan':
+                if not report or params.get('report_id') != report.get('report_id'):
+                    return {'state': 'retest_required', 'reason': '请先重新检测，再生成路由方案'}
+                return self.routing.prepare(report, params.get('group'))
+            if action == 'routing-apply':
+                return self.routing.apply(params.get('plan_id'), report, confirmed)
+            if action == 'routing-undo-plan':
+                return self.routing.undo_prepare()
+            return self.routing.undo(params.get('plan_id'), confirmed)
         if action in ('account-recovery-plan', 'account-recovery-apply'):
             allowed = set() if action == 'account-recovery-plan' else {'plan_id'}
             if set(params) - allowed:

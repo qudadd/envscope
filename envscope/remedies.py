@@ -425,8 +425,9 @@ class ConfigRemedies:
 
 
 class SolutionPlans:
-    def __init__(self, config, legacy, discoverer, proxy_tester):
+    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None):
         self.config, self.legacy, self.discoverer, self.proxy_tester = config, legacy, discoverer, proxy_tester
+        self.routing = routing
         self.plans = {}
 
     @staticmethod
@@ -549,7 +550,17 @@ class SolutionPlans:
             effects.insert(0, "为将修改的配置创建私有原文件备份与恢复记录，随后仅写入下列字段")
             tasks.append("config")
         selected = next((row for row in report.get("claude_checks", {}).get("items", []) if row["id"] == check_id), None)
-        needs_backend = (selected and selected["id"] in ("proxy", "tun", "guard", "rules")
+        route_plan = None
+        needs_routing = any(p.get('repair') == 'routing' for p in problems) or selected and selected['id'] == 'rules' and selected['status'] in ('warn', 'fail', 'unknown')
+        if needs_routing:
+            route = self.routing.prepare(report) if self.routing else {'reason': '请在持续维护中预览路由配置，或在客户端按所列规则手动处理。'}
+            if route.get('state') == 'planned':
+                route_plan = route['plan_id']
+                tasks.append('routing')
+                effects.extend(route['effects'])
+            else:
+                manual.append(route['reason'])
+        needs_backend = (selected and selected["id"] in ("proxy", "tun", "guard")
                          and selected["status"] in ("warn", "fail", "unknown") and report.get("usage") != "cli"
                          and not (selected["id"] == "proxy" and kinds.get("cli")))
         if any(p.get("repair") == "legacy" for p in problems) or needs_backend:
@@ -578,13 +589,13 @@ class SolutionPlans:
         before["configuration"] = [{"target": c["target"], "after_hash": c["after_hash"], "fields": c.get("fields", [])} for c in changes]
         before["configuration_pending"] = list(manual)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"], "changes": changes,
-                              "tasks": tasks, "problems": [p["id"] for p in problems],
+                              "tasks": tasks, "routing": route_plan, "problems": [p["id"] for p in problems],
                               "before": before, "proxy": chosen if changes and any("HTTPS_PROXY" in c.get("fields", []) for c in changes) else None,
                               "context": context, "repair_json": "trailing_comma" in kinds.get("cli", set())}}
         return {"state": "planned", "plan_id": token, "effects": effects, "manual": manual,
                 "manual_items": manual_items, "connections": connections,
                 "configuration_count": len(changes), "enhance_cli": enhance_cli,
-                "steps": ["备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
+                "steps": ["备份、写入并验证原生路由" if t == 'routing' else "备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
                 "reason": "确认后执行；配置写入不等于故障已解决，随后自动复检。"}
 
     def apply(self, token, report, confirmed=False):
@@ -613,6 +624,20 @@ class SolutionPlans:
                 return {"state": value["state"], "steps": outputs, "backups": backups, "before": plan["before"], "needs_retest": True}
         for task in plan["tasks"]:
             if task == "config":
+                continue
+            if task == 'routing':
+                try:
+                    value = self.routing.apply(plan['routing'], report, True)
+                except (ValueError, OSError):
+                    # A reviewed region/node step or an external edit may have
+                    # invalidated the route plan. Retain earlier backup evidence
+                    # and force a fresh audit instead of losing partial results.
+                    value = {'state': 'partial' if outputs else 'retest_required',
+                             'reason': '路由方案在执行前已变化或无法完成；保留此前步骤与备份，先复检，再按最新节点和配置生成路由方案。'}
+                outputs.append({'step': task, 'state': value['state'], 'reason': value.get('reason', '')})
+                if value['state'] != 'completed':
+                    return {'state': value['state'], 'steps': outputs, 'reason': value.get('reason', ''),
+                            'backups': backups, 'before': plan['before'], 'needs_retest': True}
                 continue
             value = self.legacy.run(task, {}, confirmed=True)
             outputs.append({"step": task, "state": value["state"], "reason": value.get("reason", "维护操作已返回，尚待复检")})

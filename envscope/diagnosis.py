@@ -269,7 +269,7 @@ def diagnose(report, preferences=None):
                 ["在代理客户端切换到预期的规则或全局模式，选择真实代理节点。", "需要代理 UDP 时选择明确支持 UDP 的节点；不要把 DIRECT / REJECT 当成代理节点。", "完成后复检，核对实际运行状态。"], "proxy-settings")
         else:
             add("maintenance.rules", "账号启动要求的代理规则不满足", observed, "需要修正运行内核中的规则；静态配置文本存在不能代替实际加载。",
-                ["使用修复方案调用已安装维护核心修复，再复检运行规则。", "手动处理时，将所列条目放进客户端实际加载的规则，不只在静态文件中写 prepend-rules。"], "maintenance", "legacy")
+                ["在修复方案或持续维护中预览原生路由配置：备份、保留脚本、重载并读回 16 条规则。", "不支持的客户端请将所列条目放进实际加载的规则；静态文件不能证明已经生效。"], "maintenance", "routing")
     elif account_used and preferences.get("require_rules") and status("baseline.rules") == "unknown":
         group_missing = "代理组" in rule.get("reason", "")
         add("startup.rules", "账号启动要求核对规则，但本次没有完成", rule.get("reason", "没有取得可识别的代理运行规则。"),

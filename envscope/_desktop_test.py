@@ -105,6 +105,11 @@ def main(output=None):
                 assert result['watchdog_controls'] and result['ip_lookup_control']
                 result['process_guard_controls']=read_js("!!document.getElementById('process-guard-prepare') && !!document.getElementById('process-guard-stop')")
                 assert result['process_guard_controls']
+                result['routing_controls']=read_js("!!document.getElementById('routing-prepare') && !!document.getElementById('routing-restore')")
+                from .routing_config import load_yaml, update_yaml_rules, rule_strings
+                pinned = rule_strings('Fixture', 'proxy')
+                result['routing_yaml'] = list(load_yaml(update_yaml_rules(b'rules: []\n', pinned))[1]['rules']) == pinned
+                assert result['routing_controls'] and result['routing_yaml']
                 assert runtime.ready.wait(5), 'Tray did not initialize'
                 result['tray'] = True
                 ids = read_js("[...document.querySelectorAll('[id]')].map(n=>n.id)")

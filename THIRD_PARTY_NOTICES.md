@@ -1,5 +1,21 @@
 # Third-party origins
 
+## ruamel.yaml and routing interoperability
+
+Comment-preserving YAML edits use [ruamel.yaml](https://yaml.dev/doc/ruamel.yaml/),
+MIT licensed, runtime range `>=0.19.1,<0.20`. Only its pure Python round-trip
+parser is used; unsafe Python object constructors are never enabled. Its license
+is included in desktop packages. Duplicate keys, cycles, custom tags and excessive
+input depth / size are rejected before any write.
+
+Native routing interoperates with the documented Clash Verge global script format
+and Mihomo local control API. The generated wrapper follows the reviewed
+claude-switcher managed-script composition, retaining upstream attribution below.
+The release validation downloads unmodified official Mihomo v1.19.33 binaries
+(GPL-3.0) into ignored test artifacts and checks pinned SHA-256 digests. These
+test binaries are not shipped with EnvScope; their source is available at
+https://github.com/MetaCubeX/mihomo/tree/v1.19.33 .
+
 ## cryptography
 
 Encrypted `.envsnap` archives use [cryptography](https://github.com/pyca/cryptography),

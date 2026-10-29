@@ -17,7 +17,19 @@ identity fixtures and a real disposable child-process exit are tested; real
 Claude credentials and server device recognition remain unverified.
 See [account volume scope](ACCOUNT_VOLUMES.md).
 
-## Current scope: 0.12.0 (2026-10-29)
+## Current scope: 0.14.0 (2026-10-29)
+
+0.14 adds native Clash Verge routing: reviewed 16-rule plans, preserved user
+scripts, bounded comment-preserving YAML edits, durable backups, actual runtime
+readback, rollback and restart recovery. Windows/macOS UI fixtures and an actual
+temporary Windows Mihomo core have passed; macOS Unix-socket results are recorded
+by the release CI. Other clients remain guided. [Routing scope](ROUTING.md).
+
+0.13 added account-volume recovery and a separate 10-second process guard.
+Three native architectures passed frozen account roundtrips, interruption
+recovery, user-task registration / multiple automatic executions / removal,
+tray operations and full archive updates. Real Claude login, GUI regeneration,
+power loss and proxy failure on user devices remain separate acceptance work.
 
 IP lookup now filters city presets by the observed exit country and suggests
 timezone/locale/language only with explicit evidence and user confirmation.
@@ -43,9 +55,9 @@ authenticated `.envsnap` archives, passive CLI conflict/provenance inspection,
 and broader device/browser metadata. Installed guard modes are compared with
 the selected client. CN/RU are rejected by a separate official-region gate.
 
-Upstream main was reviewed at `495b9952f36b8b7b7575fa0d8de48c2465dbf486`.
-The bundled immutable pin remains `870c4ca`. OS repairs, routing, process guard,
-Mac timezone watchdog and DMG still depend on explicitly installed legacy
+Upstream main was reviewed at `223a5cc44edf36dfa568903ab02e73f0f015ec9e`.
+The bundled immutable pin remains `870c4ca`. Remaining system network repairs,
+Mac privileged timezone watchdog and DMG compatibility depend on explicitly installed legacy
 components. [Current implementation and tests](ENVIRONMENT_COVERAGE.md).
 
 The dated sections below record prior audits. Former native browser, archive

@@ -162,7 +162,7 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     self.server.solution_before = {"problems": [{"id": p["id"], "title": p["title"]} for p in self.server.last_raw_report["diagnosis"]["problems"]]}
                 if request["action"] in ("environment-confirm", "settings-save", "settings-restore", "fix", "install", "update-apply", "set-region", "set-client") or request["action"] in ("solution-apply", "solution-undo") and result.get("state") not in ("confirmation_required", "retest_required"):
                     self.server.last_raw_report = None
-                if request['action'] in ('inspection-apply', 'region-undo') and result.get('needs_retest'):
+                if request['action'] in ('inspection-apply', 'region-undo', 'routing-apply', 'routing-undo') and result.get('needs_retest'):
                     self.server.last_raw_report = None
                 if request["action"] in ("account-switch", "app-launch", "app-restart", "open-safe") and self.server.last_raw_report:
                     result["latest_report"] = redact(self.server.last_raw_report)

@@ -8,12 +8,10 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from urllib.request import build_opener, ProxyHandler, Request
 
 from .model import Finding, Status
 from .policy import normalize_ip
 from .transport import response_evidence
-from .discovery import config_documents
 
 DOMAINS = ("claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com", "challenges.cloudflare.com",
            "datadoghq.com", "segment.io", "stripe.com", "stripe.network", "stripecdn.com",
@@ -187,34 +185,11 @@ def verify_rules(config, rules, proxies, preferences):
 
 
 def runtime_rules(preferences):
-    from .controller import NoRedirects, validate_controller
-    origin, secret = "http://127.0.0.1:9090", os.environ.get("ENVSCOPE_CONTROLLER_SECRET", "")
-    for content in config_documents():
-        found = re.search(r"^external-controller:\s*[\"']?([^\s\"']+)", content, re.M)
-        if found:
-            candidate = found[1].replace("0.0.0.0:", "127.0.0.1:")
-            try:
-                origin = validate_controller("http://" + candidate)
-            except ValueError:
-                continue
-        key = re.search(r"^secret:\s*[\"']?([^\s\"']*)", content, re.M)
-        if key and key[1]:
-            secret = key[1]
+    from .local_controller import discover
     try:
-        headers = {"Accept": "application/json"}
-        if secret:
-            if len(secret) > 4096 or any(ord(c) < 32 or ord(c) == 127 for c in secret):
-                raise ValueError("invalid controller secret")
-            headers["Authorization"] = "Bearer " + secret
-        opener = build_opener(ProxyHandler({}), NoRedirects())
-        def read(endpoint):
-            with opener.open(Request(origin + endpoint, headers=headers), timeout=2) as response:
-                body = response.read(1048577)
-            if len(body) > 1048576:
-                raise ValueError("oversized runtime response")
-            return json.loads(body)
-        config = read("/configs")
-        value = verify_rules(config, read("/rules"), read("/proxies"), preferences)
+        controller = discover()
+        config = controller.request('/configs')
+        value = verify_rules(config, controller.request('/rules'), controller.request('/proxies'), preferences)
         tun = config.get("tun") if isinstance(config, dict) else None
         value["runtime"] = {"mode": config.get("mode"), "tun_enabled": tun.get("enable"), "auto_route": tun.get("auto-route"),
                             "dns_hijack_configured": bool(tun.get("dns-hijack"))} if isinstance(tun, dict) else {"mode": config.get("mode") if isinstance(config, dict) else None}

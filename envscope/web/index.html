@@ -130,6 +130,13 @@
       <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p><p id="upkeep-watchdog-state" class="note" role="status"></p>
         <div class="actions"><button id="upkeep-run" disabled>立即复检</button><button id="upkeep-report" disabled>查看最近一次巡检</button><button id="upkeep-refresh" class="link">刷新状态</button><button id="upkeep-stop" class="link" disabled>停用并移除任务</button></div>
       </section>
+      <section class="tool-section" id="routing-panel"><h2>Claude 路由配置</h2>
+        <p class="note">Clash Verge：保留原脚本，置顶 13 个域名与 3 个 UDP 端口规则，加载后逐条核对。其他客户端请按检测结果手动设置。</p>
+        <h3 id="routing-state">尚未配置</h3><p id="routing-status" class="note" role="status"></p>
+        <button id="routing-load" class="link">读取可用代理组</button><label>目标代理组<select id="routing-group"><option value="">按已确认目标 / 唯一可用组</option></select></label>
+        <div class="actions"><button id="routing-prepare">生成路由修复方案</button><button id="routing-restore" class="link" disabled>预览恢复原配置</button></div>
+        <div id="routing-plan"></div><div id="routing-output" class="solution-output" aria-live="polite"></div><p id="routing-backup" class="note"></p>
+      </section>
       <section class="tool-section" id="process-guard-panel"><h2>代理故障时停止 Claude</h2>
         <p class="note">独立的 10 秒进程守护。端口或指定隧道异常时停止当前用户的 Claude 桌面，避免继续重试；未保存内容可能丢失。需要先审核并启用，轮询不是防火墙。</p>
         <h3 id="process-guard-state">未启用</h3><p id="process-guard-status" class="note" role="status"></p><p id="process-guard-route" class="note"></p>
