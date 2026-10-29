@@ -39,6 +39,7 @@ jobs:
       - run: node --check envscope/web/timezone_ui.mjs
       - run: node --check envscope/web/network_ui.mjs
       - run: node --check envscope/web/client_ui.mjs
+      - run: node --check envscope/web/check_preferences_ui.mjs
       - run: python -m scripts.check_release
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - run: python -m scripts.verify_package dist
@@ -57,6 +58,7 @@ jobs:
       - run: python -m scripts.target_environment_smoke
       - run: python -m scripts.coverage_smoke
       - run: python -m scripts.selection_smoke
+      - run: python -m scripts.check_preferences_smoke
       - run: python -m scripts.region_lookup_smoke
       - run: python -m scripts.watchdog_smoke
       - run: python -m scripts.process_guard_smoke

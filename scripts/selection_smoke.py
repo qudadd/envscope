@@ -94,7 +94,7 @@ def main():
                             page.locator('#checks-select-all').click()
                             expect(page.locator('#checks-selected-count')).to_contain_text('56 项')
                             page.locator('#check-search').fill('')
-                            assert page.locator('#all-checks-list input:checked').count() == 56
+                            assert page.locator('#all-checks-list input:checked').count() == 57
                             page.locator('#checks-clear').click()
                             row = page.locator('[data-inspection="baseline.timezone"]')
                             row.locator('input[type=checkbox]').check()

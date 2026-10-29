@@ -510,7 +510,7 @@ class SolutionPlans:
         startup_needed=target.get('connection_mode') in ('tun','http_proxy') and scope_chosen(('baseline.proxy','extra.proxy_listener','target.path'),'proxy') and (
             findings.get('baseline.proxy',{}).get('status') in ('warn','fail') or listener_offline)
         if self.client and (tun_needed or startup_needed):
-            value=self.client.prepare(report,tun=tun_needed)
+            value=self.client.prepare(report,tun=tun_needed,start_if_tun_manual=True)
             if value.get('state')=='planned':
                 # Starting a client can create a new tunnel or regenerate runtime
                 # configuration. Review later writes against a new audit instead
@@ -519,11 +519,12 @@ class SolutionPlans:
                 self.plans={token:{'deadline':time.monotonic()+90,'report_id':report['report_id'],'changes':[],
                     'tasks':['client'],'client':value['plan_id'],'problems':[p['id'] for p in problems],
                     'before':{'problems':[{'id':p['id'],'title':p['title']} for p in problems]},'proxy':None,'context':{},'repair_json':False}}
-                return {'state':'planned','plan_id':token,'effects':value['effects'],'manual':[],
+                return {'state':'planned','plan_id':token,'effects':value['effects'],'manual':value.get('manual',[]),
                     'manual_items':[{'id':p['id'],'title':p['title']} for p in problems if not p.get('repair')],
                     'connections':[],'configuration_count':0,'steps':['修复所选客户端并核对 TUN / 进程'],
                     'staged':True,'reason':'先完成客户端修复并自动复检，再根据新读到的接口与节点生成后续方案；后续修改仍会列出具体影响供确认。'}
             manual.append(value.get('reason','请在持续维护中选择实际安装的客户端。'))
+            manual.extend(value.get('manual',[]))
         cli_finding = next((f for f in report.get("findings", []) if f["id"] == "extra.cli_env"), {})
         cli = next((v for v in cli_finding.get("evidence", []) if isinstance(v, dict)), {})
         cli_used = report.get("usage") in ("cli", "both") or report.get("usage") == "auto" and bool(cli.get("installation_count") or cli.get("config", {}).get("exists"))

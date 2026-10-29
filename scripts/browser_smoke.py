@@ -143,7 +143,7 @@ def main():
                 assert not page.locator('#beginner-checks').evaluate('(node)=>node.open')
                 expect(page.locator('#flow-state')).to_contain_text('确认一次后执行并复检')
                 assert page.locator('#checks tr[data-check^="baseline."]').count()==14
-                assert page.locator('#checks tr[data-check^="extra."]').count()==18
+                assert page.locator('#checks tr[data-check^="extra."]').count()==19
                 assert page.locator('#claude-check-rows [data-claude-check]').count()==14
                 expect(page.locator('#problems')).to_contain_text('配置结尾存在多余逗号')
                 assert '查看详情' not in page.locator('#audit-results').inner_text()

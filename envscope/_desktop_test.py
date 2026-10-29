@@ -25,6 +25,19 @@ def main(output=None):
         operations = Operations(store, directory, discoverer=lambda: [], region_lookup=lambda params: {'state':'unavailable','reason':'Offline native fixture'}, legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),
                                 environment_reader=lambda: {'platform':platform.system(),'locale':'en-US','network':{'timezone_id':'UTC'}})
         assert operations.legacy._vendor_integrity()['verified'], 'Bundled upstream bytes and filenames must survive installation'
+        # Frozen imports, persisted consent and ZIP privacy on disposable data.
+        import base64
+        from io import BytesIO
+        from zipfile import ZipFile
+        operations.diagnostics.record('audit','completed')
+        config=operations.run('check-config-save',{'disabled':['webrtc','ecosystem'],'logging':False})
+        assert config['state']=='completed'
+        assert StateStore(store.root).settings()['check_config']['logging'] is False
+        exported=operations.run('diagnostics-export',{},True)
+        with ZipFile(BytesIO(base64.b64decode(exported['archive']['data']))) as bundle:
+            assert set(bundle.namelist())=={'summary.json','commands.jsonl','README.txt'}
+            assert not bundle.read('commands.jsonl')
+        result['native_diagnostics_export']=True
         # Exercise the packaged cryptography/OpenSSL runtime on disposable data.
         manager = operations.accounts
         manager.accounts_dir.mkdir(parents=True)

@@ -14,7 +14,8 @@ from .report import diff_reports, redact, validate_report
 from .target_environment import DEFAULTS as ENVIRONMENT_DEFAULTS, validate as validate_environment, FIELDS as ENVIRONMENT_FIELDS
 
 DEFAULTS = {"country": "", "timezone": "", "locale": "", "client": "auto", "proxy_group": "", "webrtc_policy": "proxy",
-            "allowed_ipv4": [], "allowed_ipv6": [], "require_guard": True, "require_rules": True, "usage": "auto", **ENVIRONMENT_DEFAULTS}
+            "allowed_ipv4": [], "allowed_ipv6": [], "require_guard": True, "require_rules": True, "usage": "auto",
+            "check_config": {}, **ENVIRONMENT_DEFAULTS}
 
 
 def validate_settings(value):
@@ -27,7 +28,7 @@ def validate_settings(value):
     proposed["country"] = proposed["country"].upper()
     if proposed["country"] and not re.fullmatch("[A-Z]{2}", proposed["country"]):
         raise ValueError("invalid country")
-    if proposed["client"] not in ("auto", "clash-verge", "shadowrocket", "sing-box", "clashx", "surge", "wireguard", "other"):
+    if proposed["client"] not in ("auto", "clash-verge", "flclash", "shadowrocket", "sing-box", "clashx", "surge", "wireguard", "other"):
         raise ValueError("invalid client")
     if proposed["webrtc_policy"] not in ("proxy", "reject"):
         raise ValueError("invalid WebRTC policy")
@@ -44,6 +45,8 @@ def validate_settings(value):
     if any(type(proposed[f]) is not bool for f in ("require_guard", "require_rules")):
         raise ValueError("invalid boolean setting")
     validate_environment(proposed)
+    from .check_preferences import validate
+    proposed['check_config'] = validate(proposed['check_config'])
     return proposed
 
 
@@ -143,8 +146,8 @@ class StateStore:
         previous.pop('environment_confirmed', None)
         return self.save_settings(previous, invalidate_environment=True)
 
-    def policy(self):
-        p = self.settings()
+    def policy(self, settings=None):
+        p = self.settings() if settings is None else validate_settings(settings)
         return Policy(allowed_ipv4=tuple(ipaddress.ip_network(n) for n in p["allowed_ipv4"]),
                       allowed_ipv6=tuple(ipaddress.ip_network(n) for n in p["allowed_ipv6"]))
 

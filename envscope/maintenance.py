@@ -32,7 +32,12 @@ def age(value):
 
 
 def fingerprint(settings):
-    return hashlib.sha256(json.dumps(settings, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+    # Diagnostic consent cannot authorize a repair and does not change its
+    # baseline. Probe/failure preferences still invalidate old approvals.
+    from .check_preferences import validate
+    config = validate(settings.get('check_config', {}))
+    scoped = {**settings, 'check_config': {k: v for k, v in config.items() if k != 'logging'}}
+    return hashlib.sha256(json.dumps(scoped, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
 
 
 def proxy_works(proxy):
@@ -362,6 +367,9 @@ class Maintenance:
 
     def run_once(self):
         from .probes import audit
+        from .diagnostics import DiagnosticLog
+        started = time.monotonic()
+        log = DiagnosticLog(self.store)
         with self._lock():
             config = self._config()
             if not config.get("enabled"):
@@ -373,10 +381,13 @@ class Maintenance:
             self._write("stats", stats)
             try:
                 preferences = self.store.settings()
-                policy = self.store.policy()
+                from .check_preferences import selection
+                selected_checks = selection(preferences)
+                options = {'selected_checks': selected_checks} if selected_checks is not None else {}
+                policy = self.store.policy(preferences)
                 from .transport import desktop_transport
                 findings = (self.auditor or audit)(policy, desktop_transport(preferences), online=True, stun=True, ipv6=True,
-                                                   browser=None, baseline_config=preferences)
+                                                   browser=None, baseline_config=preferences, **options)
                 from .regions import region_finding
                 region = region_finding(findings,preferences)
                 watchdog_changed=False
@@ -397,7 +408,7 @@ class Maintenance:
                     self._restore(config,stats)
                     if watchdog_changed or stats.get('restore_state') in ('restored','unverified'):
                         findings = (self.auditor or audit)(policy, desktop_transport(preferences), online=True, stun=True, ipv6=True,
-                                                           browser=None, baseline_config=preferences)
+                                                           browser=None, baseline_config=preferences, **options)
                 signature, key = self.data._signature([f.to_dict() for f in findings])
                 self.data._write("history-key.private.json", key)
                 comparison_key = hashlib.sha256(bytes.fromhex(key)).hexdigest()
@@ -418,7 +429,7 @@ class Maintenance:
                         f.scope = "scheduled-native-observations"
                 findings.append(Finding("maintenance.browser", "浏览器与登录状态", Status.SKIPPED,
                                         "后台不使用历史 ICE 冒充当前浏览器观测；账号登录未测", "scheduled-native-only"))
-                raw = make_report(findings, policy, "scheduled-native", preferences)
+                raw = make_report(findings, policy, "scheduled-native", preferences, selected_checks)
                 safe = redact(raw)
                 previous_report = self._read("latest", None)
                 if previous_report:
@@ -429,11 +440,13 @@ class Maintenance:
                 stats.update(completed_at=utc_now(), last_state="completed")
                 self._event("checked", f"本轮原生巡检完成，{len(raw['diagnosis']['problems'])} 个待处理问题；未检测项目仍保留未核实。")
                 self._write("stats", stats)
+                log.safe_record('maintenance-audit', 'completed', time.monotonic() - started)
                 return {"state": "completed", "reason": "原生巡检已完成；请查看问题、逐项清单及事件。", "report": safe}
             except (OSError, ValueError, UnicodeError, subprocess.TimeoutExpired):
                 stats["last_state"] = "failed"
                 self._write("stats", stats)
                 self._event("failed", "本轮未能完成；上一份结果保留，不能视为本轮通过。")
+                log.safe_record('maintenance-audit', 'failed', time.monotonic() - started)
                 return {"state": "failed", "reason": "本轮原生巡检未完成，请在检测页手动复检。"}
 
 

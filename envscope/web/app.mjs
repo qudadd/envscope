@@ -124,6 +124,17 @@ async function runAudit({oneStop=false,phase='check',checks=null}={}){
   byId("coverage-count").textContent="正在检测";byId("verdict-note").textContent="正在采集本次观测并分析问题。请保持本地页面打开。";
   byId("session-state").textContent="正在收集证据";byId("verdict").textContent="观测中…";
   try {
+    const plannedSession=await sessionPromise;
+    if(plannedSession){
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+      try{
+        const response=await fetch('/api/action',{method:'POST',signal:controller.signal,
+          headers:{'Content-Type':'application/json','X-EnvScope-Token':plannedSession.token},
+          body:JSON.stringify({action:'audit-plan',params:checks?{checks}:{},confirmed:false})});
+        if(!response.ok)throw new Error('检测偏好未读取');
+        const value=await response.json();checks=value.checks;
+      }finally{clearTimeout(timer);}
+    }
     const selected=id=>!checks||checks.includes(id);
     const rtc=selected('browser.webrtc')||selected('baseline.webrtc');
     const v4=rtc||selected('browser.http_v4'),v6=rtc||selected('browser.http_v6');
@@ -151,6 +162,12 @@ async function runAudit({oneStop=false,phase='check',checks=null}={}){
 nodes.start.addEventListener("click",()=>{if(!diagnosisUI.isBusy())void runAudit({oneStop:true});});
 
 function download(value,suffix) {
+  if(value?.format==='zip'&&typeof value.data==='string'){
+    const bytes=Uint8Array.from(atob(value.data),c=>c.charCodeAt(0)),blob=new Blob([bytes],{type:'application/zip'});
+    const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;
+    link.download=/^EnvScope-diagnostics-[0-9-]+\.zip$/.test(value.filename)?value.filename:'EnvScope-diagnostics.zip';
+    link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return;
+  }
   const blob=new Blob([JSON.stringify(value,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);
   const link=document.createElement("a");link.href=url;link.download=`envscope-${suffix}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }

@@ -71,7 +71,10 @@ def stun_observations(family=4, timeout=2):
 
 def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), browser=None, controller=None, secret=None, baseline_config=None, selected_checks=None):
     from .inspection import resolve, scope_findings
+    from .check_preferences import selection
+    selected_checks = selection(baseline_config or {}, selected_checks)
     enabled = resolve(selected_checks)
+    from .ecosystem import observe
     with ThreadPoolExecutor(max_workers=6) as pool:
         inventory_job = pool.submit(collect)
         facts_job = pool.submit(bounded_facts) if online and enabled & {'extra.dns_resolution', 'extra.target_route'} else None
@@ -79,6 +82,7 @@ def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), b
         v6_job = pool.submit(http_observations, transport, 6) if online and ipv6 and 'http.ipv6' in enabled else None
         udp4_job = pool.submit(stun_observations, 4) if online and stun and 'udp.stun' in enabled else None
         udp6_job = pool.submit(stun_observations, 6) if online and stun and ipv6 and 'udp.stun' in enabled else None
+        ecosystem_job = pool.submit(observe, transport) if online and baseline_config is not None and 'extra.ecosystem' in enabled else None
         inventory = inventory_job.result()
         network = facts_job.result() if facts_job else {"dns": [], "routes": []}
         v4, v6 = v4_job.result() if v4_job else [], v6_job.result() if v6_job else []
@@ -101,7 +105,7 @@ def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), b
     if baseline_config is not None:
         from .baseline import collect_baseline
         from .environment_info import device_information, device_finding
-        context = {}
+        context = {'ecosystem': ecosystem_job.result() if ecosystem_job else []}
         with ThreadPoolExecutor(max_workers=3) as pool:
             local_job = pool.submit(local_snapshot, inventory, listeners_enabled='extra.proxy_listener' in enabled)
             device_job = pool.submit(device_information) if 'device.environment' in enabled else None

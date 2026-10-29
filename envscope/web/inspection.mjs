@@ -5,7 +5,7 @@ const states={not_run:'尚未检测',pass:'所列范围通过',warn:'需要复�
 const explained={passed:'通过',review:'需要复核',problem:'发现问题',permission:'需要读取权限',probe_incomplete:'探测未完成',unavailable:'未取得结果',unsupported:'本版未支持',not_applicable:'不适用',informational:'参考资料'};
 
 export function initInspection({run,operate,isBusy,retest}){
-  let catalog=[],report=null,phase='not_run',selection=new Set(),visible=[],groups=[],source='current',initialized=false;
+  let catalog=[],report=null,phase='not_run',selection=new Set(),visible=[],groups=[],source='current',initialized=false,defaultsKey=null;
   const selected=()=>[...selection];
   const output=$('checks-output');
   const button=(text,fn)=>{const b=el('button',text,'link');b.type='button';b.addEventListener('click',fn);return b;};
@@ -112,7 +112,13 @@ export function initInspection({run,operate,isBusy,retest}){
     });
     $('all-checks-list').replaceChildren(...(nodes.length?nodes:[el('p',catalog.length?'没有符合条件的项目，试试清除搜索或切换筛选。':'检查目录尚未取得，请检查本地服务连接。','note')]));
   }
-  document.addEventListener('envscope-catalog',event=>{const next=event.detail.checks||catalog;if(JSON.stringify(next)!==JSON.stringify(catalog)){catalog=next;if(!initialized){selection=new Set(catalog.map(c=>c.id));initialized=true;}render();}showRecovery(event.detail.region_recovery);});
+  const applyDefaults=config=>{
+    if(!config)return;
+    const key=JSON.stringify(config.default_checks);
+    if(defaultsKey!==key){defaultsKey=key;selection=new Set(config.default_checks||catalog.map(c=>c.id));initialized=true;}
+  };
+  document.addEventListener('envscope-check-preferences-changed',event=>{applyDefaults(event.detail);render();});
+  document.addEventListener('envscope-catalog',event=>{const next=event.detail.checks||catalog;if(JSON.stringify(next)!==JSON.stringify(catalog)){catalog=next;if(!initialized){selection=new Set(catalog.map(c=>c.id));initialized=true;}render();}applyDefaults(event.detail.check_config);render();showRecovery(event.detail.region_recovery);});
   document.addEventListener('envscope-report',event=>{
     report=event.detail.report;phase='complete';source=event.detail.source||'current';
     $('all-checks-context').textContent=({history:'历史报告',maintenance:'后台巡检',current:'本次检测'})[source]+' · '+new Date(report.created_at).toLocaleString()+(report.selection?.mode==='selected'?' · 部分检查':' · 全部检查')+'。未知与未检测不算通过；历史结果不代表当前状态。';render();

@@ -1,6 +1,6 @@
 # Feature parity and integration audit
 
-## Active full-scope work: 0.18 development
+## Active full-scope work: 0.21 development
 
 [The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
 over historical status tables below. Native process protection is now implemented
@@ -11,7 +11,9 @@ reviewed install/update/remove, rollback and recovery paths. Native system netwo
 repair is implemented in 0.17. Version 0.18 adds reviewed client lifecycle,
 persistent Clash Verge TUN repair and typed Mac Claude-language transactions.
 Legacy component migration and real-device acceptance remain incomplete; the
-overall parity goal is not achieved. Upstream HEAD `223a5cc` was rechecked.
+overall parity goal is not achieved. Version 0.21 adds persistent optional probes,
+FlClash lifecycle integration and diagnostic ZIP export. Latest discovered upstream
+is `a45cede`; the full ledger tracks its remaining Windows changes separately.
 
 Whole-profile account volumes now use normal client exit, APFS copy-on-write
 where supported, commit readback and a v2 journal with reviewed recovery UI.

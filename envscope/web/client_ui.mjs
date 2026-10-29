@@ -22,7 +22,9 @@ export function renderClient(value=last,preferences=settings,locked=false){
   $('client-force').disabled=busy||externalBusy||auditing;
   $('client-prepare').disabled=blocked||!loaded||!selected;
   $('client-restore').disabled=busy||externalBusy||auditing||!value.can_restore;
+  $('client-policy').classList.toggle('manual-guidance',!!selected&&settings.connection_mode==='tun'&&!selected.tun_supported);
   $('client-policy').textContent=tun?'当前目标使用 TUN，可备份并修复 Clash Verge 的 TUN 偏好；随后核对内核和目标选路。':
+    selected?.mode==='flclash'?'FlClash：本次可启动或重开。请先在 FlClash 内开启 TUN 并完成系统授权，再回到这里复检；暂不自动改写其偏好。':
     selected?'本入口可启动或重开所选客户端。TUN 开关请在原客户端中处理；选择 TUN 目标及 Clash Verge 后可预览持久化修复。':'没有可选程序时，先安装或打开自己使用的代理客户端，再重新读取。sing-box 按已有服务方式启动。';
 }
 

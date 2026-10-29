@@ -141,3 +141,13 @@ the documented local Mihomo control protocol. Clash Verge Rev 2.5.8, revision
 binary or artwork is distributed. Apple AppKit/Core Foundation and Microsoft
 named-pipe documentation are interface references, not bundled source. See
 [exact scope and sources](docs/CLIENT_REPAIR.md).
+
+## FlClash interface review
+
+Version 0.21 independently recognizes FlClash applications and the FlClashCore
+process name. The upstream project at
+https://github.com/chen08209/FlClash, GPL-3.0, revision
+`7fd417fb9a9a277c6a9339a8ac87f907df7c25f7`, was read to verify executable names,
+app paths and its distinct preference storage. No implementation, binary or
+artwork is bundled or copied. Its TUN preference is not rewritten using Clash
+Verge conventions. See [integration scope](docs/CHECK_PREFERENCES.md).

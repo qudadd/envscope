@@ -1,4 +1,5 @@
 // Fixed desktop actions. No user input becomes an executable or shell command.
+import {initCheckPreferences} from './check_preferences_ui.mjs';
 import {describeProxy} from './diagnosis.mjs';
 import {DISCONNECTED, disconnected} from './connection.mjs';
 import {initProcessGuard,renderProcessGuard} from './process_guard_ui.mjs';
@@ -37,7 +38,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const response=await fetch("/api/catalog",{signal:controller.signal,headers:{"X-EnvScope-Token":session.token},cache:"no-store"});
     if(!response.ok)throw new Error("无法读取本机功能列表，请刷新状态或重新打开程序。");
     catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);renderTimezoneService(catalog.timezone_service,busy);renderNetwork(catalog.system_network,catalog.settings,busy);renderClient(catalog.client_repair,catalog.settings,busy);renderLanguage(catalog.client_language,catalog.settings,busy);renderComponents(catalog.legacy_components,busy);renderBackups();$('catalog-error').hidden=true;
-    document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{desktop:catalog.desktop,learning:catalog.learning,settings:catalog.settings,maintenance:catalog.maintenance,proxies:catalog.proxies,checks:catalog.checks,features:catalog.features}}));
+    document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{desktop:catalog.desktop,learning:catalog.learning,settings:catalog.settings,maintenance:catalog.maintenance,proxies:catalog.proxies,checks:catalog.checks,features:catalog.features,check_config:catalog.check_config,diagnostics:catalog.diagnostics}}));
     const options=[el("option","手动填写")];options[0].value="";
     for(const proxy of catalog.proxies||[]){const option=el("option",proxy.url+" · "+proxy.sources.join(" / "));option.value=proxy.url;options.push(option);}
     $("proxy-found").replaceChildren(...options);
@@ -60,7 +61,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
-    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button, #timezone-service-panel button, #timezone-service-panel input, #network-panel button, #network-panel input, #client-panel button, #client-panel input, #client-panel select, #language-panel button, #components-panel button, #components-panel input')].map(node=>[node,node.disabled]);
+    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button, #timezone-service-panel button, #timezone-service-panel input, #network-panel button, #network-panel input, #client-panel button, #client-panel input, #client-panel select, #language-panel button, #components-panel button, #components-panel input, #check-preferences-panel button, #check-preferences-panel input')].map(node=>[node,node.disabled]);
     for(const [node] of disabledBefore)node.disabled=true;
     busy=true;statusRevision++;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     $(output).scrollIntoView({block:'nearest'});
@@ -80,13 +81,15 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       else if(id.startsWith('account-recovery-'))$(output).textContent=[result.reason,result.manual].filter(Boolean).join('\n');
       else if(result.state==="completed"&&id==="account-switch")$(output).textContent="已准备槽位 "+result.result.slot+(result.result.launched?"，已提交应用启动请求。":"，应用未启动，请查看安装状态。")+(result.result.warnings?.length?"\n"+result.result.warnings.join("\n"):"");
       else if(id==='app-launch')$(output).textContent=[result.reason,...result.reasons||[]].filter(Boolean).join('\n');
-      else if(result.state==="completed"&&id==="support-bundle")$(output).textContent="诊断包已导出，分享前请复核。"+(!result.bundle?.report?' 本轮尚无检测报告，包内仅含设置与维护能力信息。':'');
+      else if(id.startsWith('diagnostics-')||id==='check-config-save')$(output).textContent=result.reason||'操作未完成。';
+      else if(result.state==="completed"&&id==="support-bundle")$(output).textContent="诊断包已导出，分享前请复核。"+(!result.bundle?.checks?.length?' 本轮尚无检测报告，包内仅含偏好与能力摘要。':'');
       else if(result.state==="completed"&&id==="history-report")$(output).textContent="已读取历史结果。";
       else if(result.state==="completed"&&id==="proxy-diagnose")$(output).textContent=result.evidence.map(describeProxy).join("\n\n")+"\n\n"+(result.boundary||"");
       else if(result.stdout!==undefined)$(output).textContent=(STATES[result.state]||result.state)+"\n原版输出（未独立验证）\n"+result.stdout+"\n"+(result.stderr||result.reason||"");
       else if(result.state==="blocked")$(output).textContent="操作已阻止。\n"+(result.reason||"")+"\n"+(result.reasons||[]).join("\n");
       else {const display={...result};delete display.latest_report;$(output).textContent=(STATES[result.state]||result.state||"")+"\n"+JSON.stringify(display,null,2);}
       if(result.bundle)download(result.bundle,"support");
+      if(result.archive)download(result.archive,"diagnostics");
       // Information reads do not mutate the catalog; don't turn a successful
       // display into an error just because an unrelated catalog refresh fails.
       if(!['cli-info','fingerprint','support-bundle','proxy-diagnose'].includes(id)){
@@ -196,6 +199,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   initRouting({action,reportId:()=>lastReportId,retest});
   initTimezoneService({action,reportId:()=>lastReportId,retest});
   initNetwork({action,reportId:()=>lastReportId,retest});
+  initCheckPreferences({action,retest});
   initClient({action,reportId:()=>lastReportId,retest});
   initLanguage({action,reportId:()=>lastReportId,retest});
   initComponents({action,retest});

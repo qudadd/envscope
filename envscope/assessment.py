@@ -10,7 +10,7 @@ def denied(value):
 def assessment(report, preferences=None):
     preferences = preferences or {}
     if report.get('environment', {}).get('confirmed'):
-        return target_assessment(report)
+        return target_assessment(report, preferences)
     findings = report.get("findings", [])
     by_id = {f["id"]: f for f in findings}
     usage = report.get("usage", "auto")
@@ -58,6 +58,8 @@ def assessment(report, preferences=None):
             state, next_step = "problem", "在首页审核已生成的 Code 修复方案；修改后自动复检，并重新打开 Code。"
         if key == "extra.config" and any(isinstance(v, dict) and v.get("valid") is False for v in f.get("evidence", [])):
             state, next_step = "problem", "在首页查看具体配置错误；先备份，再按位置修复并重新检测。"
+        if f.get('scope') == 'not-selected':
+            state, reason, next_step, action = 'unavailable', '本次未勾选，未取得本项结论。', '勾选此项后重新检测。', None
         details.append({"id": key, "state": state, "reason": reason, "next_step": next_step,
                         "action": action, "required": key in required, "measured_status": status})
     missing = required - by_id.keys()
@@ -73,9 +75,12 @@ def assessment(report, preferences=None):
             "boundary": "结论仅覆盖列出的使用条件；真实登录、订阅权限及回复仍需在 Claude 中确认。进程接管和权威 DNS 出口未验证，不代表完整隐私合格。"}
 
 
-def target_assessment(report):
+def target_assessment(report, preferences=None):
     env = report['environment']
     required, excluded = set(env['required']), env['excluded']
+    from .check_preferences import blocking_optional, nonblocking_failures
+    required.update(blocking_optional(report, preferences or {}))
+    nonblocking = nonblocking_failures(report, preferences or {})
     details = []
     for f in report.get('findings', []):
         key, status = f['id'], f['status']
@@ -100,6 +105,8 @@ def target_assessment(report):
         elif key not in required and state != 'permission':
             state = 'informational'
             reason = '参考记录，不作为本次目标的验收条件。' + reason
+            if key in nonblocking:
+                reason = '非必需检查的失败或告警已保留；按已保存偏好允许继续。' + f['summary']
         if f.get('scope') == 'not-selected':
             state, reason, step, action = 'unavailable', '本次未勾选，未取得本项结论。', '勾选此项后重新检测。', None
         details.append({'id': key, 'state': state, 'reason': reason, 'next_step': step,

@@ -1,5 +1,5 @@
 {
-  "reviewed_on": "2026-10-29",
+  "reviewed_on": "2026-10-30",
   "collector": "Scrapling 0.4.15 research captures; primary API and documentation review",
   "sources": [
     {
@@ -63,6 +63,24 @@
       "role": "configuration locations and environment flags; no source copied",
       "reviewed_on": "2026-10-27",
       "captured_text_sha256": "a0e7b9bfe670d145179df6a05c968442ac77f8dc0a4351a956c17bbb873e2236"
+    },
+    {
+      "repository": "YOURSJEYO/claude-switcher",
+      "revision": "3dfc92790caaf97887760a33ff72e42ba644d2c0",
+      "reviewed_on": "2026-10-30",
+      "role": "FlClash, optional check configuration and diagnostic log/export interface requirements; independent native implementation, frozen vendor unchanged"
+    },
+    {
+      "repository": "chen08209/FlClash",
+      "revision": "7fd417fb9a9a277c6a9339a8ac87f907df7c25f7",
+      "license": "GPL-3.0",
+      "paths": [
+        "lib/common/path.dart",
+        "lib/common/preferences.dart",
+        "windows/packaging/exe/inno_setup.iss"
+      ],
+      "reviewed_on": "2026-10-30",
+      "role": "public app/core names and distinct preference storage; no source, binary or artwork copied"
     }
   ],
   "solution_review": [

@@ -30,6 +30,7 @@ from .target_environment import fingerprint
 INTERVAL = 10
 POLICY_VERSION = 2
 KERNELS = {'auto': (), 'other': (), 'clash-verge': ('mihomo', 'verge-mihomo'),
+           'flclash': ('flclashcore',),
            'sing-box': ('sing-box',), 'clashx': ('clashx', 'clash'),
            'shadowrocket': ('shadowrocket',), 'surge': ('surge',), 'wireguard': ()}
 

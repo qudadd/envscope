@@ -156,6 +156,8 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     return launch_gate(self.server.last_raw_report, self.server.store.settings())[0]
                 result = self.server.operations.run(request["action"], request["params"], confirmed=request["confirmed"],
                                                     report=self.server.last_raw_report, preflight=preflight)
+                if request['action'] == 'check-config-save' and result.get('requires_retest'):
+                    self.server.last_raw_report = None
                 if request["action"] == "solution-apply" and result.get("before"):
                     self.server.solution_before = result.pop("before")
                 elif request["action"] in ("solution-open", "solution-undo") and result.get("state") in ("opened", "completed") and self.server.last_raw_report:
@@ -186,10 +188,28 @@ class DesktopHandler(SimpleHTTPRequestHandler):
 
 
 def collect_report(server, snapshot, selected_checks=None):
-    policy = server.store.policy()
+    started = time.monotonic()
+    state = 'failed'
+    try:
+        result = _collect_report(server, snapshot, selected_checks)
+        state = 'completed'
+        return result
+    finally:
+        log = getattr(server.operations, 'diagnostics', None)
+        if log: log.safe_record('audit', state, time.monotonic() - started)
+
+
+def _collect_report(server, snapshot, selected_checks=None):
+    server.last_raw_report = None
+    preferences = server.store.settings()
+    policy = server.store.policy(preferences)
+    from .check_preferences import selection
+    selected_checks = selection(preferences, selected_checks)
     options = {'selected_checks': selected_checks} if selected_checks is not None else {}
-    findings = server.auditor(policy, desktop_transport(server.store.settings()), online=True, stun=True, ipv6=True, browser=snapshot,
-                              baseline_config=server.store.settings(), **options)
+    findings = server.auditor(policy, desktop_transport(preferences), online=True, stun=True, ipv6=True, browser=snapshot,
+                              baseline_config=preferences, **options)
+    if server.store.settings() != preferences:
+        raise ValueError('检测期间偏好已变化，请重新检测；未采用旧证据判断新目标')
     changed = server.store.address_change([f.to_dict() for f in findings])
     for finding in findings:
         if finding.id == "browser.webrtc":
@@ -206,7 +226,7 @@ def collect_report(server, snapshot, selected_checks=None):
         findings.append(finding)
     from .inspection import scope_findings
     findings = scope_findings(findings, selected_checks)
-    raw = make_report(findings, policy, "one-click-desktop", server.store.settings(), selected_checks)
+    raw = make_report(findings, policy, "one-click-desktop", preferences, selected_checks)
     if getattr(server, "solution_before", None) is not None:
         raw["resolution"] = compare_diagnoses(server.solution_before, raw["diagnosis"])
         raw["resolution"]["configuration"] = server.operations.config_remedies.verify_receipts(server.solution_before.get("configuration", []))

@@ -107,6 +107,20 @@ class ClientWorkflowTests(unittest.TestCase):
         self.assertEqual(self.ops.run('client-restore',{'plan_id':restore['plan_id']},True)['state'],'completed')
         self.assertFalse(tun_model(self.io.preference.read_bytes())['value'])
 
+    def test_one_stop_starts_flclash_and_keeps_tun_as_a_manual_retest_requirement(self):
+        self.store.save_settings({'client':'flclash'},confirm_environment=True)
+        self.io.app.update(mode='flclash',label='FlClash');self.io.running=False
+        before=self.io.preference.read_bytes();report=self.report()
+        plan=self.ops.solutions.prepare(report)
+        self.assertEqual(plan['state'],'planned',plan)
+        self.assertTrue(plan['staged']);self.assertIn('FlClash',str(plan['manual']))
+        self.assertFalse(self.io.calls)
+        result=self.ops.solutions.apply(plan['plan_id'],report,True)
+        self.assertEqual(result['state'],'completed');self.assertTrue(result['needs_retest'])
+        self.assertTrue(self.io.running);self.assertEqual(self.io.preference.read_bytes(),before)
+        self.assertNotEqual(self.report()['assessment']['verdict'],'qualified_in_scope')
+        self.assertFalse(self.scheduler.calls)
+
     def test_guard_never_guesses_between_two_target_tunnels_or_incomplete_routes(self):
         self.io.preference.write_bytes(b'enable_tun_mode: true\n')
         report=self.report();route=next(f for f in report['findings'] if f['id']=='target.tun_route')

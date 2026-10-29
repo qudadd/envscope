@@ -14,6 +14,7 @@ from .remedies import ConfigRemedies, SolutionPlans
 from .maintenance import Maintenance
 from .readiness import launch_readiness
 from .check_catalog import check_catalog
+from .check_preferences import catalog as check_preferences_catalog
 from .environment_info import cli_information, device_information
 from .coverage import feature_catalog
 from .isolated_browser import IsolatedBrowser
@@ -124,6 +125,8 @@ def launch_gate(report, preferences):
 class Operations:
     def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None, language_repair=None, components=None):
         self.store = store
+        from .diagnostics import DiagnosticLog
+        self.diagnostics = DiagnosticLog(store)
         self.environment_reader = environment_reader
         from .region_lookup import lookup_region
         self.region_lookup = region_lookup or lookup_region
@@ -260,11 +263,56 @@ class Operations:
                 'client_repair': self.client_repair.status(),
                 'client_language': self.language_repair.status(),
                 'legacy_components': self.components.peek(),
+                'check_config': check_preferences_catalog(self.store.settings()),
+                'diagnostics': self.diagnostics.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
+        started = time.monotonic()
+        state = 'failed'
+        try:
+            result = self._run(action, params, confirmed, report, preflight)
+            state = result.get('state', 'returned') if isinstance(result, dict) else 'returned'
+            return result
+        finally:
+            # No parameters, result payloads or exception text enter this log.
+            if action not in ('audit-plan', 'check-config', 'diagnostics-clear'):
+                self.diagnostics.safe_record(action, state, time.monotonic() - started)
+
+    def _run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action in ('diagnostics-export', 'diagnostics-clear'):
+            if params: raise ValueError('诊断导出与清除不接受路径或自定义字段')
+            if confirmed is not True:
+                return {'state': 'confirmation_required', 'reason': '仅导出脱敏检查状态与命令元数据，或清除命令诊断日志。'}
+            if action == 'diagnostics-clear': return self.diagnostics.clear(confirmed)
+            archive = self.diagnostics.archive(report)
+            desktop = getattr(self, 'desktop_runtime', None)
+            if desktop:
+                import webview
+                selected = desktop.window.create_file_dialog(webview.SAVE_DIALOG, allow_multiple=False,
+                            save_filename=archive['filename'], file_types=('Diagnostic ZIP (*.zip)',))
+                file = selected if isinstance(selected, str) else selected[0] if selected else None
+                if not file: return {'state': 'cancelled', 'reason': '已取消导出，没有写入诊断包。'}
+                from .diagnostics import write_archive
+                return write_archive(file, archive)
+            return {'state': 'completed', 'archive': archive, 'reason': '已生成脱敏 ZIP；请在浏览器中保存并复核后分享。'}
+        if action in ('check-config', 'check-config-save', 'audit-plan'):
+            from .check_preferences import catalog, validate, selection
+            if action == 'check-config-save':
+                previous = self.store.settings()['check_config']
+                config = validate({**previous, **params})
+                changed = any(config[key] != previous[key] for key in ('disabled', 'allow_optional_failures'))
+                self.store.save_settings({'check_config': config})
+                return {'state': 'completed', 'check_config': catalog(self.store.settings()),
+                        'requires_retest': changed,
+                        'reason': '已保存检测偏好。后续一键检查与后台巡检使用相同配置；原维护基线需重新批准。' if changed else '已保存日志设置，现有守护基线保留。'}
+            if action == 'audit-plan':
+                if set(params) - {'checks'}: raise ValueError('检测选择参数无效')
+                return {'state': 'completed', 'checks': selection(self.store.settings(), params.get('checks'))}
+            if params: raise ValueError('检测偏好读取不接受参数')
+            return {'state': 'completed', 'check_config': catalog(self.store.settings())}
         if action.startswith('components-'):
             allowed = {'components-status': set(), 'components-plan': {'roles', 'restore'}, 'components-apply': {'plan_id'}}
             if action not in allowed or set(params)-allowed[action]: raise ValueError('旧组件参数无效')
@@ -638,9 +686,7 @@ class Operations:
                 raise ValueError("unexpected parameters")
             return device_information()
         if action == "support-bundle":
-            return {"state": "completed", "bundle": redact({"settings": {k: v for k, v in self.store.settings().items() if not k.startswith("allowed_")},
-                                                              "report": report, "backend": self.legacy.capabilities(),
-                                                              "boundary": "已隐藏可识别地址，分享前仍请复核。"})}
+            return {"state": "completed", "bundle": self.diagnostics.summary(report)}
         if action == "settings-save":
             return {"state": "completed", "settings": self.store.save_settings(params)}
         if action == "settings-restore":

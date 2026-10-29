@@ -1,4 +1,4 @@
-"""Eighteen additional checks, each restricted to the evidence actually measured."""
+"""Nineteen additional checks, each restricted to the evidence actually measured."""
 import ipaddress
 import re
 import statistics
@@ -12,11 +12,13 @@ CHECKS = (("dns_resolution", "目标域名解析"), ("target_route", "目标系�
           ("tls", "TLS 证书校验"), ("timing", "连接分段耗时"), ("clock", "系统时间偏差"),
           ("desktop", "桌面客户端安装"), ("profile", "客户端资料目录"), ("config", "客户端配置格式"),
           ("cli_paths", "CLI 入口冲突"), ("cli_env", "CLI 认证与接口配置"),
-          ("storage", "资料磁盘空间"), ("account", "账号存档一致性"))
+          ("storage", "资料磁盘空间"), ("account", "账号存档一致性"), ("ecosystem", "外围服务 HTTPS 连接"))
 
 
 def extended_checks(inventory, network, local, context):
     result = []
+    from .ecosystem import finding
+    result.append(finding(context.get('ecosystem', [])))
     titles = dict(CHECKS)
     def add(name, status, summary, evidence=(), limits=(), suggestion="", scope="selected-configuration-only"):
         result.append(Finding("extra." + name, titles[name], status, summary, scope, list(evidence), list(limits), suggestion))

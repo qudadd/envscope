@@ -45,7 +45,7 @@ def macos_network():
     network = {"adapters": parse_macos_interfaces(command_text(["/sbin/ifconfig", "-a"]))}
     try:
         processes = command_text(["/bin/ps", "-A", "-o", "comm="])
-        known = {"mihomo", "verge-mihomo", "sing-box", "shadowrocket", "clashx", "surge", "wireguard", "tailscaled"}
+        known = {"mihomo", "verge-mihomo", "flclashcore", "sing-box", "shadowrocket", "clashx", "surge", "wireguard", "tailscaled"}
         network["known_clients"] = sorted({Path(p.strip()).name for p in processes.splitlines() if Path(p.strip()).name.lower() in known})
     except (OSError, subprocess.TimeoutExpired):
         network["known_clients"] = []
@@ -106,7 +106,7 @@ $v=@{
  ui_language=(Read-Part 'language' {(Get-UICulture).Name})
  region_locale=(Read-Part 'locale' {(Get-Culture).Name})
  ipv6_bindings=@(Get-NetAdapterBinding -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue | Select-Object Name,Enabled)
- known_clients=@(Get-Process -Name 'mihomo','verge-mihomo','sing-box','wireguard','openvpn','tailscaled' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessName -Unique)
+ known_clients=@(Get-Process -Name 'mihomo','verge-mihomo','FlClashCore','sing-box','wireguard','openvpn','tailscaled' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessName -Unique)
  desktop_packages=@(Get-AppxPackage -Name '*Claude*' -ErrorAction SilentlyContinue | Select-Object Name,Version)
 }
 $v.errors=$failures

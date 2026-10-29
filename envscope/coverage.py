@@ -3,7 +3,7 @@ UPSTREAM = 'https://github.com/YOURSJEYO/claude-switcher'
 REVIEWED_COMMIT = '223a5cc44edf36dfa568903ab02e73f0f015ec9e'
 
 FEATURES = (
-    ('audit','14 项基础与逐项报告','native','checks','原始证据、问题说明、复检；另有 18 项扩展与目标验收。'),
+    ('audit','14 项基础与逐项报告','native','checks','原始证据、问题说明、复检；另有 19 项扩展与目标验收。'),
     ('status','账号状态与命名','native','accounts','本机槽位与存档状态，不是服务端账号验证。'),
     ('switch','账号切换与启动检查','native','accounts','新检查、独占事务、校验复制、恢复记录；不使用旧 Windows 覆盖路径。'),
     ('keep','跨账号保留技能文件','native','accounts','keep-in-workspace.txt 仅允许 skills/；身份、Cookie、凭据和设置禁止跨账号混合。'),
@@ -31,6 +31,7 @@ FEATURES = (
     ('update','完整软件与上游更新','native','settings','EnvScope 完整包校验、重启、回滚；原版核心更新在工具页另列。'),
     ('install','原版安装 / 卸载入口','install','tools','固定校验的安装器，授权窗口由用户完成；Windows 原版卸载仍按说明执行。'),
     ('history','历史、出口变化与诊断导出','native','history','本机脱敏历史；48 小时出口变化不是服务端风险评分。'),
+    ('check-preferences','持久可选检查与诊断日志','native','settings','一键与后台共用可选检查偏好；必需依赖保留，跳过不算通过。512 KiB 双份命令日志，可关闭与清除；固定白名单 ZIP 导出。'),
 )
 
 

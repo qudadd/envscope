@@ -19,6 +19,7 @@ from .accounts import _safe_chain
 
 SPECS=(
     ('clash-verge','Clash Verge',('Clash Verge','clash-verge','Clash Verge Rev'),'clash-verge.exe'),
+    ('flclash','FlClash',('FlClash',),'FlClash.exe'),
     ('shadowrocket','Shadowrocket',('Shadowrocket',),'Shadowrocket.exe'),
     ('clashx','ClashX',('ClashX','ClashX Pro'),'ClashX.exe'),
     ('surge','Surge',('Surge',),'Surge.exe'),
@@ -26,7 +27,7 @@ SPECS=(
     ('other','Mihomo Party',('Mihomo Party',),'Mihomo Party.exe'),
     ('other','Clash Nyanpasu',('Clash Nyanpasu',),'Clash Nyanpasu.exe'),
 )
-WINDOWS_MODES={'clash-verge','wireguard','other'}
+WINDOWS_MODES={'clash-verge','flclash','wireguard','other'}
 
 
 def file_hash(path):

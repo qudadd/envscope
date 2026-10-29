@@ -42,9 +42,9 @@ def evaluate(values):
 
 
 class ExtendedRuleTests(unittest.TestCase):
-    def test_eighteen_distinct_measurements_have_scopes_and_suggestions(self):
+    def test_nineteen_distinct_measurements_have_scopes_and_suggestions(self):
         by_id = evaluate(fixtures())
-        self.assertEqual(len(by_id), 18)
+        self.assertEqual(len(by_id), 19)
         self.assertEqual(set(by_id), {"extra." + name for name, _ in CHECKS})
         self.assertTrue(all(f.scope and f.limitations and f.suggestion for f in by_id.values()))
         self.assertEqual(by_id["extra.target_route"].status, Status.PASS)
@@ -266,7 +266,7 @@ class RouteTests(unittest.TestCase):
 
 
 class MeasurementIntegrationTests(unittest.TestCase):
-    def test_audit_merges_fourteen_plus_eighteen_without_public_requests(self):
+    def test_audit_merges_fourteen_plus_nineteen_without_public_requests(self):
         inventory, network, local, _ = fixtures()
         transport = Mock()
         browser = Finding("browser.webrtc", "browser", Status.UNKNOWN, "fixture", "test")
@@ -274,11 +274,11 @@ class MeasurementIntegrationTests(unittest.TestCase):
                 patch("envscope.probes.http_observations", return_value=[]), patch("envscope.probes.stun_observations", return_value=[]), \
                 patch("envscope.probes.local_snapshot", return_value=local), patch("envscope.probes.assess_snapshot", return_value=browser), \
                 patch("envscope.baseline.guard_state", return_value={"registered": False}), patch("envscope.baseline.runtime_rules", return_value={"status": "unknown", "reason": "fixture"}), \
-                patch("envscope.baseline.extra_network", return_value=({}, [])), \
+                patch("envscope.baseline.extra_network", return_value=({}, [])), patch('envscope.ecosystem.observe',return_value=[]), \
                 patch('envscope.environment_info.device_information',return_value={'state':'completed','rows':[]}):
             findings = audit(Policy(), transport, online=True, stun=True, ipv6=True, baseline_config={})
         self.assertEqual(sum(f.id.startswith("baseline.") for f in findings), 14)
-        self.assertEqual(sum(f.id.startswith("extra.") for f in findings), 18)
+        self.assertEqual(sum(f.id.startswith("extra.") for f in findings), 19)
         self.assertEqual(len({f.id for f in findings}), len(findings))
         transport.get.assert_not_called()
 

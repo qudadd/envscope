@@ -31,7 +31,7 @@ def proxy_runtime(inventory, preferences):
         from .wireguard import finding
         checked = finding(network.get('wireguard', {}), preferences.get('wireguard_service', ''))
         return baseline_finding('proxy', '代理客户端', checked.status, checked.summary, checked.evidence, checked.limitations)
-    names = {"clash-verge": ("mihomo", "verge-mihomo"), "sing-box": ("sing-box",), "shadowrocket": ("shadowrocket",),
+    names = {"clash-verge": ("mihomo", "verge-mihomo"), "flclash": ("flclashcore",), "sing-box": ("sing-box",), "shadowrocket": ("shadowrocket",),
              "clashx": ("clashx",), "surge": ("surge",)}
     matches = clients if expected == "auto" else [c for c in clients if str(c).lower() in names.get(expected, ())]
     return baseline_finding("proxy", "代理客户端", Status.PASS if matches else Status.UNKNOWN,

@@ -52,10 +52,10 @@ def proxy_apps(home=None,system=None,environ=None):
         roots=[Path(env.get('LOCALAPPDATA') or home/'AppData/Local')/'Programs',Path(env.get('ProgramFiles') or 'C:/Program Files')]
         candidates=[(label,root/folder/exe) for root in roots for label,folder,exe in
                     [('Clash Verge Rev','Clash Verge','clash-verge.exe'),('Clash Verge Rev','clash-verge','clash-verge.exe'),
-                     ('Mihomo Party','Mihomo Party','Mihomo Party.exe'),('Clash Nyanpasu','Clash Nyanpasu','Clash Nyanpasu.exe')]]
+                     ('FlClash','FlClash','FlClash.exe'),('Mihomo Party','Mihomo Party','Mihomo Party.exe'),('Clash Nyanpasu','Clash Nyanpasu','Clash Nyanpasu.exe')]]
     elif system=='Darwin':
         candidates=[(name,root/(name+'.app')/'Contents/MacOS'/binary) for root in (Path('/Applications'),home/'Applications') for name,binary in
-                    [('Clash Verge','clash-verge'),('Mihomo Party','Mihomo Party'),('Clash Nyanpasu','clash-nyanpasu')]]
+                    [('Clash Verge','clash-verge'),('FlClash','FlClash'),('Mihomo Party','Mihomo Party'),('Clash Nyanpasu','clash-nyanpasu')]]
     else:candidates=[]
     result=[]
     for label,path in candidates:

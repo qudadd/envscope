@@ -140,7 +140,7 @@ class ClientRepair:
         app=value['app']
         if (not all(isinstance(app.get(k),str) and 0<len(app[k])<=32768 for k in ('id','mode','label','path','sha256'))
                 or not Path(app['path']).is_absolute() or not re.fullmatch('[a-f0-9]{64}',app['sha256'])
-                or app['mode'] not in ('clash-verge','shadowrocket','clashx','surge','wireguard','other')):
+                or app['mode'] not in ('clash-verge','flclash','shadowrocket','clashx','surge','wireguard','other')):
             raise ValueError('客户端原程序记录无法核对，保留备份')
         if value['tun']:
             directory=value.get('directory')
@@ -187,8 +187,8 @@ class ClientRepair:
             raise ValueError('实际地区未确认或官方地区条件未通过，更改代理不能改变使用资格')
         return settings
 
-    def prepare(self,report,app_id=None,*,tun=False,restart=False,allow_force=False):
-        if any(type(v) is not bool for v in (tun,restart,allow_force)):raise ValueError('TUN、重开与强制退出选项需要明确的布尔值')
+    def prepare(self,report,app_id=None,*,tun=False,restart=False,allow_force=False,start_if_tun_manual=False):
+        if any(type(v) is not bool for v in (tun,restart,allow_force,start_if_tun_manual)):raise ValueError('TUN、重开与强制退出选项需要明确的布尔值')
         try:
             settings=self._fresh(report);previous=self._record()
             if previous and previous['state'] in PENDING:raise ValueError('上次客户端操作未完成，先预览恢复，未覆盖原记录')
@@ -196,10 +196,14 @@ class ClientRepair:
             app=self._app(app_id)
             if settings['client'] not in ('auto',app['mode']):raise ValueError('所选程序与已确认客户端目标不同，请先调整目标并复检')
             if tun and settings['connection_mode']!='tun':raise ValueError('当前目标不是 TUN 连接，不生成 TUN 改写')
+            manual=[]
+            if tun and app['mode']!='clash-verge' and start_if_tun_manual:
+                tun=False
+                manual=[app['label']+' 的 TUN 开关需在原客户端开启并完成系统授权；本次只启动客户端，不改写其偏好，之后自动复检。']
             state=self.io.snapshot(app)
             if state['unreadable']:raise ValueError('所选客户端进程归属无法读取，未生成退出方案')
             if state['processes'] and not tun and not restart:
-                return {'state':'guided','reason':'所选客户端已运行，无需重复启动；连接异常时可明确选择重开后重新预览。'}
+                return {'state':'guided','reason':'所选客户端已运行，无需重复启动；连接异常时可明确选择重开后重新预览。','manual':manual}
             context=self.io.context(app) if tun else None
             self._fresh(report)
             token=secrets.token_urlsafe(20)
@@ -216,7 +220,7 @@ class ClientRepair:
             elif restart:effects.append('先正常退出再重开所选客户端，会短暂中断其他应用连接；读回当前用户进程，连接与 TUN 另行复检。')
             else:effects.append('只在所选程序尚未运行时提交启动请求，再读取当前用户进程；启动不等于连接或 TUN 已通过。')
             if allow_force:effects.append('已明确允许本次强制退出所选代理客户端：正常退出失败后终止，2 秒未退出再强制结束；未保存的代理配置可能丢失。不会强制退出 Claude。')
-            return {'state':'planned','plan_id':token,'effects':effects,'client':app['label'],
+            return {'state':'planned','plan_id':token,'effects':effects,'client':app['label'],'manual':manual,
                     'reason':'审核具体程序与退出范围后确认；客户端启动和 TUN 读回均须独立验证。'}
         except (OSError,ValueError,RuntimeError) as error:
             return {'state':'guided','reason':str(error)[:260],'manual':['先在原客户端核对节点、服务模式及系统授权；正常退出受阻时从系统托盘退出后重新预览。']}

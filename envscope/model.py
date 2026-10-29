@@ -46,6 +46,8 @@ def make_report(findings, policy, mode="audit", preferences=None, selected_check
     from .target_environment import build_findings, plan, summary, scoped_preferences, FIELDS
 
     preferences = preferences or {}
+    from .check_preferences import selection
+    selected_checks = selection(preferences, selected_checks)
     from .regions import region_finding
     from .inspection import scope_findings, selection_info, repair_options
     findings = list(findings)
@@ -77,6 +79,9 @@ def make_report(findings, policy, mode="audit", preferences=None, selected_check
         "boundary": "只读诊断；结论仅覆盖本次观测与配置范围，不证明零泄漏或防火墙保护。",
     }
     target_plan = plan(preferences)
+    from .check_preferences import validate, nonblocking_failures
+    config = validate(preferences.get('check_config', {}))
+    report['check_config'] = {**config, 'nonblocking_failures': sorted(nonblocking_failures(report, preferences))}
     if target_plan:
         report['environment'] = {**summary(preferences), **target_plan,
                                  'targets': {k: preferences.get(k) for k in sorted(FIELDS)}}

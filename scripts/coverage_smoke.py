@@ -67,7 +67,7 @@ def main():
                         expect(page.locator('#start')).to_be_enabled(timeout=30000)
                         page.locator('[data-page="coverage"]').click()
                         expect(page.locator('[data-dimension]')).to_have_count(8)
-                        expect(page.locator('[data-feature]')).to_have_count(28)
+                        expect(page.locator('[data-feature]')).to_have_count(29)
                         expect(page.locator('[data-feature="components"]')).to_contain_text('原生实现')
                         expect(page.locator('[data-feature="system-network"]')).to_contain_text('原生实现')
                         expect(page.locator('[data-feature="client-repair"]')).to_contain_text('原生实现')

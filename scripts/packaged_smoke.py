@@ -64,6 +64,7 @@ def main():
         assert result.returncode == 0 and desktop_output.exists(), "frozen native window/tray smoke failed"
         assert not native['errors'] and all(native[key] for key in ('native_window', 'tray', 'close_hides', 'reopened', 'quit')), native
         assert native['release'] == __release__, 'Built executable release does not match the source'
+        assert native['native_diagnostics_export'] is True, 'Frozen diagnostic ZIP / consent check failed'
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 
