@@ -31,26 +31,28 @@ def main():
     environment = dict(os.environ)
     if platform.system() == 'Darwin':
         from .build_timezone_worker import build
-        native = build()
-        # Keep the separately signed native worker byte exact. PyInstaller treats
-        # a raw Mach-O data file as a binary and rewrites its code signature.
-        with zipfile.ZipFile(native/'timezone-helper.payload.zip','w',zipfile.ZIP_DEFLATED) as archive:
-            archive.write(native/'timezone-helper','timezone-helper')
-        for name in ('timezone-helper.payload.zip','timezone-helper.json'):
-            command.extend(['--add-data',str(native/name)+os.pathsep+'envscope/native-runtime'])
+        for component in ('timezone','network'):
+            native = build(component=component);name=component+'-helper'
+            # Keep the separately signed worker byte exact. PyInstaller rewrites
+            # the code signature of raw Mach-O files passed as data.
+            with zipfile.ZipFile(native/(name+'.payload.zip'),'w',zipfile.ZIP_DEFLATED) as archive:
+                archive.write(native/name,name)
+            for file in (name+'.payload.zip',name+'.json'):
+                command.extend(['--add-data',str(native/file)+os.pathsep+'envscope/native-runtime'])
     environment["PYINSTALLER_CONFIG_DIR"] = str(root / "build" / "pyinstaller-cache")
     subprocess.run(command, cwd=root, check=True, env=environment)
     app = root / "dist" / "desktop" / ("EnvScope.app" if platform.system() == "Darwin" else "EnvScope")
     if platform.system() == 'Darwin':
-        manifests = list(app.rglob('timezone-helper.json'))
-        assert manifests, 'Native timezone helper missing'
-        for metadata in manifests:
-            expected = json.loads(metadata.read_text())
-            with zipfile.ZipFile(metadata.with_name('timezone-helper.payload.zip')) as archive:
-                assert archive.namelist()==['timezone-helper']
-                payload=archive.read('timezone-helper')
-            assert hashlib.sha256(payload).hexdigest()==expected['sha256'], 'Frozen timezone helper bytes changed'
-            assert expected['fixture'] is False, 'Acceptance helper must never ship'
+        for component in ('timezone','network'):
+            name=component+'-helper';manifests=list(app.rglob(name+'.json'))
+            assert manifests, 'Native '+component+' helper missing'
+            for metadata in manifests:
+                expected = json.loads(metadata.read_text())
+                with zipfile.ZipFile(metadata.with_name(name+'.payload.zip')) as archive:
+                    assert archive.namelist()==[name]
+                    payload=archive.read(name)
+                assert hashlib.sha256(payload).hexdigest()==expected['sha256'], 'Frozen '+component+' helper bytes changed'
+                assert expected['fixture'] is False, 'Acceptance helper must never ship'
     manifests = list(app.rglob("VENDOR_MANIFEST.json"))
     if not manifests:
         raise RuntimeError("Pinned vendor bundle missing from desktop package")

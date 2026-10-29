@@ -145,9 +145,9 @@ static int selected_match(CFArrayRef current,CFArrayRef expected,int desired){
 }
 static int event(int root,const char *phase,const char *id){
     char name[90],date[30],line[256];time_t stamp=time(NULL);struct tm utc;gmtime_r(&stamp,&utc);strftime(date,sizeof(date),"%Y-%m-%d",&utc);
-    snprintf(name,sizeof(name),"events-%s.private.jsonl",date);int fd=openat(root,name,O_WRONLY|O_APPEND|O_CREAT|O_NOFOLLOW|O_CLOEXEC,0644);
+    snprintf(name,sizeof(name),"events-%s.private.jsonl",date);int fd=openat(root,name,O_WRONLY|O_APPEND|O_CREAT|O_NOFOLLOW|O_CLOEXEC,0600);
     if(fd<0)return 0;int n=snprintf(line,sizeof(line),"{\"at_epoch\":%lld,\"phase\":\"%s\",\"transaction\":\"%s\",\"fixture\":%s}\n",(long long)stamp,phase,id,ENVSCOPE_NET_FIXTURE?"true":"false");
-    int ok=protected_fd(fd,0)&&!fchmod(fd,0644)&&n>0&&n<(int)sizeof(line)&&write_all(fd,line,(size_t)n)&&!fsync(fd);close(fd);return ok;
+    int ok=protected_fd(fd,0)&&!fchmod(fd,0600)&&n>0&&n<(int)sizeof(line)&&write_all(fd,line,(size_t)n)&&!fsync(fd);close(fd);return ok;
 }
 static int publish(int root,CFMutableDictionaryRef record,const char *state){
     char id[40];if(!get_text(record,CFSTR("id"),id,sizeof(id))||!valid_id(id,0))return 0;
@@ -188,8 +188,11 @@ static int transaction(int root,CFMutableDictionaryRef plan,int restoring){
         if(!get_text(plan,CFSTR("record_id"),wanted,sizeof(wanted))||strcmp(wanted,previous)||
            !get_number(last,CFSTR("owner"),&old_owner)||old_owner!=owner||!valid_rows(CFDictionaryGetValue(last,CFSTR("adapters")))){CFRelease(last);return 79;}
         char backup[90];snprintf(backup,sizeof(backup),"record-%s.private.plist",previous);
-        CFMutableDictionaryRef original=read_plist(root,backup,0);long long original_owner;
-        if(!original||!get_number(original,CFSTR("owner"),&original_owner)||original_owner!=owner||
+        CFMutableDictionaryRef original=read_plist(root,backup,0);long long original_owner,original_format;char original_id[40];
+        if(!original||!get_number(original,CFSTR("format"),&original_format)||original_format!=1||
+           !get_text(original,CFSTR("id"),original_id,sizeof(original_id))||strcmp(original_id,previous)||
+           CFDictionaryGetValue(original,CFSTR("fixture"))!=(ENVSCOPE_NET_FIXTURE?kCFBooleanTrue:kCFBooleanFalse)||
+           !get_number(original,CFSTR("owner"),&original_owner)||original_owner!=owner||
            !valid_rows(CFDictionaryGetValue(original,CFSTR("adapters")))||
            !CFEqual(CFDictionaryGetValue(original,CFSTR("adapters")),CFDictionaryGetValue(last,CFSTR("adapters")))){
             if(original)CFRelease(original);CFRelease(last);return 78;}

@@ -8,6 +8,8 @@ dist/
 .env
 *.private.json
 *.private.jsonl
+*.private.bin
+*.private.plist
 reports/
 artifacts/
 *.log

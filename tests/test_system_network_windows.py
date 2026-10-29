@@ -27,7 +27,7 @@ class WindowsNetworkTests(unittest.TestCase):
         self.assertIn("record-",source)
         self.assertIn('System32/WindowsPowerShell/v1.0/Modules',source)
         self.assertIn('Set-NetAdapterBinding -Enabled $enabled',source)
-        self.assertLess(len(call.kwargs['input']),30000)
+        self.assertLess(len(call.kwargs['input']),31000)
 
     def test_snapshot_does_not_execute_the_privileged_transaction(self):
         body=script('snapshot')

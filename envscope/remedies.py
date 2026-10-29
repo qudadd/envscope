@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import secrets
 import stat
+import subprocess
 import tempfile
 import time
 
@@ -425,9 +426,10 @@ class ConfigRemedies:
 
 
 class SolutionPlans:
-    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None):
+    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None, network=None):
         self.config, self.legacy, self.discoverer, self.proxy_tester = config, legacy, discoverer, proxy_tester
         self.routing = routing
+        self.network = network
         self.plans = {}
 
     @staticmethod
@@ -538,14 +540,14 @@ class SolutionPlans:
         else:
             chosen = None
         changes = []
-        for target, edits in kinds.items():
+        for config_target, edits in kinds.items():
             try:
-                change = self.config.preview(target, edits, chosen)
+                change = self.config.preview(config_target, edits, chosen)
                 if change:
                     changes.append(change)
                     effects.extend(change["effects"])
             except (ValueError, OSError, UnicodeError):
-                manual.append(LABELS[target] + "不能安全自动修改，请使用该问题的文件入口修正。")
+                manual.append(LABELS[config_target] + "不能安全自动修改，请使用该问题的文件入口修正。")
         if changes:
             effects.insert(0, "为将修改的配置创建私有原文件备份与恢复记录，随后仅写入下列字段")
             tasks.append("config")
@@ -560,6 +562,24 @@ class SolutionPlans:
                 effects.extend(route['effects'])
             else:
                 manual.append(route['reason'])
+        network_plan=None
+        findings={f['id']:f for f in report.get('findings',[])}
+        scope=set(check_ids) if check_ids is not None else None
+        ipv6_keys={'target.ipv6','baseline.ipv6'}
+        dns_keys={'target.dns','extra.dns_resolution','baseline.dns'}
+        ipv6_selected=bool(scope & ipv6_keys) if scope is not None else check_id in (None,'ipv6')
+        dns_selected=bool(scope & dns_keys) if scope is not None else check_id in (None,'dns')
+        ipv6_needed=ipv6_selected and target.get('ipv6_mode')=='disabled' and any(findings.get(k,{}).get('status')=='fail' for k in ipv6_keys)
+        dns_needed=dns_selected and (any(findings.get(k,{}).get('status')=='fail' for k in dns_keys-{'baseline.dns'})
+                                     or any(p['id']=='network.dns' for p in problems))
+        if self.network and (ipv6_needed or dns_needed):
+            try:
+                value=self.network.prepare(report,adapter_ids=None if ipv6_needed else [],flush_dns=dns_needed)
+            except (ValueError,OSError,subprocess.SubprocessError) as error:
+                value={'reason':str(error)[:240]+' 请在系统网络设置核对，未生成自动修改。'}
+            if value.get('state')=='planned':
+                network_plan=value['plan_id'];tasks.append('system-network');effects.extend(value['effects'])
+            else:manual.append(value['reason'])
         needs_backend = (selected and selected["id"] in ("proxy", "tun", "guard")
                          and selected["status"] in ("warn", "fail", "unknown") and report.get("usage") != "cli"
                          and not (selected["id"] == "proxy" and kinds.get("cli")))
@@ -589,13 +609,13 @@ class SolutionPlans:
         before["configuration"] = [{"target": c["target"], "after_hash": c["after_hash"], "fields": c.get("fields", [])} for c in changes]
         before["configuration_pending"] = list(manual)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"], "changes": changes,
-                              "tasks": tasks, "routing": route_plan, "problems": [p["id"] for p in problems],
+                              "tasks": tasks, "routing": route_plan, "system_network":network_plan, "problems": [p["id"] for p in problems],
                               "before": before, "proxy": chosen if changes and any("HTTPS_PROXY" in c.get("fields", []) for c in changes) else None,
                               "context": context, "repair_json": "trailing_comma" in kinds.get("cli", set())}}
         return {"state": "planned", "plan_id": token, "effects": effects, "manual": manual,
                 "manual_items": manual_items, "connections": connections,
                 "configuration_count": len(changes), "enhance_cli": enhance_cli,
-                "steps": ["备份、写入并验证原生路由" if t == 'routing' else "备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
+                "steps": ["备份、修改并读回所选系统网络设置" if t=='system-network' else "备份、写入并验证原生路由" if t == 'routing' else "备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
                 "reason": "确认后执行；配置写入不等于故障已解决，随后自动复检。"}
 
     def apply(self, token, report, confirmed=False):
@@ -624,6 +644,15 @@ class SolutionPlans:
                 return {"state": value["state"], "steps": outputs, "backups": backups, "before": plan["before"], "needs_retest": True}
         for task in plan["tasks"]:
             if task == "config":
+                continue
+            if task=='system-network':
+                try:value=self.network.apply(plan['system_network'],True)
+                except (ValueError,OSError,subprocess.SubprocessError):
+                    value={'state':'partial','reason':'系统网络操作未完成，请查看网络恢复记录；此前配置备份保留。'}
+                outputs.append({'step':task,**value})
+                if value['state']!='completed':
+                    return {'state':value['state'],'steps':outputs,'reason':value.get('reason',''),
+                            'backups':backups,'before':plan['before'],'needs_retest':True}
                 continue
             if task == 'routing':
                 try:

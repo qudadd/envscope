@@ -5,8 +5,10 @@ The coordinator and all tests can inject an executor; diagnostics never write.
 """
 import hashlib
 import plistlib
+import platform
 import re
 import secrets
+import subprocess
 import time
 
 from .model import Status
@@ -47,7 +49,7 @@ def validate_snapshot(value):
 
 
 def public_status(record):
-    return {k:v for k,v in record.items() if k in ('id','state','owner','release','dns_flush','reason','fixture')} | {
+    return {k:v for k,v in record.items() if k in ('id','state','release','dns_flush','reason','fixture')} | {
         'adapters':[{k:r.get(k) for k in ('id','name','ipv6_enabled')} for r in record.get('adapters',[])]}
 
 
@@ -55,10 +57,38 @@ def binding_view(snapshot,identifiers):
     return {r['id']:{k:r[k] for k in ('ipv6_enabled','config')} for r in snapshot['adapters'] if r['id'] in identifiers}
 
 
+class UnavailableNetworkIO:
+    supported=False
+    def __init__(self,reason='系统网络修改支持 Windows 和 macOS；当前实例未连接系统执行器。'):
+        self.reason=reason
+    def snapshot(self):raise ValueError(self.reason)
+    def status(self):return {'state':'unavailable','id':'','reason':self.reason}
+    def execute(self,*args):raise ValueError(self.reason)
+
+
+def native_network_io():
+    if platform.system()=='Windows':
+        from .system_network_windows import WindowsNetworkIO
+        return WindowsNetworkIO()
+    if platform.system()=='Darwin':
+        from .system_network_macos import MacNetworkIO
+        return MacNetworkIO()
+    return UnavailableNetworkIO()
+
+
 class SystemNetwork:
     def __init__(self,store,io):
         self.store,self.io=store,io
         self.plans={}
+
+    def status(self):
+        try:
+            record=public_status(self.io.status())
+            return {'supported':getattr(self.io,'supported',True),**record,
+                    'can_restore':record.get('state') in PENDING|{'committed'} and bool(record.get('adapters') or record.get('state') in PENDING)}
+        except (OSError,ValueError,subprocess.SubprocessError) as error:
+            return {'state':'unavailable','supported':getattr(self.io,'supported',True),
+                    'reason':str(error)[:240],'can_restore':False}
 
     def options(self):
         try:
@@ -67,8 +97,8 @@ class SystemNetwork:
             return {'state':'completed','supported':True,
                     'adapters':[{k:row[k] for k in ('id','name','active','ipv6_enabled')} for row in snapshot['adapters']],
                     'recovery':public_status(record),'note':'仅按明确批准的接口修改 IPv6，DNS 操作只刷新缓存；不替换 DNS 服务器，不将配置读回当作流量证明。'}
-        except (OSError,ValueError) as error:
-            return {'state':'guided','supported':True,'reason':str(error)[:240],
+        except (OSError,ValueError,subprocess.SubprocessError) as error:
+            return {'state':'guided','supported':getattr(self.io,'supported',True),'reason':str(error)[:240],
                     'manual':['在系统网络设置中核对当前使用的网络接口和 IPv6。权限不足时只为本次已审核的修改申请系统授权。']}
 
     def prepare(self,report,*,adapter_ids=None,flush_dns=False):
@@ -134,8 +164,10 @@ class SystemNetwork:
                       and all(r['id'] in rows and rows[r['id']]['ipv6_enabled'] is False
                               and rows[r['id']]['config']==r['config'] for r in plan['payload']['adapters'])
                       and (not plan['payload']['flush_dns'] or status.get('dns_flush')=='completed'))
-        except (OSError,ValueError) as error:
-            return {'state':'partial','reason':str(error)[:240]+' 原值与恢复记录保留，请先刷新状态。','needs_retest':True}
+        except (OSError,ValueError,subprocess.SubprocessError) as error:
+            recovery=self.status()
+            return {'state':'partial','reason':str(error)[:240]+' 请查看恢复状态；原备份没有自动丢弃。',
+                    'status':recovery,'needs_retest':True}
         return {'state':'completed' if verified else 'partial','status':public_status(status),'needs_retest':True,
                 'transaction_id':plan['payload']['nonce'],'scope':'selected-network-settings',
                 'reason':'所列网络设置已读回；现在复检解析、连接及出口。' if verified else '系统操作返回，但配置或缓存刷新尚未完整确认；请按恢复记录处理。'}
@@ -175,7 +207,7 @@ class SystemNetwork:
             rows={r['id']:r for r in snapshot['adapters']}
             restored=(status.get('state')=='restored' and all(r['id'] in rows and
                       all(rows[r['id']][k]==r[k] for k in ('ipv6_enabled','config')) for r in plan['record'].get('adapters',[])))
-        except (OSError,ValueError) as error:
+        except (OSError,ValueError,subprocess.SubprocessError) as error:
             return {'state':'partial','reason':str(error)[:240]+' 恢复记录保留。','needs_retest':True}
         return {'state':'completed' if restored else 'partial','status':public_status(status),'needs_retest':True,
                 'reason':'系统网络恢复已返回，请复检实际设置与连接。'}

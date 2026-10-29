@@ -94,6 +94,9 @@ def fixture(home, settings, system='Windows', fault=None, browser=None):
         network['routes'] = [{'destination':'8.8.8.8','interface':'Ethernet','interface_index':1}]
     elif fault == 'dns':
         network['dns'] = []
+    elif fault == 'ipv6_disabled':
+        inventory['network']['ipv6_bindings']=[{'Enabled':False}]
+        inventory['network']['ipv6_services']=[{'ipv6_off':True}]
     elif fault == 'unrelated_web':
         network['dns'] = [r for r in network['dns'] if r['host'] != 'claude.ai']
         local['desktop_config'] = {'exists': True, 'valid': False}
@@ -103,6 +106,8 @@ def fixture(home, settings, system='Windows', fault=None, browser=None):
         path = 'curl-explicit-proxy' if mode == 'http_proxy' else 'curl-os-routing-no-http-proxy'
         proxy = PROXY if mode == 'http_proxy' else None
         def get(self, url, family=0, headers_only=False):
+            if fault=='ipv6_disabled' and family==6:
+                return Response(error='curl_exit_7')
             if fault == 'timeout':
                 return Response(error='deadline_exceeded')
             if fault == 'certificate':

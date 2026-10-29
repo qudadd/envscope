@@ -130,6 +130,15 @@
       <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p><p id="upkeep-watchdog-state" class="note" role="status"></p>
         <div class="actions"><button id="upkeep-run" disabled>立即复检</button><button id="upkeep-report" disabled>查看最近一次巡检</button><button id="upkeep-refresh" class="link">刷新状态</button><button id="upkeep-stop" class="link" disabled>停用并移除任务</button></div>
       </section>
+      <section class="tool-section" id="network-panel" hidden><h2>网络设置与恢复</h2>
+        <p class="note">按已确认目标修改所选接口，申请本次所需的系统授权。修改会影响该接口上的其他应用；保留原配置与事务记录，失败后可恢复。</p>
+        <h3 id="network-state">尚未读取</h3><p id="network-status" class="note" role="status"></p><p id="network-policy" class="note"></p>
+        <div class="actions"><button id="network-load" class="link">读取网络接口</button><button id="network-all" class="link" disabled>全选</button><button id="network-none" class="link" disabled>取消全选</button></div>
+        <div id="network-adapters"></div>
+        <label class="checkbox"><input id="network-dns" type="checkbox">同时刷新本机 DNS 缓存（缓存内容不可撤销，不更换 DNS 服务器）</label>
+        <div class="actions"><button id="network-prepare" disabled>预览网络修复</button><button id="network-restore" class="link" disabled>预览恢复原设置</button></div>
+        <div id="network-plan"></div><div id="network-output" class="solution-output" aria-live="polite"></div>
+      </section>
       <section class="tool-section" id="routing-panel"><h2>Claude 路由配置</h2>
         <p class="note">Clash Verge：保留原脚本，置顶 13 个域名与 3 个 UDP 端口规则，加载后逐条核对。其他客户端请按检测结果手动设置。</p>
         <h3 id="routing-state">尚未配置</h3><p id="routing-status" class="note" role="status"></p>

@@ -20,6 +20,14 @@ See [account volume scope](ACCOUNT_VOLUMES.md).
 
 ## Current scope: 0.16.0 (2026-10-29)
 
+0.17 adds native Windows/macOS IPv6 interface selection and DNS cache flush.
+The one-stop and selected-check workflows review exact effects before foreground
+OS authorization, preserve protected originals, independently read back changes,
+and expose rollback and interrupted recovery. Cache contents cannot be undone;
+settings readback never substitutes for DNS, connectivity or egress evidence.
+See [network scope and recovery](SYSTEM_NETWORK.md). Client-specific persistent
+TUN, language and legacy component migration remain incomplete.
+
 0.16 adds a small root-owned native Mac timezone worker, a 60-second LaunchDaemon,
 explicit foreground administrator authorization, protected transaction backups,
 independent readback, rate limits and pending-operation recovery. Region changes

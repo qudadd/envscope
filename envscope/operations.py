@@ -122,7 +122,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None):
         self.store = store
         self.environment_reader = environment_reader
         from .region_lookup import lookup_region
@@ -154,8 +154,10 @@ class Operations:
         self.process_guard = process_guard or ProcessGuard(store, self.home)
         from .routing import Routing
         self.routing = routing or Routing(store, self.home, environ={} if home is not None else None)
+        from .system_network import SystemNetwork,UnavailableNetworkIO,native_network_io
+        self.network=network or SystemNetwork(store,UnavailableNetworkIO() if home is not None or environment_reader is not None else native_network_io())
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
-                                      lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing)
+                                      lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing,self.network)
         from .region_setup import RegionSetup
         from .inventory import collect
         self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home,timezone_service=self.timezone_service)
@@ -223,11 +225,26 @@ class Operations:
                 'features':feature_catalog(legacy,browser), 'isolated_browser':browser, 'dmg_archives':dmg,
                 'region_recovery': self.regions.public_recovery(), 'routing': self.routing.status(),
                 'timezone_service': self.timezone_service.status(),
+                'system_network': self.network.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action.startswith('system-network-'):
+            allowed={'system-network-options':set(),'system-network-status':set(),
+                     'system-network-plan':{'report_id','adapter_ids','flush_dns'},
+                     'system-network-apply':{'plan_id'},'system-network-restore-plan':set(),
+                     'system-network-restore':{'plan_id'}}
+            if action not in allowed or set(params)-allowed[action]:raise ValueError('系统网络参数无效')
+            if action=='system-network-options':return self.network.options()
+            if action=='system-network-status':return self.network.status()
+            if action=='system-network-restore-plan':return self.network.prepare_restore()
+            if action=='system-network-restore':return self.network.restore(params.get('plan_id'),confirmed)
+            if action=='system-network-apply':return self.network.apply(params.get('plan_id'),confirmed)
+            if not report or params.get('report_id')!=report.get('report_id'):
+                return {'state':'retest_required','reason':'先完成新的检测，再预览网络修复。'}
+            return self.network.prepare(report,adapter_ids=params.get('adapter_ids'),flush_dns=params.get('flush_dns',False))
         if action.startswith('timezone-service-'):
             allowed={'timezone-service-status':set(),'timezone-service-plan':{'report_id','remove','restore'},
                      'timezone-service-apply':{'plan_id'},'timezone-service-recovery-plan':set(),

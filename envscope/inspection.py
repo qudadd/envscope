@@ -96,6 +96,7 @@ def problem_prefixes(checks):
         'extra.account': ('account.',), 'target.region': ('target.region',),
         'target.dns': ('network.dns',), 'extra.dns_resolution': ('network.dns',),
         'target.tun_route': ('target.tun_route', 'startup.tun'), 'extra.runtime_tun': ('startup.tun',),
+        'target.ipv6':('target.ipv6','policy.http.ipv6','policy.browser.http_v6'),
     }
     prefixes = set()
     for key in checks:
@@ -117,6 +118,8 @@ def repair_options(report):
         if not steps:
             steps = [note.get('next_step') or f.get('suggestion') or catalog.get(key, {}).get('next_step') or '按所列证据核对实际使用的客户端；处理后重新检测本项。']
         action = 'region' if key in ('baseline.timezone', 'baseline.locale', 'baseline.country') else 'solution' if any(p.get('repair') for p in problems) else 'manual'
+        if key in ('target.ipv6','baseline.ipv6','target.dns','extra.dns_resolution') and f['status']=='fail':
+            action='solution'
         if note.get('action') == 'permission-help':
             action = 'permission'
         needed = f['status'] == 'fail' or note.get('state') == 'unsupported' or f['status'] in ('warn', 'unknown') and note.get('state') not in ('not_applicable', 'informational')

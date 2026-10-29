@@ -41,6 +41,16 @@ jobs:
         run: python -m scripts.timezone_acceptance
       - name: Actual local Mihomo routing and rollback (isolated fixture)
         run: python -m scripts.routing_core_smoke
+      - name: Actual macOS network transactions (fixture paths only)
+        if: runner.os == 'macOS'
+        env:
+          ENVSCOPE_NETWORK_ACCEPTANCE: '1'
+        run: python -m scripts.network_acceptance
+      - name: Actual Windows network ACL and transport (fixture bindings only)
+        if: runner.os == 'Windows'
+        env:
+          ENVSCOPE_NETWORK_ACCEPTANCE: '1'
+        run: python -m scripts.network_windows_acceptance
       - run: python -m scripts.build_desktop
       - name: Frozen Windows smoke
         if: runner.os == 'Windows'
@@ -60,6 +70,12 @@ jobs:
         env:
           ENVSCOPE_SCHEDULER_ACCEPTANCE: '1'
         run: python -m scripts.scheduler_acceptance dist/desktop/EnvScope.app/Contents/MacOS/EnvScope
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Network-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/network*acceptance/result.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -24,7 +24,7 @@ def main():
     for name in names:
         path = Path(name)
         if (path.parts[0] in {"reports", "artifacts", "build", "dist", ".venv", ".env"}
-                or "__pycache__" in path.parts or name.endswith((".private.json", ".private.jsonl", ".private.bin", ".log", ".pyc"))):
+                or "__pycache__" in path.parts or name.endswith((".private.json", ".private.jsonl", ".private.bin", ".private.plist", ".log", ".pyc"))):
             errors.append("Private/build artifact tracked: " + name)
         file = root / path
         if file.suffix.lower() in {".py", ".c", ".mjs", ".js", ".json", ".md", ".yml", ".yaml", ".ps1", ".sh", ".command", ".txt"}:

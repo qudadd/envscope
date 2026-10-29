@@ -131,6 +131,7 @@ function Publish($record,$state) {
  $line=@{at_epoch=$record.at_epoch;transaction=$record.id;phase=$state;fixture=$Fixture} | ConvertTo-Json -Compress
  $log=Join-Path $Root ('events-'+[DateTime]::UtcNow.ToString('yyyy-MM-dd')+'.private.jsonl')
  if(Test-Path -LiteralPath $log){Assert-Protected $log}
+ if(-not(Test-Path -LiteralPath $log)){[IO.File]::WriteAllBytes($log,[byte[]]@());Protect $log $false $false}
  $stream=[IO.File]::Open($log,'Append','Write','Read');try{$bytes=[Text.Encoding]::UTF8.GetBytes($line+"`n");$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
 }
 function Restore-Original($before) {
@@ -172,7 +173,8 @@ try {
   if($plan.record_id -cne $previous.id -or $plan.owner -cne $previous.owner){throw 'receipt changed'}
   $backup=Join-Path $Root ('record-'+$previous.id+'.private.json');Assert-Protected $backup
   $original=[IO.File]::ReadAllText($backup,[Text.Encoding]::UTF8) | ConvertFrom-Json
-  if($original.owner -cne $previous.owner -or $original.id -cne $previous.id){throw 'backup mismatch'}
+  if($original.format -ne 1 -or $original.fixture -ne $Fixture -or $original.owner -cne $previous.owner -or $original.id -cne $previous.id -or (@($original.adapters)|ConvertTo-Json -Depth 30 -Compress) -cne (@($previous.adapters)|ConvertTo-Json -Depth 30 -Compress)){throw 'backup mismatch'}
+  Shape $original
   Restore-Original @($original.adapters);Publish $original 'restored'
  }else {
   Shape $plan
@@ -263,9 +265,11 @@ class WindowsNetworkIO:
             # Only reviewed, generated PowerShell is executable; input stays data.
             body='\n'.join(line.lstrip() for line in body.splitlines() if line.strip())
             encoded=base64.b64encode(body.encode('utf-16-le')).decode()
-            if len(encoded)>30000:raise ValueError('网络修改命令超出系统限制，未尝试执行。')
+            command=[self.executable,'-NoProfile','-NonInteractive','-EncodedCommand',encoded]
+            if len(encoded)>31000 or len(subprocess.list2cmdline(command))>32000:
+                raise ValueError('网络修改命令超出系统限制，未尝试执行。')
             launcher=("$ErrorActionPreference='Stop';$code=[Console]::In.ReadToEnd();"
-                      "if($code.Length -gt 30000 -or $code -cnotmatch '^[A-Za-z0-9+/=]+$'){exit 65};"
+                      "if($code.Length -gt 31000 -or $code -cnotmatch '^[A-Za-z0-9+/=]+$'){exit 65};"
                       "$options=@{FilePath="+quote(self.executable)+";ArgumentList=@('-NoProfile','-NonInteractive','-EncodedCommand',$code);WindowStyle='Hidden';Wait=$true;PassThru=$true};"
                       "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent());"
                       "if(-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){$options.Verb='RunAs'};"

@@ -43,6 +43,7 @@ def main(output=None):
         result.update(encrypted_archive_roundtrip=True,cryptography_version=cryptography.__version__)
         result['native_dmg_roundtrip'] = 'not_applicable'
         result['native_timezone_worker'] = 'not_applicable'
+        result['native_network_worker'] = 'not_applicable'
         if platform.system() == 'Darwin':
             from .timezone_service import bundle_worker
             import subprocess
@@ -50,6 +51,10 @@ def main(output=None):
             info=json.loads(subprocess.check_output([worker['path'],'--version'],timeout=10))
             assert info=={'format':1,'release':__release__,'fixture':False}
             result['native_timezone_worker']=True
+            network=bundle_worker(cache=directory/'native-network-cache',component='network')
+            info=json.loads(subprocess.check_output([network['path'],'--version'],timeout=10))
+            assert info=={'format':1,'release':__release__,'fixture':False}
+            result['native_network_worker']=True
             # Exercise real hdiutil from the frozen application, only in this
             # disposable home. No real Claude credentials or system keychain.
             import shutil
@@ -125,6 +130,8 @@ def main(output=None):
                 result['process_guard_controls']=read_js("!!document.getElementById('process-guard-prepare') && !!document.getElementById('process-guard-stop')")
                 assert result['process_guard_controls']
                 result['routing_controls']=read_js("!!document.getElementById('routing-prepare') && !!document.getElementById('routing-restore')")
+                result['system_network_controls']=read_js("!!document.getElementById('network-all') && !!document.getElementById('network-restore') && !!document.getElementById('network-dns')")
+                assert result['system_network_controls']
                 from .routing_config import load_yaml, update_yaml_rules, rule_strings
                 pinned = rule_strings('Fixture', 'proxy')
                 result['routing_yaml'] = list(load_yaml(update_yaml_rules(b'rules: []\n', pinned))[1]['rules']) == pinned

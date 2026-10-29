@@ -12,7 +12,7 @@ CHECK_PROBLEMS = {
     "proxy": ("proxy.", "cli.socks", "cli.proxy_format", "cli.bypass", "network.proxy_dns"), "tun": ("startup.tun",), "country": ("target.country", "target.region"),
     "ip_stability": (), "timezone": ("target.timezone", "clock."),
     "locale": ("target.locale",), "ipv6": ("policy.http.ipv6", "policy.browser.http_v6"),
-    "dns": ("hosts.",), "webrtc": ("policy.udp.stun", "policy.browser.webrtc"),
+    "dns": ("hosts.", "network.dns", "target.dns"), "webrtc": ("policy.udp.stun", "policy.browser.webrtc"),
     "guard": ("maintenance.guard",), "rules": ("maintenance.rules", "startup.rules"),
     "language": ("target.language",), "asn": (), "reachability": ("service.", "network.",),
 }

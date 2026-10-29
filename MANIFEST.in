@@ -6,4 +6,4 @@ recursive-include scripts *.py
 recursive-include native *.c
 recursive-include tests *.py *.mjs
 recursive-include .github *.md *.yml
-global-exclude __pycache__ *.py[cod] *.private.json *.private.jsonl
+global-exclude __pycache__ *.py[cod] *.private.json *.private.jsonl *.private.bin *.private.plist
