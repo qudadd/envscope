@@ -86,9 +86,9 @@ def windows(home, result):
                 # public receipt. Retrying must not start a second instance,
                 # even when the original task permits parallel instances.
                 def instances():
-                    # GetInstances is scoped to the caller's security context;
-                    # a limited task can be invisible to an elevated caller.
-                    # Read only this unique owned script's actual processes.
+                    # GetInstances is security-scoped and task state alone is
+                    # not a process identity. Independently read only this
+                    # unique owned script's actual processes.
                     import psutil
                     own=psutil.Process().username();found=set()
                     for proc in psutil.process_iter(['pid','username','cmdline','create_time'],ad_value=None):
