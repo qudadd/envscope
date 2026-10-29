@@ -85,6 +85,10 @@ def windows(home, result):
                 # Simulate a crash after OS restoration but before the final
                 # public receipt. Retrying must not start a second instance,
                 # even when the original task permits parallel instances.
+                probe="$s=New-Object -ComObject 'Schedule.Service';$s.Connect();[int]$s.GetFolder('\\').GetTask("+quote(marker)+").GetInstances(0).Count"
+                def instances():
+                    return int(command([shell,'-NoProfile','-NonInteractive','-Command',probe]).stdout.decode('utf-8-sig').strip())
+                prior_instances=instances();assert prior_instances>0
                 receipt=io.status();assert len(receipt['id'])==32
                 files=[layout.root/'latest.json',layout.root/('record-'+receipt['id']+'.private.json')]
                 script="$ErrorActionPreference='Stop';"
@@ -94,8 +98,8 @@ def windows(home, result):
                 subject=ComponentMigration(StateStore(home/'state'),home,io=WindowsComponents(home,layout=layout,runner=runner))
                 plan=subject.prepare(restore=True);assert plan['state']=='planned',plan
                 assert subject.apply(plan['plan_id'],True)['state']=='restored'
-                probe="$s=New-Object -ComObject 'Schedule.Service';$s.Connect();[int]$s.GetFolder('\\').GetTask("+quote(marker)+").GetInstances(0).Count"
-                assert command([shell,'-NoProfile','-NonInteractive','-Command',probe]).stdout.decode().strip()=='1'
+                restored_instances=instances()
+                assert restored_instances==prior_instances, (prior_instances,restored_instances)
             if not running: command([shell, '-NoProfile', '-NonInteractive', '-Command', 'Enable-ScheduledTask -TaskName '+quote(marker)+'|Out-Null'])
         result['checks'] = ['actual COM read/stop/delete/create/readback', 'actor SID and DACL verified',
                             'strict boolean consent', 'disabled and stopped stay disabled', 'original running task resumes',

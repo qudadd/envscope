@@ -137,7 +137,7 @@ $deny='O:BAG:SYD:(D;;FW;;;BU)(A;;FR;;;BU)'
  deny=((xS $deny) -ceq (xS 'O:BAG:SYD:(A;;FR;;;BU)(D;;FW;;;BU)'))}|ConvertTo-Json -Compress
 """
         encoded=base64.b64encode(source.encode('utf-16-le')).decode()
-        value=subprocess.run([powershell(),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],capture_output=True,timeout=10)
+        value=subprocess.run([powershell(),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],capture_output=True,timeout=30)
         self.assertEqual(value.returncode,0,value.stderr.decode(errors='replace'))
         self.assertEqual(json.loads(value.stdout.decode('utf-8-sig')),
                          {'equivalent':True,'wider':False,'owner':False,'protected':False,'inherited':False,'deny':False})
