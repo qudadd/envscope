@@ -61,7 +61,7 @@ if ($GenerateArchive) {
     $zip = [IO.Compression.ZipArchive]::new($memory, [IO.Compression.ZipArchiveMode]::Create, $true)
     try {
         $data = @{
-            '.claude-switcher-snapshot.json' = '{"format":"claude-switcher-snapshot","version":1,"account":"C","platform":"Windows"}'
+            '.claude-switcher-snapshot.json' = '{"format":"claude-switcher-snapshot","version":1,"account":"c","platform":"Windows"}'
             'fixture.txt' = 'INDEPENDENT_DOTNET_FIXTURE'
         }
         foreach ($name in $data.Keys) {

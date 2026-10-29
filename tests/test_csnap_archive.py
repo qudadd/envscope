@@ -97,6 +97,13 @@ class CsnapTests(unittest.TestCase):
         self.assertTrue(result['verified'])
         self.assertEqual((self.manager.accounts_dir/'C/state').read_bytes(), b'OLD_FIXTURE')
 
+    def test_legacy_lowercase_account_marker_matches_original_windows_rules(self):
+        # PowerShell -match / -eq are case-insensitive; an original export
+        # invoked with lower-case c produces this legitimate marker.
+        self.legacy(metadata={'format':'claude-switcher-snapshot','version':1,'account':'c'})
+        self.archive.import_archive(str(self.file),'C',PASSWORD)
+        self.assertEqual((self.manager.accounts_dir/'C/fixture').read_bytes(),b'OLD_FIXTURE')
+
     def test_wrong_password_and_all_authenticated_regions_before_plaintext(self):
         self.legacy()
         original = self.file.read_bytes()

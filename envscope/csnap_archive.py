@@ -302,7 +302,7 @@ def _unpack(source, destination, slot):
         metadata = json.loads(archive.read(marker).decode('utf-8-sig'), object_pairs_hook=_unique_json)
         if (not isinstance(metadata, dict) or metadata.get('format') != 'claude-switcher-snapshot'
                 or type(metadata.get('version')) is not int or metadata['version'] != 1
-                or metadata.get('account') != slot):
+                or not isinstance(metadata.get('account'), str) or metadata['account'].upper() != slot):
             raise AccountError('.csnap 元数据无效或账号槽位不匹配，请选择存档原来的 A–D 槽位。')
         _safe_chain(destination)
         destination.mkdir(mode=0o700)

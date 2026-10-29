@@ -1,6 +1,6 @@
 # Feature parity and integration audit
 
-## Active full-scope work: 0.22 development
+## Active full-scope work: 0.22.1 development
 
 [The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
 over historical status tables below. Windows CSNAP001 interoperability is now

@@ -45,7 +45,7 @@ def main():
             assert (manager.accounts_dir/'C/nested/empty').is_dir()
             assert not list((root/'work').iterdir())
             result = {'state':'passed','scope':'Self-authored .NET crypto and ZipArchive versus Python on fixture volumes',
-                      'python_to_dotnet':True,'dotnet_to_python':True,'legacy_short_password':True,
+                      'python_to_dotnet':True,'dotnet_to_python':True,'legacy_short_password':True,'legacy_lowercase_marker':True,
                       'empty_directory_preserved':True,'vendor_executed':False,'real_account_or_network_changed':False,
                       'python_archive_sha256':hashlib.sha256(candidate.read_bytes()).hexdigest(),
                       'dotnet_archive_sha256':hashlib.sha256(generated.read_bytes()).hexdigest()}
