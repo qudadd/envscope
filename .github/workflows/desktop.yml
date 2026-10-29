@@ -35,6 +35,8 @@ jobs:
       - name: Independent .NET CSNAP001 exchange (fixtures only)
         if: runner.os == 'Windows'
         run: python -m scripts.csnap_acceptance
+      - name: Detached browser cleanup after parent exit (owned processes only)
+        run: python -m scripts.browser_session_acceptance
       - name: Actual encrypted DMG compatibility (isolated fixture)
         run: python -m scripts.dmg_acceptance
       - name: Actual root timezone service lifecycle (fixture paths only)
@@ -151,6 +153,12 @@ jobs:
           name: Native-evidence-${{ runner.os }}-${{ runner.arch }}
           path: artifacts/native-smoke.json
           if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Browser-session-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/browser-session-acceptance/*result.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:

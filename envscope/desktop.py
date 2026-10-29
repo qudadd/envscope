@@ -8,6 +8,14 @@ from .service import expire_idle, make_server
 
 
 def main():
+    if len(sys.argv)>1 and sys.argv[1]=='--browser-session-fixture':
+        if len(sys.argv)!=3:
+            raise SystemExit(2)
+        from .browser_sessions import fixture_parent
+        return fixture_parent(sys.argv[2])
+    if len(sys.argv) > 1 and sys.argv[1] == '--browser-cleanup-worker':
+        from .browser_sessions import main as cleanup_main
+        return cleanup_main(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "--process-guard-worker":
         from .process_guard import main as guard_main
         return guard_main(sys.argv[2:])

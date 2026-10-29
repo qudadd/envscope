@@ -29,6 +29,7 @@ STATUSES = frozenset(('completed', 'failed', 'blocked', 'planned', 'enabled', 'd
 COMMANDS = frozenset(('audit', 'maintenance-audit', 'check-config-save', 'settings-save', 'settings-restore',
                       'environment-confirm', 'support-bundle', 'diagnostics-export', 'diagnostics-clear',
                       'account-switch', 'account-add', 'account-label', 'app-launch', 'app-restart', 'open-safe',
+                      'browser-cleanup','browser-folder','browser-logs',
                       'archive-export', 'archive-import', 'snapshot-export', 'snapshot-import',
                       'solution-apply', 'solution-undo', 'inspection-apply', 'region-apply', 'region-undo',
                       'client-apply', 'client-restore', 'routing-apply', 'routing-undo',

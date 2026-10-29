@@ -194,7 +194,13 @@ class Operations:
 
     def _open_remedy(self, action):
         system = platform.system()
-        if action in ('maintenance-logs', 'guard-logs'):
+        directories = ('maintenance-logs','guard-logs','browser-folder','browser-logs')
+        if action in ('browser-folder','browser-logs'):
+            from .accounts import _safe_chain
+            path = self.isolated_browser.root if action=='browser-folder' else self.isolated_browser.root.parent/'browser-cleanup-events'
+            _safe_chain(path)
+            if not path.is_dir():return False
+        elif action in ('maintenance-logs', 'guard-logs'):
             from .accounts import _safe_chain
             path=(self.process_guard.root if action == 'guard-logs' else self.maintenance.root)/'events';_safe_chain(path)
             if not path.is_dir():return False
@@ -205,7 +211,7 @@ class Operations:
         else:
             path = None
         if system == "Windows":
-            if path and action in ('maintenance-logs', 'guard-logs'):
+            if path and action in directories:
                 command=[str(Path(os.environ.get('WINDIR','C:/Windows'))/'explorer.exe'),str(path)]
             elif path:
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/notepad.exe"), str(path)]
@@ -216,7 +222,7 @@ class Operations:
                     return False
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "explorer.exe"), uri]
         elif system == "Darwin":
-            command = ["/usr/bin/open", str(path)] if action in ('maintenance-logs', 'guard-logs') else ["/usr/bin/open", "-e", str(path)] if path else ["/usr/bin/open", "-b", "com.apple.systempreferences"]
+            command = ["/usr/bin/open", str(path)] if action in directories else ["/usr/bin/open", "-e", str(path)] if path else ["/usr/bin/open", "-b", "com.apple.systempreferences"]
         else:
             return False
         subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -226,6 +232,7 @@ class Operations:
     def background_status(self):
         """Only read status; no account tree walk, task registration or audit lock."""
         return {'settings':self.store.settings(),'maintenance':self.maintenance.status(),
+                'browser_sessions':self.isolated_browser.session_status(),
                 'process_guard':self.process_guard.status(),'timezone_service':self.timezone_service.status(),
                 'system_network':self.network.status(),'client_repair':self.client_repair.status(),
                 'client_language':self.language_repair.status(), 'legacy_components': self.components.peek()}
@@ -539,7 +546,15 @@ class Operations:
         if action == 'browser-cleanup':
             if params:
                 raise ValueError('unexpected browser parameters')
-            return self.isolated_browser.cleanup()
+            if confirmed is not True:
+                return {'state':'confirmation_required','reason':'将清理 EnvScope 中已关闭的临时浏览器资料，包括可识别的旧版资料。临时登录资料会清除；使用中或无法核实的目录保留，日常浏览器资料不受影响。'}
+            return self.isolated_browser.cleanup(include_legacy=True)
+        if action in ('browser-folder','browser-logs'):
+            if params:
+                raise ValueError('unexpected browser parameters')
+            opened = self.remedy_opener(action)
+            return {'state':'opened' if opened else 'unavailable',
+                    'reason':('已打开临时资料目录，请先确认浏览器已退出。' if action=='browser-folder' else '已打开清理记录，记录不包含链接、代理或登录内容。') if opened else '尚未生成此目录，或系统未能打开；请先打开一次临时浏览器。'}
         if action == 'environment-location':
             return self.region_lookup(params)
         if action == 'watchdog-options':

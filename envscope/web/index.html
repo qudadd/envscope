@@ -247,15 +247,18 @@
       <section class="tool-section" id="environment-tools"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">点击后在下方显示，不会打开额外窗口。设备和浏览器信息用于排障，不推断账号风险。</p><div id="environment-output" class="information-output" role="status" tabindex="-1"><p class="note">选择一项查看；无需先安装维护核心。</p></div></section>
       <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生提供逐项检查、配置预览与恢复、独立账号资料、加密存档、临时浏览器、托盘和完整软件更新。持续维护提供基线恢复、单独批准的 10 秒进程守护，以及可授权的 Mac 60 秒系统时区守护。</p><p class="note">Clash Verge 置顶路由、Mac 系统时区服务和原版加密 DMG 兼容已原生实现。系统网络深度修复、其他客户端适配和旧组件迁移仍需维护核心或手动处理；具体能力与验收范围见环境全览。</p><p class="note">上游核对至 223a5cc，已核对其新增 Windows 地区设置；随附源码仍固定在 870c4ca。完整升级尚未完成，当前缺口和验证要求持续记录。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FULL_PARITY_AUDIT.md" target="_blank" rel="noopener noreferrer">完整功能升级核对表</a></details>
       <section class="tool-section"><h2>配置备份</h2><p class="note">最近 20 份可识别恢复记录，关闭后仍保留。撤销会先停用持续维护，并校验备份和当前文件；后续已有修改时拒绝覆盖。原文位于 ~/.envscope/config-backups，可能含密钥，不可分享。</p><div id="config-backups"></div></section>
+      <section class="tool-section"><h2>临时浏览器</h2><p class="note">独立资料，不带入日常 Cookie 或扩展。关闭后清理，应用退出后由独立进程继续检查。</p>
+        <div id="param-url" class="parameter"><label>网页地址<input id="safe-url" type="url" value="https://claude.ai/"></label></div>
+        <div class="actions"><button id="browser-open">打开临时浏览器</button><button id="browser-cleanup" class="link">清理已关闭的资料</button><button id="browser-folder" class="link">临时资料目录</button><button id="browser-logs" class="link">清理记录</button></div>
+        <p id="browser-session-status" class="note" role="status"></p>
+      </section>
       <section class="tool-section"><h2>维护</h2><p id="backend-note" class="note">正在读取已安装的维护核心。</p>
         <label>操作<select id="maintenance-action"></select></label>
         <div id="maintenance-effects" class="note"></div>
         <div id="param-client" class="parameter" hidden><label>代理客户端<select id="legacy-client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option></select></label></div>
         <div id="param-policy" class="parameter" hidden><label>STUN 端口策略<select id="legacy-policy"><option value="proxy">经代理</option><option value="reject">拒绝</option></select></label></div>
-        <div id="param-url" class="parameter" hidden><label>网页地址<input id="safe-url" type="url" value="https://claude.ai/"></label></div>
         <div id="param-snapshot" class="parameter" hidden><div class="form-grid"><label>账号<select id="snapshot-account"><option>A</option><option>B</option><option>C</option><option>D</option></select></label><label>DMG 绝对路径<input id="snapshot-file"></label></div><label>密码<input id="snapshot-password" type="password" autocomplete="new-password"></label></div>
         <div class="actions"><button id="maintenance-run">执行</button><span id="maintenance-availability"></span></div>
-        <button id="browser-cleanup" class="link">清理已关闭的临时浏览器资料</button>
         <p class="note">首次安装会打开随附的原版交互安装器。修复可能修改系统和代理设置；执行前列出具体影响。原版更新只更新维护核心。</p>
       </section>
       <pre id="tool-output" class="output" aria-live="polite">尚未执行操作</pre>

@@ -104,7 +104,7 @@ class EncryptedArchiveTests(unittest.TestCase):
 class IsolatedBrowserTests(unittest.TestCase):
     def test_both_platforms_use_private_profiles_no_spoofing_and_cleanup_only_after_exit(self):
         for system in ('Windows','Darwin'):
-            with self.subTest(system=system), tempfile.TemporaryDirectory() as directory, patch('envscope.isolated_browser.threading.Thread'):
+            with self.subTest(system=system), tempfile.TemporaryDirectory() as directory, patch('envscope.isolated_browser.IsolatedBrowser._start_reaper'):
                 root = Path(directory).resolve()
                 executable = root/'fixture-browser'
                 executable.write_text('NOT_EXECUTABLE')
@@ -142,7 +142,7 @@ class IsolatedBrowserTests(unittest.TestCase):
             gate.assert_not_called()
 
     def test_proxy_argument_is_explicit_and_does_not_become_shell_code(self):
-        with tempfile.TemporaryDirectory() as directory, patch('envscope.isolated_browser.threading.Thread'):
+        with tempfile.TemporaryDirectory() as directory, patch('envscope.isolated_browser.IsolatedBrowser._start_reaper'):
             root = Path(directory).resolve()
             exe = root/'browser';exe.touch()
             launch = Mock()

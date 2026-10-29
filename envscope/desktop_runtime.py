@@ -221,6 +221,11 @@ def native_main(server):
                 instance.close()
                 launch_installed(installed)
                 return 0
+        from .accounts import AccountError
+        try:
+            server.operations.isolated_browser.resume_cleanup()
+        except (AccountError,OSError,ValueError):
+            pass  # The read-only catalog exposes unreadable records for review.
         url = "http://127.0.0.1:" + str(server.server_port)
         webview.settings.update(ALLOW_DOWNLOADS=True, ALLOW_FILE_URLS=False, OPEN_EXTERNAL_LINKS_IN_BROWSER=True)
         window = webview.create_window("EnvScope", url, width=1180, height=800, min_size=(960, 640))

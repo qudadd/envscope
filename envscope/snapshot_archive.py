@@ -30,6 +30,26 @@ FILES = 200000
 CHUNK = 1024**2
 
 
+def restrict_private_directory(root):
+    """Restrict a freshly created private directory before placing data in it."""
+    root = Path(root)
+    _safe_chain(root)
+    root.chmod(0o700)
+    if os.name == 'nt':
+        # Drop inherited access before placing any plaintext in the folder.
+        options = dict(capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = subprocess.run(['whoami.exe', '/user', '/fo', 'csv', '/nh'], **options)
+        try:
+            sid = next(csv.reader(io.StringIO(result.stdout)))[1]
+        except (IndexError, StopIteration):
+            raise AccountError('无法确认当前用户，未创建明文暂存资料。') from None
+        if result.returncode or not sid.startswith('S-1-') or not all(c in 'S-0123456789' for c in sid):
+            raise AccountError('无法确认当前用户，未创建明文暂存资料。')
+        result = subprocess.run(['icacls.exe', str(root), '/inheritance:r', '/grant:r', '*'+sid+':(OI)(CI)F'], **options)
+        if result.returncode:
+            raise AccountError('无法限制暂存目录权限，未导出资料。')
+
+
 @contextmanager
 def private_workspace(parent):
     parent = Path(parent).absolute()
@@ -37,20 +57,7 @@ def private_workspace(parent):
     parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with tempfile.TemporaryDirectory(prefix='work-', dir=parent) as temporary:
         root = Path(temporary)
-        root.chmod(0o700)
-        if os.name == 'nt':
-            # Drop inherited access before placing any plaintext in the folder.
-            options = dict(capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
-            result = subprocess.run(['whoami.exe', '/user', '/fo', 'csv', '/nh'], **options)
-            try:
-                sid = next(csv.reader(io.StringIO(result.stdout)))[1]
-            except (IndexError, StopIteration):
-                raise AccountError('无法确认当前用户，未创建明文暂存资料。') from None
-            if result.returncode or not sid.startswith('S-1-') or not all(c in 'S-0123456789' for c in sid):
-                raise AccountError('无法确认当前用户，未创建明文暂存资料。')
-            result = subprocess.run(['icacls.exe', str(root), '/inheritance:r', '/grant:r', '*'+sid+':(OI)(CI)F'], **options)
-            if result.returncode:
-                raise AccountError('无法限制暂存目录权限，未导出资料。')
+        restrict_private_directory(root)
         yield root
 
 

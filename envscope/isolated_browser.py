@@ -1,15 +1,14 @@
 """Reviewed temporary Chromium sessions; never alter the user's daily profile."""
-import json
 import os
 from pathlib import Path
 import platform
-import shutil
 import subprocess
 import threading
 import uuid
 from urllib.parse import urlsplit
 
 from .accounts import AccountError, _safe_chain
+from .browser_sessions import SessionStore, profile_running, start_worker
 
 
 def browser_candidates(home, system=None, environ=None):
@@ -40,46 +39,46 @@ def validate_url(value):
     return value
 
 
-def profile_running(profile, system):
-    options = dict(capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10,
-                   creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-    if system == 'Windows':
-        code = "[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false);$ErrorActionPreference='Stop';@(Get-CimInstance Win32_Process | Where-Object {$_.Name -in @('chrome.exe','msedge.exe','brave.exe')} | Select-Object -ExpandProperty CommandLine) | ConvertTo-Json -Compress"
-        result = subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',code], **options)
-        if result.returncode:
-            return None
-        try:
-            commands = json.loads(result.stdout or '[]')
-            commands = [commands] if isinstance(commands,str) else commands
-            if not isinstance(commands,list) or any(not isinstance(c,str) or not c for c in commands):
-                return None
-        except ValueError:
-            return None
-    elif system == 'Darwin':
-        result = subprocess.run(['/bin/ps','-ax','-o','command='], **options)
-        if result.returncode:
-            return None
-        commands = result.stdout.splitlines()
-    else:
-        return None
-    return any(str(profile).casefold() in c.casefold() for c in commands)
-
-
 class IsolatedBrowser:
-    def __init__(self, home, system=None, finder=None, launcher=None, running=None):
-        self.home = Path(home)
+    def __init__(self, home, system=None, finder=None, launcher=None, running=None, worker=None):
+        self.home = Path(home).resolve()
         self.system = system or platform.system()
         self.root = self.home/'.envscope/browser-sessions'
         self.finder = finder or (lambda: browser_candidates(self.home,self.system))
         self.launcher = launcher or subprocess.Popen
         self.running = running or (lambda p: profile_running(p,self.system))
+        self.worker = worker if worker is not None else start_worker if launcher is None else None
+        self.store = SessionStore(self.root,self.system,running=running)
         self.sessions = {}
         self.lock = threading.Lock()
 
     def capability(self):
         available = next(((name,path) for name,path in self.finder() if path.is_file()), None)
+        sessions = self.session_status()
         return {'available':bool(available), 'browser':available[0] if available else None,
-                'reason':'使用独立临时资料，关闭后可清理；不伪装设备或地区。' if available else '未找到已安装的 Chrome、Edge、Brave 或 Chromium。'}
+                'sessions':sessions,
+                'reason':'独立临时资料、单独清理进程与重启恢复；使用中或无法核实的资料保留。' if available else '未找到已安装的 Chrome、Edge、Brave 或 Chromium。'}
+
+    def session_status(self):
+        try:
+            sessions = self.store.inspect()
+            sessions['worker'] = self.store.worker_status()['state']
+        except (AccountError,OSError,ValueError):
+            sessions = {'state':'unreadable'}
+        return sessions
+
+    def resume_cleanup(self):
+        """Resume only records carrying the original explicit cleanup grant."""
+        status = self.store.inspect()
+        if status['sessions'] and self.worker:
+            try:
+                if self.store.worker_status()['state']=='running':
+                    return {'state':'running','sessions':status['sessions']}
+                self.worker(self.root)
+                return {'state':'requested','sessions':status['sessions']}
+            except (OSError,ValueError,subprocess.SubprocessError):
+                return {'state':'unavailable','sessions':status['sessions']}
+        return {'state':'not_needed','sessions':status['sessions']}
 
     def open(self, url, settings, preflight):
         url = validate_url(url)
@@ -92,12 +91,7 @@ class IsolatedBrowser:
             return {'state':'unavailable', 'reason':self.capability()['reason']}
         name, executable = browser
         _safe_chain(executable)
-        _safe_chain(self.root)
-        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        token = uuid.uuid4().hex
-        profile = self.root/token
-        profile.mkdir(mode=0o700)
-        args = [str(executable), '--user-data-dir='+str(profile), '--no-first-run', '--no-default-browser-check',
+        args = [str(executable), '--no-first-run', '--no-default-browser-check',
                 '--disable-sync', '--disable-extensions', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp']
         mode = settings.get('connection_mode')
         if mode in ('direct','tun'):
@@ -110,18 +104,33 @@ class IsolatedBrowser:
                 raise ValueError('临时浏览器仅接受不含密码的 HTTP / HTTPS 代理。')
             args.append('--proxy-server='+proxy)
         # No language, timezone, user agent, canvas or device spoofing.
+        token = uuid.uuid4().hex
+        profile = self.store.create(token)
+        args.insert(1,'--user-data-dir='+str(profile))
         args.append(url)
         try:
             proc = self.launcher(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                  creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         except OSError:
-            profile.rmdir()
+            self.store.abandon(token)
             raise AccountError('未能启动已检测的浏览器。') from None
+        self.store.launched(token,proc)
         with self.lock:
             self.sessions[token] = (profile, proc)
-        threading.Thread(target=self._reap, args=(token,proc), daemon=True).start()
+        self._start_reaper(token,proc)
+        worker_requested = False
+        if self.worker:
+            try:
+                self.worker(self.root)
+                worker_requested = True
+            except (OSError,ValueError,subprocess.SubprocessError):
+                pass  # The durable record remains recoverable on next launch.
         return {'state':'started', 'reason':name+' 的临时浏览器已提交启动。登录资料不会带入日常浏览器；关闭全部临时窗口后清理。',
-                'session':token, 'boundary':'浏览器选项不等于防火墙隔离；需在该临时窗口内复查 WebRTC。关闭应用或异常退出后，残留资料可能需手动清理。'}
+                'session':token,'cleanup_worker_requested':worker_requested,
+                'boundary':'浏览器选项不等于防火墙隔离，需在临时窗口复查 WebRTC。'+('已请求独立清理进程，应用退出后继续检查。' if worker_requested else '独立清理进程未启动，可在下次打开应用后恢复清理。')}
+
+    def _start_reaper(self, token, proc):
+        threading.Thread(target=self._reap, args=(token,proc), daemon=True).start()
 
     def _reap(self, token, proc):
         try:
@@ -130,24 +139,19 @@ class IsolatedBrowser:
         except (OSError, ValueError, AccountError):
             pass  # Keep profiles if process state cannot be established.
 
-    def cleanup(self, token=None):
+    def cleanup(self, token=None, *, include_legacy=False):
         with self.lock:
-            removed, retained = 0, 0
+            local = {}
             for key,(profile,proc) in list(self.sessions.items()):
-                if token and token != key:
-                    continue
                 try:
-                    alive = proc.poll() is None or self.running(profile) is not False
+                    local[key] = proc.poll() is None
                 except (OSError, subprocess.TimeoutExpired):
-                    alive = True
-                if alive:
-                    retained += 1
-                    continue
-                _safe_chain(profile)
-                if profile.parent != self.root or profile.resolve().parent != self.root.resolve():
-                    raise AccountError('临时资料路径发生变化，已停止清理。')
-                shutil.rmtree(profile)
-                del self.sessions[key]
-                removed += 1
-        return {'state':'completed', 'removed':removed, 'retained':retained,
-                'reason':f'已清理 {removed} 个本次临时资料；{retained} 个仍在使用或无法确认退出，予以保留。'}
+                    local[key] = None
+            result = self.store.cleanup(token,allow_legacy=include_legacy,local=local)
+            self.sessions = {key:value for key,value in self.sessions.items() if (self.root/key).exists()}
+        result['reason'] = (f"已清理 {result['removed']} 个已关闭的临时资料；"
+                            f"{result['retained']} 个仍在使用或无法确认退出，{result['unverified']} 个记录异常，均保留。"
+                            +(f"另有 {result['legacy']} 个旧版资料，需确认后清理。" if result['legacy'] else ''))
+        if result['retained'] or result['unverified'] or result['overflow']:
+            result['boundary'] = '先退出临时浏览器的全部窗口，再重试清理。仍无法核实时，打开“临时资料目录”检查保留的会话，或查看清理记录；不要清理日常浏览器目录。'
+        return result

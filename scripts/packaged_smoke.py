@@ -66,6 +66,11 @@ def main():
         assert native['release'] == __release__, 'Built executable release does not match the source'
         assert native['native_diagnostics_export'] is True, 'Frozen diagnostic ZIP / consent check failed'
         assert native['native_csnap_roundtrip'] is True, 'Frozen CSNAP001 archive check failed'
+        from scripts.browser_session_acceptance import run_acceptance
+        browser_cleanup = run_acceptance(executable,native_proof=native)
+        assert browser_cleanup['state']=='passed' and browser_cleanup['frozen'] is True
+        browser_evidence=Path('artifacts/browser-session-acceptance');browser_evidence.mkdir(parents=True,exist_ok=True)
+        (browser_evidence/'frozen-result.json').write_text(json.dumps(browser_cleanup,indent=2)+'\n',encoding='utf-8')
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 

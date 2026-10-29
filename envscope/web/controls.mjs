@@ -62,9 +62,11 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
     const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button, #timezone-service-panel button, #timezone-service-panel input, #network-panel button, #network-panel input, #client-panel button, #client-panel input, #client-panel select, #language-panel button, #components-panel button, #components-panel input, #check-preferences-panel button, #check-preferences-panel input')].map(node=>[node,node.disabled]);
+    disabledBefore.push(...['browser-folder','browser-logs','browser-open','safe-url'].map(id=>[$(id),$(id).disabled]));
     for(const [node] of disabledBefore)node.disabled=true;
     busy=true;statusRevision++;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     $(output).scrollIntoView({block:'nearest'});
+    if(id.startsWith('browser-')||id==='open-safe')$(output).classList.remove('manual-guidance');
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),/^(archive|snapshot)-/.test(id)?1200000:240000);
     try {
       const response=await fetch("/api/action",{method:"POST",signal:controller.signal,headers:{"Content-Type":"application/json","X-EnvScope-Token":session.token},
@@ -73,7 +75,10 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(!response.ok)throw new Error(({invalid_session:'本地会话已失效，请重新打开 EnvScope。',audit_running:'正在进行其他检测或操作，请等待完成。',operation_unavailable_or_deadline:'本次读取未能完成，请稍后重试；不影响其他功能。'})[result.error]||result.error||"操作无法完成");
       if(result.latest_report)onReport(result.latest_report);
       if(id==='archive-choose-file'){if(result.file)$('encrypted-path').value=result.file;$(output).textContent=result.reason||(result.file?'文件位置已选择。':'已取消选择。');}
-      else if(['archive-export','archive-import','archive-cleanup','snapshot-export','snapshot-import','browser-cleanup','open-safe'].includes(id))$(output).textContent=[result.reason,result.boundary].filter(Boolean).join('\n');
+      else if(['archive-export','archive-import','archive-cleanup','snapshot-export','snapshot-import','browser-cleanup','browser-folder','browser-logs','open-safe'].includes(id)){
+        $(output).textContent=[result.reason,result.boundary].filter(Boolean).join('\n');
+        if(id==='browser-cleanup')$(output).classList.toggle('manual-guidance',!!(result.retained||result.unverified||result.overflow));
+      }
       else if(['cli-info','fingerprint'].includes(id)&&result.rows)information(result);
       else if(id.startsWith('maintenance-')||id.startsWith('guard-')||id.startsWith('routing-')||id.startsWith('timezone-service-')||id.startsWith('system-network-')||id.startsWith('client-')||id.startsWith('language-')||id.startsWith('components-'))$(output).textContent=result.reason||({planned:'方案已生成，请核对下方影响。',enabled:'持续维护已启用。',disabled:'持续维护已停用。',completed:'已刷新维护结果。',confirmation_required:'请先审核方案并确认。'})[result.state]||'本次操作尚未确认完成。';
       else if(result.state==="completed"&&["settings-save","settings-restore"].includes(id))$(output).textContent=id==="settings-save"?"已保存，后续检测使用新偏好。":"已恢复上次偏好。";
@@ -98,7 +103,14 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     }catch(error){if(error instanceof TypeError){disconnected();$(output).textContent=DISCONNECTED;}else $(output).textContent=error.name==="AbortError"?"等待已超时。操作可能仍在后台执行；请查看实际状态，避免重复执行。":String(error.message);if(/^(archive|snapshot)-/.test(id)){ $(output).classList.add('manual-guidance'); try{await refresh();}catch{} }return null;}
     finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();setParameters();renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);renderTimezoneService(catalog.timezone_service);renderNetwork(catalog.system_network,catalog.settings);renderClient(catalog.client_repair,catalog.settings);renderLanguage(catalog.client_language,catalog.settings);renderComponents(catalog.legacy_components);}}
   }
+  function renderBrowserSessions(sessions={}){
+    const attention=sessions.state==='unreadable'||sessions.unverified||sessions.pending||sessions.legacy||sessions.overflow||(sessions.sessions&&['unverified','stale'].includes(sessions.worker));
+    $('browser-session-status').classList.toggle('manual-guidance',!!attention);
+    const worker=({running:'进程身份与心跳已核对',not_running:'未运行或已结束',stale:'心跳已过期',unverified:'状态无法核实'})[sessions.worker]||'尚无记录';
+    $('browser-session-status').textContent=sessions.state==='unreadable'?'会话记录无法读取，未自动清理。请打开临时资料目录核实。':`临时会话记录 ${sessions.sessions||0} 个，待重试 ${sessions.pending||0} 个，旧版资料 ${sessions.legacy||0} 个，无法核实 ${sessions.unverified||0} 个。使用中或无法核实的资料保留。${sessions.sessions?'后台清理：'+worker+'。':''}${sessions.overflow?'资料超过单轮检查上限，请先手动核实目录。':''}`;
+  }
   function renderAccounts(){
+    renderBrowserSessions(catalog.isolated_browser?.sessions);
     const value=catalog.accounts;
     const dmg=catalog.dmg_archives||{};
     $('encrypted-format').querySelector('[value="dmg"]').disabled=!dmg.available;
@@ -157,7 +169,6 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     $("maintenance-availability").textContent=id==='open-safe'?catalog.isolated_browser?.reason||'':!a?.supported?"此平台的原版未提供此功能":!a.available?"需要先安装支持该操作的维护核心":"";
     $("param-client").hidden=id!=="set-client";
     $("param-policy").hidden=id!=="fix"||catalog.legacy.platform!=="Darwin";
-    $("param-url").hidden=id!=="open-safe";
     $("param-snapshot").hidden=!["snapshot-export","snapshot-import"].includes(id);
   }
   function renderUpkeep(value){
@@ -266,7 +277,9 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       await action('archive-'+mode,{slot:$('encrypted-slot').value.trim(),file:$('encrypted-path').value.trim(),password,format},'account-output',mode==='export'?'将复制非活动槽位，在受限临时目录中打包，使用密码加密并回读校验后导出。密码不会保存；临时明文随后清理。':`将用密码打开存档，校验格式与复制结果，再导入空槽位。${format==='dmg'?'DMG 只读挂载且槽位须与原存档一致。':format==='csnap'?'.csnap 先验签再解密，槽位须与原存档一致。':''}不覆盖现有资料，不启动 Claude。`);
     });
   }
-  $('browser-cleanup').addEventListener('click',()=>action('browser-cleanup',{},'tool-output'));
+  $('browser-cleanup').addEventListener('click',()=>action('browser-cleanup',{},'tool-output','将清理 EnvScope 中已关闭的临时浏览器资料，包括旧版遗留的临时登录资料。使用中或无法确认退出的资料保留，日常浏览器不受影响。'));
+  $('browser-open').addEventListener('click',()=>action('open-safe',{url:$('safe-url').value.trim()},'tool-output','将重新检测后打开独立临时浏览器，不带入日常浏览器资料。关闭全部临时窗口后清理；应用退出后独立清理进程继续检查。'));
+  for(const id of ['browser-folder','browser-logs'])$(id).addEventListener('click',()=>action(id,{},'tool-output'));
   $("proxy-found").addEventListener("change",()=>{$("proxy-url").value=$("proxy-found").value;});
   $("proxy-test").addEventListener("click",()=>action("proxy-diagnose",{proxy:$("proxy-url").value.trim()}));
   $("cli-info").addEventListener("click",()=>action("cli-info",{},'environment-output'));$("device-info").addEventListener("click",()=>action("fingerprint",{},'environment-output'));
@@ -302,7 +315,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   document.addEventListener("envscope-audit-complete",event=>{lastReportId=event.detail?.report_id||null;void refresh().catch(()=>{});});
   document.addEventListener('envscope-maintenance-change',()=>{void refresh().catch(()=>{});});
   setInterval(async()=>{
-    if(statusPending||document.hidden||($('page-upkeep').hidden&&($('page-audit').hidden||!catalog?.maintenance?.enabled))||busy||$('start').disabled||document.documentElement.dataset.operationBusy==='true')return;
+    if(statusPending||document.hidden||($('page-tools').hidden&&$('page-upkeep').hidden&&($('page-audit').hidden||!catalog?.maintenance?.enabled))||busy||$('start').disabled||document.documentElement.dataset.operationBusy==='true')return;
     const revision=statusRevision,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);statusPending=true;
     try{
       const response=await fetch('/api/status',{signal:controller.signal,headers:{'X-EnvScope-Token':session.token},cache:'no-store'});
@@ -311,6 +324,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       // A read begun before an action/audit must not paint its older state over
       // the new result. Read-only polling never acquires the mutation lock.
       if(revision!==statusRevision||busy||$('start').disabled||document.documentElement.dataset.operationBusy==='true')return;
+      if(value.browser_sessions)renderBrowserSessions(value.browser_sessions);
       renderUpkeep(value.maintenance);document.dispatchEvent(new CustomEvent('envscope-maintenance-status',{detail:value.maintenance}));
       if(!$('page-upkeep').hidden){
         renderProcessGuard(value.process_guard,value.settings);renderTimezoneService(value.timezone_service);

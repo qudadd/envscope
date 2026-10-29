@@ -25,6 +25,20 @@ def main(output=None):
         operations = Operations(store, directory, discoverer=lambda: [], region_lookup=lambda params: {'state':'unavailable','reason':'Offline native fixture'}, legacy=LegacyBridge(home=directory, runner=Mock(side_effect=AssertionError('No vendor execution'))),
                                 environment_reader=lambda: {'platform':platform.system(),'locale':'en-US','network':{'timezone_id':'UTC'}})
         assert operations.legacy._vendor_integrity()['verified'], 'Bundled upstream bytes and filenames must survive installation'
+        from .browser_sessions import SessionStore,validate_fixture_root
+        from .accounts import AccountError
+        try:
+            validate_fixture_root(Path.home())
+        except AccountError:
+            pass
+        else:
+            raise AssertionError('Browser fixture entry must refuse real home')
+        sessions = SessionStore(directory/'.envscope/browser-sessions',running=lambda _:False,alive=lambda *_:False,pause=lambda _:None)
+        browser_profile = sessions.create('a'*32)
+        (browser_profile/'Cookies').write_bytes(b'FROZEN_PRIVATE_BROWSER_FIXTURE')
+        sessions.launched('a'*32,Mock(pid=123456))
+        assert sessions.cleanup()['removed']==1
+        result.update(browser_session_fixture=True,native_browser_registry=True)
         # Frozen imports, persisted consent and ZIP privacy on disposable data.
         import base64
         from io import BytesIO

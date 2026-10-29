@@ -25,6 +25,9 @@ jobs:
       - name: Independent .NET CSNAP001 exchange (fixtures only)
         if: runner.os == 'Windows'
         run: python -m scripts.csnap_acceptance
+      - name: Detached browser cleanup after parent exit (owned processes only)
+        if: runner.os != 'Linux'
+        run: python -m scripts.browser_session_acceptance
       - run: node --test tests/browser.test.mjs
       - run: node --check envscope/web/app.mjs
       - run: node --check envscope/web/controls.mjs
@@ -60,6 +63,7 @@ jobs:
       - run: python -m scripts.desktop_ui_smoke
       - run: python -m scripts.target_environment_smoke
       - run: python -m scripts.coverage_smoke
+      - run: python -m scripts.browser_recovery_smoke
       - run: python -m scripts.selection_smoke
       - run: python -m scripts.check_preferences_smoke
       - run: python -m scripts.region_lookup_smoke

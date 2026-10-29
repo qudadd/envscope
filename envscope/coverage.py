@@ -18,7 +18,7 @@ FEATURES = (
     ('client','代理客户端选择','native','settings','原生检测目标；macOS 原版核心可另执行 set-client。'),
     ('fingerprint','设备、显示与虚拟化资料','native','tools','Windows / macOS 原生只读采集，不根据中文字体或虚拟机推断封禁风险。'),
     ('cli-info','CLI 安装与多入口检查','native','tools','只读路径、包元数据与配置体积；未知版本不执行任意发现的程序。'),
-    ('browser','临时浏览器','browser','tools','独立资料、不继承扩展或 Cookie，限制非代理 UDP；不等于防火墙隔离。'),
+    ('browser','临时浏览器','browser','tools','独立资料、不继承日常 Cookie、限制非代理 UDP；独立清理进程与重启恢复，使用中或无法核实则保留。不等于防火墙隔离。'),
     ('snapshot','加密存档导出与导入','native','accounts','两平台 .envsnap 与原版 Windows .csnap；加密、认证与导出逐文件回读，只导出非活动槽位、导入空槽位。.csnap 保持原 A–D 槽位。'),
     ('dmg','原版加密 DMG 兼容','native-mac','accounts','macOS 原生 A–D 导入 / 导出、只读挂载、逐文件回读与遗留暂存清理；Windows 使用 .envsnap。'),
     ('proxy','明确代理连接诊断','native','tools','HTTP / HTTPS / SOCKS5 传输验证；匿名 401 不等于登录成功。'),
