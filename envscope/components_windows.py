@@ -105,7 +105,8 @@ function Restore($r) {
  if($live.present){if(-not(Same $live $r.before $false)){throw 'later task change'}}else{
   $xml=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($r.before.definition))
   $service=New-Object -ComObject 'Schedule.Service';$service.Connect();$folder=$service.GetFolder('\')
-  [void]$folder.RegisterTask($TaskName,$xml,50,$Actor,$null,3,$r.before.security)
+  $created=$folder.RegisterTask($TaskName,$xml,50,$Actor,$null,3,$r.before.security)
+  $created.SetSecurityDescriptor($r.before.security,16)
  }
  $live=ReadTask;if(-not(Same $live $r.before $false)){
   $xml=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($r.before.definition))

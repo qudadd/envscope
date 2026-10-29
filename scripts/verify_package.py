@@ -23,6 +23,7 @@ def verify(read, names):
     assert actual == set(manifest["files"]) | {MANIFEST_NAME}, "unexpected or missing vendor files"
     for path in ("index.html", "minimal.css", "app.mjs", "logic.mjs", "controls.mjs", "diagnosis.mjs", "guide.mjs", "inspection.mjs", "connection.mjs", "desktop.mjs", "target.mjs", "coverage.mjs", "region_choices.mjs", "watchdog_ui.mjs", "process_guard_ui.mjs", "account_recovery_ui.mjs", "routing_ui.mjs", "timezone_ui.mjs", "network_ui.mjs", "client_ui.mjs"):
         assert read("envscope/web/" + path), "missing UI resource"
+    assert read('envscope/web/components_ui.mjs'), 'missing component migration UI'
     print("Verified full pinned vendor bundle and all desktop UI resources.")
 
 

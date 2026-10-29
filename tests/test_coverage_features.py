@@ -175,7 +175,8 @@ class EnvironmentCoverageTests(unittest.TestCase):
         running = {'registered':True,'enabled':True,'running':True}
         self.assertEqual(guard_finding(running,{'client':'sing-box'}).status,'unknown')
         self.assertEqual(guard_finding({**running,'configured_mode':'clash-verge'},{'client':'sing-box'}).status,'fail')
-        self.assertEqual(guard_finding({**running,'configured_mode':'sing-box'},{'client':'sing-box'}).status,'pass')
+        self.assertEqual(guard_finding({**running,'configured_mode':'sing-box'},{'client':'sing-box'}).status,'unknown')
+        self.assertEqual(guard_finding({**running,'identity_verified':True,'configured_mode':'sing-box'},{'client':'sing-box'}).status,'pass')
         with tempfile.TemporaryDirectory() as directory:
             source=Path(directory).resolve()/'guard';source.write_text('MODE="sing-box"\n')
             self.assertEqual(installed_guard_mode('Darwin',source)['configured_mode'],'sing-box')

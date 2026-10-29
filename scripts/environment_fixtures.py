@@ -63,7 +63,7 @@ def fixture(home, settings, system='Windows', fault=None, browser=None):
                        'pac_configured': False, 'endpoints': [PROXY] if mode == 'http_proxy' else [], 'bypass': {}}},
              'listeners': [{'endpoint': PROXY, 'tcp_accepts': True}] if mode == 'http_proxy' else []}
     runtime = {'status': 'pass', 'reason': 'fixture rules', 'runtime': {'tun_enabled': mode == 'tun'}}
-    guard = {'registered': True, 'enabled': True, 'running': True, 'configured_mode':settings.get('client','auto')}
+    guard = {'registered': True, 'enabled': True, 'running': True, 'identity_verified': True, 'configured_mode':settings.get('client','auto')}
     if fault == 'missing_cli':
         cli['installation_count'] = 0
     elif fault == 'missing_desktop':

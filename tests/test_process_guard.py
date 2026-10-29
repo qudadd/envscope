@@ -35,7 +35,7 @@ class GuardIOFixture:
     def snapshot(self):
         return deepcopy(self.observation)
     def legacy(self):
-        return {'rows': [{'id': 'guard', 'present': self.old_guard, 'registered': self.old_guard}]}
+        return {'rows': [{'id': 'guard', 'owned': True, 'present': self.old_guard, 'registered': self.old_guard}]}
     def identity(self):
         return {'pid': 12345, 'created': 1.0, 'exe': 'fixture-not-running'}
     def alive(self, *args):
@@ -173,6 +173,27 @@ class ProcessGuardTests(unittest.TestCase):
         value['running'] = True
         self.assertEqual(guard_finding(value, {}).status, Status.PASS)
         self.assertEqual(guard_finding(value, {'client':'surge'}).status, Status.FAIL)
+
+    def test_legacy_conflict_before_consent_during_review_and_in_worker_blocks_signals(self):
+        self.io.old_guard = True
+        self.assertEqual(self.guard.prepare(self.report)['state'], 'blocked')
+        self.io.old_guard = False; plan = self.guard.prepare(self.report)
+        self.io.old_guard = True
+        self.assertEqual(self.guard.enable(plan['plan_id'], self.report, True)['state'], 'retest_required')
+        self.assertFalse(self.scheduler.calls)
+        self.io.old_guard = False; self.enable(); self.guard.pulse()
+        self.io.old_guard = True; self.io.online = False; self.io.observation['targets'] = [{'pid': 77}]
+        self.assertEqual(self.guard.pulse()['state'], 'conflict')
+        self.assertFalse(self.guard.status()['running']); self.assertFalse(self.io.stops)
+        self.io.legacy = lambda: {'rows': [None]}
+        self.assertEqual(self.guard.pulse()['state'], 'conflict'); self.assertFalse(self.io.stops)
+
+    def test_old_policy_or_old_worker_cannot_prove_new_protection_at_same_executable(self):
+        self.enable(); self.guard.pulse()
+        pulse = self.guard.read('pulse', {}); pulse.pop('policy_version'); self.guard.write('pulse', pulse)
+        self.assertEqual(self.guard.status()['state'], 'outdated'); self.assertFalse(self.guard.status()['running'])
+        self.guard.pulse(); config = self.guard.config(); config.pop('policy_version'); self.guard.write('config', config)
+        self.assertEqual(self.guard.pulse()['state'], 'outdated'); self.assertFalse(self.guard.status()['running'])
 
     def test_private_event_rotation_preserves_complete_journal(self):
         for i in range(110): self.guard.event('fixture', str(i))

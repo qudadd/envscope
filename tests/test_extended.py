@@ -283,12 +283,13 @@ class MeasurementIntegrationTests(unittest.TestCase):
         transport.get.assert_not_called()
 
     def test_disabled_registered_guard_is_not_running_pass(self):
-        with patch("envscope.baseline.platform.system", return_value="Windows"), patch("envscope.baseline.subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout='{"registered":true,"enabled":false,"running":false}')):
+        snapshot = {'rows': [{'id': 'guard', 'owned': True, 'present': True, 'registered': True, 'enabled': False, 'running': False}]}
+        with patch("envscope.baseline.platform.system", return_value="Windows"), patch('envscope.process_guard.NativeGuardIO.legacy', return_value=snapshot), patch('envscope.process_guard.ProcessGuard.status', return_value={'state':'disabled'}):
             value = guard_state()
         self.assertTrue(value["registered"])
         self.assertFalse(value["enabled"])
         self.assertFalse(value["running"])
-        with patch("envscope.baseline.platform.system", return_value="Windows"), patch("envscope.baseline.subprocess.run", return_value=subprocess.CompletedProcess([], 1, stdout="")):
+        with patch('envscope.process_guard.NativeGuardIO.legacy', side_effect=ValueError('fixture denied')):
             self.assertEqual(guard_state()["error"], "unavailable")
 
     def test_curl_metrics_certificate_and_clock_headers_are_selected_only(self):

@@ -23,6 +23,7 @@ FEATURES = (
     ('dmg','原版加密 DMG 兼容','native-mac','accounts','macOS 原生 A–D 导入 / 导出、只读挂载、逐文件回读与遗留暂存清理；Windows 使用 .envsnap。'),
     ('proxy','明确代理连接诊断','native','tools','HTTP / HTTPS / SOCKS5 传输验证；匿名 401 不等于登录成功。'),
     ('guard','代理故障进程守护','native','upkeep','独立用户任务每 10 秒监测指定端口或网卡 / 内核，按批准范围停止桌面进程；心跳、创建时间核对和日志，不是防火墙。'),
+    ('components','旧后台任务迁移与恢复','native','upkeep','核对固定任务的命令、用户与原脚本，审核后保存定义和权限再移除登记；可整笔恢复，账号、脚本与旧界面保留。'),
     ('watchdog','时区与地区格式守护','native','upkeep','按批准基线恢复并读回；macOS 可前台授权原生 60 秒系统服务，支持更新、移除与恢复旧基线。Windows 权限不足时转手动。'),
     ('routing','域名与 UDP 路由维护','native','upkeep','Clash Verge 原生预览、保留脚本、16 条置顶规则、加载读回与恢复；其他客户端提供手动步骤，运行规则不等于流量证明。'),
     ('upkeep','持续检查与配置保持','native','upkeep','用户任务 / LaunchAgent；批准字段与系统基线恢复，代理离线重开所选客户端，冷却、复检及按日事件日志。'),

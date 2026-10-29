@@ -48,6 +48,13 @@ def retirable(row):
     except (ValueError, TypeError): return False
 
 
+def public_receipt(receipt):
+    value = {k: receipt[k] for k in ('format', 'fixture', 'id', 'state', 'roles', 'release', 'at_epoch') if k in receipt}
+    value['original'] = [{k: row[k] for k in ('id', 'present', 'registered', 'enabled', 'running', 'definition_sha', 'script_sha', 'mode', 'group') if k in row}
+                         for row in receipt.get('original', []) if isinstance(row, dict)]
+    return value
+
+
 class UnavailableComponents:
     fixture = True
     def snapshot(self): raise ValueError('隔离环境未提供真实旧组件适配器')
@@ -86,7 +93,7 @@ class ComponentMigration:
             return {**deepcopy(self.cached[1]), 'cached': True}
         try:
             snapshot, receipt = self._snapshot(), self.io.status()
-            value = {'state': receipt.get('state', 'not_configured'), 'receipt': receipt,
+            value = {'state': receipt.get('state', 'not_configured'), 'receipt': public_receipt(receipt),
                      'rows': [{k: r.get(k) for k in ('id', 'title', 'scope', 'label', 'path', 'script', 'present', 'registered', 'owned', 'running', 'enabled', 'error', 'reason')} for r in snapshot['rows']],
                      'can_restore': bool(receipt.get('id') and receipt.get('state') in (*PENDING, 'committed')),
                      'needs_recovery': receipt.get('state') in PENDING,

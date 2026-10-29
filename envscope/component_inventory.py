@@ -244,5 +244,6 @@ def windows_snapshot(layout, sid=None, *, runner=subprocess.run, parse_args=None
 
 def blocking(snapshot, role='guard'):
     if not isinstance(snapshot, dict) or not isinstance(snapshot.get('rows'), list): return True
+    if any(not isinstance(r, dict) for r in snapshot['rows']): return True
     rows = [r for r in snapshot['rows'] if r.get('id') == role]
-    return len(rows) != 1 or rows[0].get('present') is not False or rows[0].get('registered') is not False or bool(rows[0].get('error'))
+    return len(rows) != 1 or rows[0].get('owned') is not True or rows[0].get('present') is not False or rows[0].get('registered') is not False or bool(rows[0].get('error'))

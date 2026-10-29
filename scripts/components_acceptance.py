@@ -115,7 +115,7 @@ def mac(home, result):
     setup += '/bin/mkdir '+shlex.quote(str(system_root))+'; /bin/chmod 755 '+shlex.quote(str(system_root))+'; '
     setup += '/bin/mkdir '+shlex.quote(str(layout.daemons))+' '+shlex.quote(str(layout.scripts))+'; '
     for name in ('claude-bodyguard.sh', 'tz-watchdog.sh', 'claude-switch.sh'):
-        setup += '/bin/cp '+shlex.quote(str(source))+' '+shlex.quote(str(layout.scripts/name))+'; /bin/chown 0:0 '+shlex.quote(str(layout.scripts/name))+'; /bin/chmod 755 '+shlex.quote(str(layout.scripts/name))+'; '
+        setup += '/bin/cp '+shlex.quote(str(source))+' '+shlex.quote(str(layout.scripts/name))+'; /usr/sbin/chown 0:0 '+shlex.quote(str(layout.scripts/name))+'; /bin/chmod 755 '+shlex.quote(str(layout.scripts/name))+'; '
     definitions = {}
     for role in labels:
         value = {'Label': labels[role], 'ProgramArguments': ['/bin/bash', str(layout.script(role))]+(['update', '--auto'] if role.startswith('update.') else []),
@@ -125,10 +125,11 @@ def mac(home, result):
         if role == 'update.user': layout.definition(role).write_bytes(definitions[role])
         else:
             stage = home/(role+'.plist'); stage.write_bytes(definitions[role])
-            setup += '/bin/cp '+shlex.quote(str(stage))+' '+shlex.quote(str(layout.definition(role)))+'; /bin/chown 0:0 '+shlex.quote(str(layout.definition(role)))+'; /bin/chmod 644 '+shlex.quote(str(layout.definition(role)))+'; '
+            setup += '/bin/cp '+shlex.quote(str(stage))+' '+shlex.quote(str(layout.definition(role)))+'; /usr/sbin/chown 0:0 '+shlex.quote(str(layout.definition(role)))+'; /bin/chmod 644 '+shlex.quote(str(layout.definition(role)))+'; '
     created = False; user_loaded = False
     try:
-        command(['/usr/bin/sudo', '-n', '/bin/sh', '-c', 'set -eu;'+setup]); created = True
+        created = True
+        command(['/usr/bin/sudo', '-n', '/bin/sh', '-c', 'set -eu;'+setup])
         command(['/usr/bin/sudo', '-n', '/bin/launchctl', 'bootstrap', 'system', str(layout.definition('guard'))])
         command(['/bin/launchctl', 'bootstrap', 'gui/'+str(os.getuid()), str(layout.definition('update.user'))]); user_loaded = True
         def runner(args, **kwargs):

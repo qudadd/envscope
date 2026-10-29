@@ -5,7 +5,6 @@ import ipaddress
 import os
 import platform
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -54,37 +53,32 @@ def tunnel(inventory):
 
 
 def guard_state():
-    from .process_guard import ProcessGuard
+    from .process_guard import ProcessGuard, NativeGuardIO
     from .state import StateStore
-    native = ProcessGuard(StateStore()).status()
-    if native.get('state') != 'disabled' or native.get('scheduler', {}).get('present'):
-        return {'registered': native.get('scheduler', {}).get('registered') is True,
-                'enabled': native.get('enabled') is True, 'running': native.get('running') is True,
-                'kind': 'envscope-process-guard', 'configured_mode': native.get('baseline', {}).get('client'),
-                'state': native.get('state'), 'heartbeat': native.get('heartbeat'), 'note': native.get('reason'),
-                'error': None if native.get('running') else 'native_guard_not_verified'}
+    from .component_inventory import blocking
+    from .accounts import AccountError
     try:
-        if platform.system() == "Windows":
-            script = "$t=Get-ScheduledTask -TaskName 'ClaudeBodyguard' -ErrorAction SilentlyContinue; if($t){@{registered=$true;enabled=([string]$t.State -ne 'Disabled');running=([string]$t.State -eq 'Running')}|ConvertTo-Json -Compress}else{'{\"registered\":false}'}"
-            command = [shutil.which("powershell.exe") or "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script]
-        elif platform.system() == "Darwin":
-            command = ["/bin/launchctl", "print", "system/local.claude-bodyguard"]
-        else:
-            return {"registered": False, "error": "unsupported"}
-        r = subprocess.run(command, capture_output=True, text=True, timeout=4,
-                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        if platform.system() == "Windows":
-            if r.returncode != 0:
-                raise ValueError("guard query unavailable")
-            value = json.loads(r.stdout)
-            if not isinstance(value, dict):
-                raise ValueError("invalid guard response")
-            return {"registered": value.get("registered") is True, "enabled": value.get("enabled") is True,
-                    "running": value.get("running") is True, "kind": "scheduled-task", **installed_guard_mode('Windows')}
-        return {"registered": r.returncode == 0 and bool(r.stdout.strip()), "enabled": r.returncode == 0,
-                "running": bool(re.search(r"\bstate\s*=\s*running\b", r.stdout)), "kind": "launchd", **installed_guard_mode('Darwin')}
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        return {"registered": False, "error": "unavailable"}
+        io = NativeGuardIO(Path.home())
+        legacy = io.legacy()
+        native = ProcessGuard(StateStore(), io=io, legacy_reader=lambda: legacy).status()
+        if native.get('state') != 'disabled' or native.get('scheduler', {}).get('present'):
+            return {'registered': native.get('scheduler', {}).get('registered') is True,
+                    'enabled': native.get('enabled') is True, 'running': native.get('running') is True,
+                    'kind': 'envscope-process-guard', 'configured_mode': native.get('baseline', {}).get('client'),
+                    'state': native.get('state'), 'heartbeat': native.get('heartbeat'), 'note': native.get('reason'),
+                    'legacy_conflict': blocking(legacy),
+                    'error': None if native.get('running') else 'native_guard_not_verified'}
+        rows = [r for r in legacy.get('rows', []) if r.get('id') == 'guard']
+        if len(rows) != 1: raise ValueError('legacy identity unavailable')
+        row = rows[0]
+        return {'registered': row.get('registered') is True, 'enabled': row.get('enabled') is True,
+                'running': row.get('running') is True, 'present': row.get('present'),
+                'identity_verified': row.get('owned') is True and not row.get('error'),
+                'kind': 'scheduled-task' if platform.system() == 'Windows' else 'launchd',
+                'error': row.get('error'), 'reason': row.get('reason'),
+                **installed_guard_mode(platform.system())}
+    except (OSError, ValueError, TypeError, KeyError, AccountError, subprocess.TimeoutExpired):
+        return {'registered': False, 'identity_verified': False, 'error': 'unavailable'}
 
 
 def installed_guard_mode(system, path=None):
@@ -112,14 +106,14 @@ def guard_finding(guard, preferences):
         active = guard.get('registered') and guard.get('enabled') and guard.get('running')
         expected, mode = preferences.get('client', 'auto'), guard.get('configured_mode')
         mismatch = bool(mode and expected != 'auto' and mode != expected)
-        state = Status.FAIL if mismatch else Status.PASS if active else Status.UNKNOWN
+        state = Status.FAIL if mismatch else Status.PASS if active and not guard.get('legacy_conflict') and not guard.get('error') else Status.UNKNOWN
         return baseline_finding('guard', '守护进程', state,
                                 '原生进程守护已收到有效心跳，工作进程与任务归属已核实' if state == Status.PASS else '原生进程守护未确认正常，请在持续维护中处理',
                                 [guard], ['10 秒轮询及停止过程存在流量窗口；只守护已识别的当前用户 Claude 桌面，不是防火墙。'])
     active = guard.get('registered') and guard.get('enabled') and guard.get('running')
     expected, mode = preferences.get('client','auto'), guard.get('configured_mode')
     mismatch = bool(mode and expected!='auto' and mode!=expected)
-    status = Status.FAIL if mismatch else Status.UNKNOWN if guard.get('error') or active and not mode else Status.PASS if active else Status.WARN
+    status = Status.FAIL if mismatch else Status.UNKNOWN if guard.get('error') or active and (not mode or guard.get('identity_verified') is not True) else Status.PASS if active else Status.WARN
     message = '守护配置仍使用 '+str(mode)+'，与当前选择 '+expected+' 不一致' if mismatch else '守护任务启用且运行，已读取其客户端配置' if active and mode else '任务在运行，但未读到守护客户端配置' if active else '守护任务未运行、已停用或尚未安装'
     return baseline_finding('guard','守护进程',status,message,[guard],
                             ['只核对任务状态与安装文件；不证明运行进程已加载最新配置。更换客户端后需重新安装 / 重启守护并复检。',
