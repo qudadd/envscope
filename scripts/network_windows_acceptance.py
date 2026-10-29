@@ -20,6 +20,8 @@ def main():
         raise SystemExit('Windows network fixture requires opted-in disposable CI')
     ps=powershell()
     def run(body,check=True):
+        body=("$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);"
+              "$env:PSModulePath=Join-Path ([Environment]::GetFolderPath('Windows')) 'System32/WindowsPowerShell/v1.0/Modules';"+body)
         value=subprocess.run([ps,'-NoProfile','-NonInteractive','-Command',body],capture_output=True,timeout=30,
                              creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if check and value.returncode:raise RuntimeError('Owned Windows fixture failed: '+value.stderr.decode('utf-8',errors='replace')[-1600:])
