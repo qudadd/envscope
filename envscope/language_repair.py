@@ -16,6 +16,7 @@ from .target_environment import fingerprint
 
 PENDING={'prepared','writing','rolling_back','partial'}
 STATES=PENDING|{'committed','rolled_back','not_applied'}
+_UNSET=object()
 
 
 class LanguageIO:
@@ -100,7 +101,7 @@ class LanguageRepair:
             if before==after:return {'state':'guided','reason':'应用语言偏好已符合目标，无需重复改写；实际界面请在 Claude 中确认。'}
             self._fresh(report);token=secrets.token_urlsafe(20)
             self.plans={token:{'deadline':self.clock()+90,'report':{k:report[k] for k in ('created_at','mode','diagnosis')},
-                'fingerprint':fingerprint(settings),'previous':previous,'before':before,'after':after,'id':secrets.token_hex(16)}}
+                'report_id':report.get('report_id'),'fingerprint':fingerprint(settings),'previous':previous,'before':before,'after':after,'id':secrets.token_hex(16)}}
             return {'state':'planned','plan_id':token,'effects':[
                 '先请求正常退出已识别的 Claude 桌面，请保存工作；退出未确认就停止，不强制退出、不交换账号资料。',
                 '为当前用户的 Claude 应用专用 AppleLanguages 保存带类型的原值、缺省状态与恢复记录。',
@@ -112,11 +113,16 @@ class LanguageRepair:
         except (OSError,ValueError,RuntimeError) as error:
             return {'state':'guided','reason':str(error)[:260],'manual':['macOS 可在系统设置 → 通用 → 语言与地区 → 应用程序中为 Claude 选择语言；Windows 请在 Claude 实际支持的设置中确认。']}
 
-    def apply(self,token,confirmed=False):
+    def apply(self,token,confirmed=False,current_report=_UNSET):
         if confirmed is not True:return {'state':'confirmation_required'}
         plan=self.plans.get(token) if isinstance(token,str) else None
         if (not plan or self.clock()>plan['deadline'] or not SolutionPlans._current(plan['report'])
             or plan['fingerprint']!=fingerprint(self.store.settings())):return {'state':'retest_required','reason':'语言方案或检测已过期，请重新检测并预览'}
+        if current_report is not _UNSET:
+            try:self._fresh(current_report)
+            except (ValueError,OSError,RuntimeError):return {'state':'retest_required','reason':'本轮最新检测未满足应用语言设置条件，请重新检测并预览'}
+            if not plan['report_id'] or current_report.get('report_id')!=plan['report_id']:
+                return {'state':'retest_required','reason':'本机检测已更新，旧语言方案不再执行，请按最新结果重新预览'}
         with self.transaction_lock(),self.locker._lock():
             if self._record()!=plan['previous'] or self.io.snapshot()!=plan['before']:
                 return {'state':'retest_required','reason':'应用语言或恢复记录已改变，没有覆盖'}

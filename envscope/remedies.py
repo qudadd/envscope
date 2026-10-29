@@ -690,11 +690,11 @@ class SolutionPlans:
             if task == "config":
                 continue
             if task=='client':
-                value=self.client.apply(plan['client'],True)
+                value=self.client.apply(plan['client'],True,report)
                 return {**value,'before':plan['before'],'steps':[{'step':'client',**value}],'backups':backups,
                         'next_review':value.get('state')=='completed','needs_retest':value.get('needs_retest',False)}
             if task=='language':
-                value=self.language.apply(plan['language'],True)
+                value=self.language.apply(plan['language'],True,report)
                 outputs.append({'step':task,**value})
                 if value['state']!='completed':return {**value,'steps':outputs,'backups':backups,'before':plan['before'],'needs_retest':True}
                 continue

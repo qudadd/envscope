@@ -97,7 +97,11 @@ class LanguageTests(unittest.TestCase):
         self.assertEqual(restarted.restore(restore['plan_id'],True)['state'],'completed');self.assertEqual(self.io.snapshot(),before)
 
     def test_later_app_edits_and_changed_preview_are_not_overwritten(self):
-        plan=self.plan();self.prefs.values['any']=present('de-DE')
+        plan=self.plan()
+        self.assertEqual(self.manager.apply(plan['plan_id'],True,None)['state'],'retest_required')
+        newer={**self.report,'report_id':'new-audit'}
+        self.assertEqual(self.manager.apply(plan['plan_id'],True,newer)['state'],'retest_required')
+        self.assertFalse(self.prefs.writes);self.prefs.values['any']=present('de-DE')
         self.assertEqual(self.manager.apply(plan['plan_id'],True)['state'],'retest_required');self.assertEqual(self.io.closes,0)
         self.apply();restore=self.manager.prepare_restore();self.prefs.values['any']=present('fr-CA')
         self.assertEqual(self.manager.restore(restore['plan_id'],True)['state'],'retest_required')

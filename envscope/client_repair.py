@@ -25,6 +25,7 @@ from .target_environment import build_findings,fingerprint
 
 PENDING={'prepared','stopping','writing','starting','rolling_back','partial'}
 STATES=PENDING|{'committed','rolled_back','not_applied'}
+_UNSET=object()
 
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
@@ -142,7 +143,9 @@ class ClientRepair:
                 or app['mode'] not in ('clash-verge','shadowrocket','clashx','surge','other')):
             raise ValueError('客户端原程序记录无法核对，保留备份')
         if value['tun']:
-            if Path(value.get('directory','')) not in self.io.directories():raise ValueError('客户端恢复目录不在已识别范围内')
+            directory=value.get('directory')
+            if not isinstance(directory,str) or not Path(directory).is_absolute() or Path(directory) not in self.io.directories():
+                raise ValueError('客户端恢复目录不在已识别范围内')
             validate_model(value.get('before'));validate_model(value.get('after'))
             backup=read(self.root/ident/'before.private.bin')
             if backup is None or digest(backup)!=value.get('before_hash') or tun_model(backup)!=value['before']:
@@ -202,7 +205,7 @@ class ClientRepair:
             token=secrets.token_urlsafe(20)
             self.plans={token:{'deadline':self.clock()+90,'settings':fingerprint(settings),'app':app,'state':state,
                 'previous':previous,'context':context,'tun':tun,'restart':tun or restart,'allow_force':allow_force,
-                'report':{k:report[k] for k in ('created_at','mode','diagnosis')},'id':secrets.token_hex(16)}}
+                'report':{k:report[k] for k in ('created_at','mode','diagnosis')},'report_id':report.get('report_id'),'id':secrets.token_hex(16)}}
             effects=['先请求正常退出已识别的 Claude 桌面；请保存工作。账号资料不交换、不调用登出，完成复检前不自动重开 Claude。',
                      '只处理所选程序：'+app['label']+'（'+app['path']+'）；启动前再次核对位置和文件摘要。']
             if tun:
@@ -227,12 +230,17 @@ class ClientRepair:
             self.sleep(1)
         return last
 
-    def apply(self,token,confirmed=False):
+    def apply(self,token,confirmed=False,current_report=_UNSET):
         if confirmed is not True:return {'state':'confirmation_required'}
         plan=self.plans.get(token) if isinstance(token,str) else None
         if (not plan or self.clock()>plan['deadline'] or not SolutionPlans._current(plan['report'])
                 or plan['settings']!=fingerprint(self.store.settings())):
             return {'state':'retest_required','reason':'目标、检测或方案已过期，请重新检测并预览'}
+        if current_report is not _UNSET:
+            try:self._fresh(current_report)
+            except (ValueError,OSError,RuntimeError):return {'state':'retest_required','reason':'本轮最新检测未满足客户端修复条件，请重新检测并预览'}
+            if not plan['report_id'] or current_report.get('report_id')!=plan['report_id']:
+                return {'state':'retest_required','reason':'本机检测已更新，旧客户端方案不再执行，请按最新结果重新预览'}
         with self.transaction_lock(),self.locker._lock():
             if self._record()!=plan['previous']:return {'state':'retest_required','reason':'客户端恢复记录已改变，未覆盖'}
             app=self._app(plan['app']['id'],plan['app']);state=self.io.snapshot(app)

@@ -133,6 +133,11 @@ class ClientWorkflowTests(unittest.TestCase):
             self.assertEqual(value['state'],'planned');self.assertEqual(self.io.calls,[])
             self.assertEqual(post('client-apply',{'plan_id':value['plan_id']})['state'],'confirmation_required')
             self.assertEqual(server.last_raw_report['report_id'],report['report_id'])
+            server.last_raw_report={**report,'report_id':'new-audit'}
+            self.assertEqual(post('client-apply',{'plan_id':value['plan_id']},True)['state'],'retest_required')
+            server.last_raw_report=None
+            self.assertEqual(post('client-apply',{'plan_id':value['plan_id']},True)['state'],'retest_required')
+            self.assertEqual(self.io.calls,[]);server.last_raw_report=report
             self.assertEqual(post('client-apply',{'plan_id':value['plan_id']},True)['state'],'completed')
             self.assertIsNone(server.last_raw_report)
             status=post('client-status',{});self.assertTrue(status['can_restore'])

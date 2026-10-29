@@ -2,6 +2,7 @@
 from copy import deepcopy
 from datetime import datetime,timezone
 from pathlib import Path
+import json
 import tempfile
 import unittest
 from unittest.mock import Mock,patch
@@ -142,7 +143,10 @@ class ClientRepairTests(unittest.TestCase):
         self.setUp();plan=self.prepare();self.manager.apply(plan['plan_id'],True)
         self.io.actor=lambda:'another-user'
         self.assertEqual(self.manager.prepare_restore()['state'],'guided')
-        record=self.manager._record();(self.manager.root/record['id']/'before.private.bin').write_bytes(b'corrupt fixture')
+        record=self.manager._record();path=self.manager.root/record['id']/'record.private.json'
+        original=path.read_bytes();invalid={**record,'directory':['unexpected','type']};path.write_text(json.dumps(invalid))
+        self.assertEqual(self.manager.status()['state'],'invalid');self.assertEqual(self.manager.prepare(self.report,tun=True)['state'],'guided')
+        path.write_bytes(original);(self.manager.root/record['id']/'before.private.bin').write_bytes(b'corrupt fixture')
         self.assertEqual(self.manager.status()['state'],'invalid');self.assertFalse(self.manager.status()['can_restore'])
 
     def test_fresh_report_and_official_region_are_required_but_no_installer_runs(self):

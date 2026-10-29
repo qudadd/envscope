@@ -258,7 +258,7 @@ class Operations:
             if action=='language-status':return self.language_repair.status()
             if action=='language-restore-plan':return self.language_repair.prepare_restore()
             if action=='language-restore':return self.language_repair.restore(params.get('plan_id'),confirmed)
-            if action=='language-apply':return self.language_repair.apply(params.get('plan_id'),confirmed)
+            if action=='language-apply':return self.language_repair.apply(params.get('plan_id'),confirmed,report)
             if not report or params.get('report_id')!=report.get('report_id'):
                 return {'state':'retest_required','reason':'先完成新的目标检测，再预览应用语言设置。'}
             return self.language_repair.prepare(report)
@@ -271,7 +271,7 @@ class Operations:
             if action=='client-status':return self.client_repair.status()
             if action=='client-restore-plan':return self.client_repair.prepare_restore(allow_force=params.get('allow_force',False))
             if action=='client-restore':return self.client_repair.restore(params.get('plan_id'),confirmed)
-            if action=='client-apply':return self.client_repair.apply(params.get('plan_id'),confirmed)
+            if action=='client-apply':return self.client_repair.apply(params.get('plan_id'),confirmed,report)
             if not report or params.get('report_id')!=report.get('report_id'):
                 return {'state':'retest_required','reason':'先按当前目标重新检测，再预览客户端修复。'}
             return self.client_repair.prepare(report,params.get('app_id'),tun=params.get('tun',False),
