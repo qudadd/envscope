@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from functools import partial
 import unittest
 from unittest.mock import Mock
 from urllib.request import Request,ProxyHandler,build_opener
@@ -15,7 +16,7 @@ from envscope.client_config import tun_model
 from envscope.model import Finding,Status,make_report
 from envscope.operations import Operations
 from envscope.process_guard import ProcessGuard
-from envscope.service import make_server
+from envscope.service import make_server,DesktopHandler
 from envscope.state import StateStore
 from scripts.environment_fixtures import fixture,fixture_policy,target
 from tests.test_client_repair import ClientFixture
@@ -134,6 +135,12 @@ class ClientWorkflowTests(unittest.TestCase):
 
     def test_http_api_requires_current_report_and_invalidates_it_only_after_write(self):
         server=make_server(store=self.store,operations=self.ops,auditor=lambda *a,**k:client_findings(self.home,self.store,self.io,self.guard,browser=k.get('browser')))
+        response_locks=[]
+        class ObservedHandler(DesktopHandler):
+            def json_response(handler,status,value):
+                if handler.command=='POST' and status==200:response_locks.append(handler.server.audit_lock.locked())
+                return super().json_response(status,value)
+        server.RequestHandlerClass=partial(ObservedHandler,**server.RequestHandlerClass.keywords)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         opener=build_opener(ProxyHandler({}));origin='http://127.0.0.1:'+str(server.server_port)
         def post(action,params,confirmed=False):
@@ -156,10 +163,14 @@ class ClientWorkflowTests(unittest.TestCase):
             self.assertIsNone(server.last_raw_report)
             status=post('client-status',{});self.assertTrue(status['can_restore'])
             self.assertNotIn('fixture-only-token',json.dumps(status))
+            self.assertTrue(response_locks);self.assertFalse(any(response_locks),'A completed response must not retain the operation lock')
         finally:
             server.shutdown();server.server_close();thread.join(timeout=3)
 
     def test_read_only_status_poll_does_not_take_or_release_the_mutation_lock(self):
+        # This case measures HTTP lock semantics, not real OS task-query latency.
+        self.ops.maintenance.status=Mock(return_value={'state':'disabled'})
+        self.ops.timezone_service.status=Mock(return_value={'state':'not_applicable','supported':False})
         server=make_server(store=self.store,operations=self.ops)
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         opener=build_opener(ProxyHandler({}));origin='http://127.0.0.1:'+str(server.server_port)

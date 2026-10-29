@@ -135,12 +135,12 @@ class DesktopHandler(SimpleHTTPRequestHandler):
         if not self.server.audit_lock.acquire(blocking=False):
             self.json_response(409, {"error": "audit_running"})
             return
+        response_status=200
         try:
             if self.path == "/api/audit":
                 if not self.server.store.settings().get('environment_confirmed'):
-                    self.json_response(409, {'error': 'target_environment_required'})
-                    return
-                self.json_response(200, collect_report(self.server, snapshot, selected))
+                    response_status,response_value=409,{'error':'target_environment_required'}
+                else:response_value=collect_report(self.server,snapshot,selected)
             else:
                 def preflight():
                     if not self.server.last_browser or not self.server.store.settings().get('environment_confirmed'):
@@ -166,20 +166,23 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                     self.server.last_raw_report = None
                 if request["action"] in ("account-switch", "app-launch", "app-restart", "open-safe") and self.server.last_raw_report:
                     result["latest_report"] = redact(self.server.last_raw_report)
-                self.json_response(200, result)
+                response_value=result
         except PreflightError:
             value = {"state": "blocked", "reason": "操作前复检未通过，未提交启动请求，账号文件没有交换。"}
             if self.server.last_raw_report:
                 value["latest_report"] = redact(self.server.last_raw_report)
                 value["reasons"] = launch_gate(self.server.last_raw_report, self.server.store.settings())[1]
-            self.json_response(200, value)
+            response_value=value
         except (ValueError, AccountError) as error:
-            self.json_response(400, {"error": str(error)[:240]})
+            response_status,response_value=400,{"error":str(error)[:240]}
         except (OSError, subprocess.TimeoutExpired):
-            self.json_response(500, {"error": "operation_unavailable_or_deadline"})
+            response_status,response_value=500,{"error":"operation_unavailable_or_deadline"}
         finally:
-            self.server.audit_lock.release()
             self.server.last_activity = time.monotonic()
+            self.server.audit_lock.release()
+        # Completion is visible only after the operation is finished and the
+        # next request can acquire its lock (including immediate auto-retest).
+        self.json_response(response_status,response_value)
 
 
 def collect_report(server, snapshot, selected_checks=None):
