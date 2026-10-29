@@ -65,12 +65,16 @@ def daemon_bytes(layout):
 def bundle_worker():
     root=Path(__file__).resolve().parent/'native-runtime'
     try:
-        manifest=json.loads((root/'timezone-helper.json').read_text(encoding='utf-8'))
+        metadata=root/'timezone-helper.json'
+        if metadata.stat().st_size>65536:raise ValueError('oversized helper metadata')
+        manifest=json.loads(metadata.read_text(encoding='utf-8'))
         path=(root/'timezone-helper').resolve(strict=True)
     except (OSError,ValueError):
         raise ValueError('请使用完整 macOS 独立桌面包，本入口需要随附的原生时区辅助程序。') from None
-    if (manifest.get('format')!=1 or manifest.get('fixture') is not False or manifest.get('release')!=__release__
+    if (not isinstance(manifest,dict) or type(manifest.get('format')) is not int or manifest.get('format')!=1
+            or manifest.get('fixture') is not False or manifest.get('release')!=__release__
             or not isinstance(manifest.get('sha256'),str) or not SHA.fullmatch(manifest['sha256'])
+            or not 0<path.stat().st_size<=2*1024**2
             or _hash(path.read_bytes())!=manifest['sha256']):
         raise ValueError('随附的时区辅助程序校验失败，请重新获取完整桌面包。')
     return {'path':str(path),'sha256':manifest['sha256'],'release':manifest['release']}
@@ -156,7 +160,7 @@ trap 'exit 130' INT TERM HUP
 '''
     body+=f'/bin/cp {shlex.quote(worker["path"])} "$STAGE/lock-worker"\n/bin/chmod 755 "$STAGE/lock-worker"\n'
     body+=f'safe "$STAGE/lock-worker" && [ "$(digest "$STAGE/lock-worker")" = {shlex.quote(worker["sha256"])} ] || exit 79\n'
-    body+=f'/usr/bin/printf %s {shlex.quote(_encoded(script.encode()))} | /usr/bin/base64 -D | "$STAGE/lock-worker" --lifecycle\n'
+    body+=f'/usr/bin/printf %s {shlex.quote(_encoded(script.encode()))} | /usr/bin/base64 -D | /usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin LC_ALL=C HOME=/var/root "$STAGE/lock-worker" --lifecycle\n'
     return body
 
 
@@ -344,7 +348,7 @@ class NativeTimezoneIO:
         pending=(root/'pending').exists()
         if values['baseline'] and not pending:
             base=values['baseline']
-            if (base.get('format')!=1 or type(base.get('owner_uid')) is not int or base['owner_uid']<0
+            if (type(base.get('format')) is not int or base.get('format')!=1 or type(base.get('owner_uid')) is not int or base['owner_uid']<0
                     or base.get('helper_sha256')!=hashes['worker'] or daemon_bytes(self.layout)!=self.read(self.layout.daemon)):
                 raise ValueError('时区服务文件与安装记录不一致，请使用恢复入口或手动核对。')
             _zone(base.get('target'));_zone(base.get('original'))
@@ -379,7 +383,9 @@ class TimezoneService:
                 state,reason='conflict','系统时区守护由另一用户配置；请联系其本人或系统管理员。'
             elif not value['registered']:
                 state,reason='unregistered','服务文件存在，但系统未确认注册。可预览重新安装。'
-            elif (type(heartbeat.get('at_epoch')) not in (int,float) or not 0<=self.io.clock()-heartbeat['at_epoch']<180
+            elif (type(heartbeat.get('format')) is not int or heartbeat.get('format')!=1
+                  or heartbeat.get('release')!=base.get('release')
+                  or type(heartbeat.get('at_epoch')) not in (int,float) or not 0<=self.io.clock()-heartbeat['at_epoch']<180
                   or heartbeat.get('target')!=base['target'] or heartbeat.get('fixture') is not self.io.fixture
                   or heartbeat.get('initial') is not False):
                 state,reason='waiting','尚未收到当前基线的新心跳，请刷新；没有心跳不计为守护正常。'

@@ -78,11 +78,13 @@ class TimezoneServiceTests(unittest.TestCase):
     def test_status_requires_real_fresh_scheduled_heartbeat(self):
         self.installed()
         self.assertEqual(self.service.status()['state'],'waiting')
-        self.io.value['status']={'at_epoch':1000,'state':'healthy','target':'America/New_York','observed':'America/New_York','fixture':False,'initial':True}
+        self.io.value['status']={'format':1,'release':__release__,'at_epoch':1000,'state':'healthy','target':'America/New_York','observed':'America/New_York','fixture':False,'initial':True}
         self.assertEqual(self.service.status()['state'],'waiting')
         self.io.value['status']['initial']=False
         self.assertEqual(self.service.status()['state'],'active')
         self.io.value['status']['at_epoch']=0
+        self.assertEqual(self.service.status()['state'],'waiting')
+        self.io.value['status']['at_epoch']=1001
         self.assertEqual(self.service.status()['state'],'waiting')
         self.io.value['status']['at_epoch']=1000;self.io.value['status']['state']='paused'
         self.assertEqual(self.service.status()['state'],'attention')
