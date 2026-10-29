@@ -121,7 +121,7 @@ function Restore($r) {
   $created.SetSecurityDescriptor($r.before.security,16)
  }
  $live=ReadTask;if(-not(Same $live $r.before $false)){throw 'restore readback'}
- if($r.before.running -and $r.before.enabled){
+ if($r.before.running -and $r.before.enabled -and $live.state -ne 4 -and $live.instances -eq 0){
   $service=New-Object -ComObject 'Schedule.Service';$service.Connect();[void]$service.GetFolder('\').GetTask($TaskName).Run($null)
   $until=[DateTime]::UtcNow.AddSeconds(10);do{$live=ReadTask;if($live.state -eq 4 -or $live.instances -gt 0){break};Start-Sleep -Milliseconds 200}while([DateTime]::UtcNow -lt $until)
   if($live.state -ne 4 -and $live.instances -eq 0){throw 'prior running state unverified'}

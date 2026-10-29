@@ -54,7 +54,7 @@ def windows(home, result):
     setup = ("$ErrorActionPreference='Stop';$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
         "$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "+quote('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(source)+'"')+';'
         "$t=New-ScheduledTaskTrigger -AtLogOn;$p=New-ScheduledTaskPrincipal -UserId $sid -LogonType Interactive -RunLevel Limited;"
-        "$s=New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit ([TimeSpan]::Zero);"
+        "$s=New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel;"
         "Register-ScheduledTask -TaskName "+quote(marker)+" -Action $a -Trigger $t -Principal $p -Settings $s | Out-Null")
     installed = False
     try:
@@ -81,10 +81,25 @@ def windows(home, result):
             plan = subject.prepare(restore=True); assert plan['state'] == 'planned', plan
             value = subject.apply(plan['plan_id'], True); assert value['state'] == 'restored', value
             after = io.snapshot()['rows'][0]; assert after['running'] is running and after['enabled'] is running, after
+            if running:
+                # Simulate a crash after OS restoration but before the final
+                # public receipt. Retrying must not start a second instance,
+                # even when the original task permits parallel instances.
+                receipt=io.status();assert len(receipt['id'])==32
+                files=[layout.root/'latest.json',layout.root/('record-'+receipt['id']+'.private.json')]
+                script="$ErrorActionPreference='Stop';"
+                for file in files:
+                    script+='$p='+quote(str(file))+";$r=Get-Content -LiteralPath $p -Raw|ConvertFrom-Json;$r.state='prepared';[IO.File]::WriteAllText($p,($r|ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false));"
+                command([shell,'-NoProfile','-NonInteractive','-Command',script])
+                subject=ComponentMigration(StateStore(home/'state'),home,io=WindowsComponents(home,layout=layout,runner=runner))
+                plan=subject.prepare(restore=True);assert plan['state']=='planned',plan
+                assert subject.apply(plan['plan_id'],True)['state']=='restored'
+                probe="$s=New-Object -ComObject 'Schedule.Service';$s.Connect();[int]$s.GetFolder('\\').GetTask("+quote(marker)+").GetInstances(0).Count"
+                assert command([shell,'-NoProfile','-NonInteractive','-Command',probe]).stdout.decode().strip()=='1'
             if not running: command([shell, '-NoProfile', '-NonInteractive', '-Command', 'Enable-ScheduledTask -TaskName '+quote(marker)+'|Out-Null'])
         result['checks'] = ['actual COM read/stop/delete/create/readback', 'actor SID and DACL verified',
                             'strict boolean consent', 'disabled and stopped stay disabled', 'original running task resumes',
-                            'recovery after new process object', 'account marker unchanged', 'no vendor script execution']
+                            'recovery after new process object', 'interrupted restoration does not duplicate a parallel-capable task', 'account marker unchanged', 'no vendor script execution']
         assert preserve.read_bytes() == b'ACCOUNT_FIXTURE_ONLY'
         result['passed'] = True
     finally:
