@@ -134,4 +134,7 @@ ConvertTo-Json -InputObject $v -Depth 6 -Compress
             result["network_error"] = "platform_network_adapter_not_implemented"
     except (OSError, subprocess.TimeoutExpired, ValueError):
         result["network_error"] = "inventory_unavailable_or_deadline"
+    if result['platform'] == 'Windows':
+        from .wireguard import WireGuardReader
+        result.setdefault('network', {})['wireguard'] = WireGuardReader().collect()
     return result

@@ -9,6 +9,7 @@ FEATURES = (
     ('keep','跨账号保留技能文件','native','accounts','keep-in-workspace.txt 仅允许 skills/；身份、Cookie、凭据和设置禁止跨账号混合。'),
     ('fix','原版兼容核心修复','fix','tools','客户端 / TUN、网络、地区、应用语言、Code 和路由已另有原生入口；旧统一核心仍保留，调用前审核全部影响。'),
     ('client-repair','客户端启动与 TUN 修复','native','upkeep','所选程序正常启动 / 重开、Clash Verge TUN 偏好备份和验证；失败及中断可恢复，先复检再生成后续守护方案。'),
+    ('wireguard','WireGuard 服务与隧道基线','native-win','audit','Windows 具体隧道服务、所属进程、程序摘要、对应网卡与目标选路分别核对；进程守护固定同一基线。不会读取私钥或自动更换 VPN。'),
     ('application-language','Claude 应用语言与恢复','native-mac','upkeep','Mac 只处理已确认目标的 Claude 专用语言，保留多语言、缺省与 ByHost 原值；Windows 提供手动步骤。实际界面另行确认。'),
     ('system-network','IPv6 与 DNS 缓存修复','native','upkeep','读取接口、勾选 / 全选、一次确认后申请系统授权，原配置备份、独立读回、中断恢复；缓存刷新不可撤销，连接与出口另行复检。'),
     ('code','Code 配置修复与撤销','native','audit','备份、字段预览、写入、自动复检与可验证撤销。'),
@@ -36,8 +37,8 @@ def feature_catalog(legacy, browser):
     actions = {a['id']:a for a in legacy.get('actions', [])}
     rows = []
     for key,title,adapter,page,note in FEATURES:
-        if adapter == 'native-mac':
-            state = 'native' if legacy.get('platform') == 'Darwin' else 'not_upstream'
+        if adapter in ('native-mac', 'native-win'):
+            state = 'native' if legacy.get('platform') == ('Darwin' if adapter == 'native-mac' else 'Windows') else 'not_upstream'
         elif adapter == 'native':
             state = 'native'
         elif adapter == 'browser':
@@ -59,7 +60,7 @@ DIMENSIONS = (
     ('udp','04 / UDP 与浏览器',('udp.stun','browser.webrtc','browser.http_v4','browser.http_v6','baseline.ipv6'), '原生 STUN 与浏览器 ICE 分别测量；未响应不是无泄漏证明。'),
     ('device','05 / 设备与浏览器环境',('device.environment','browser.environment','baseline.language'), '显示字体数量、图形、虚拟化线索与浏览器环境；不伪造或随机化指纹。'),
     ('client','06 / 客户端与配置',('extra.desktop','extra.profile','extra.cli_paths','extra.cli_env','target.config','target.auth'), '识别安装、配置冲突、认证方式；不读取密钥，也不声称验证了订阅。'),
-    ('guard','07 / 后台保护',('baseline.proxy','baseline.tun','baseline.guard','extra.runtime_tun','extra.controller_bind'), '是否启动、是否配置、是否取得实际流量证据分别展示；进程轮询不是防火墙隔离。'),
+    ('guard','07 / 后台保护',('baseline.proxy','baseline.tun','baseline.guard','target.wireguard','target.tun_route','extra.runtime_tun','extra.controller_bind'), '是否启动、是否配置、是否取得实际流量证据分别展示；进程轮询不是防火墙隔离。'),
     ('account','08 / 账号与持续变化',('extra.account','extra.storage','baseline.ip_stability'), '本地存档完整性和历史出口变化可测；服务端画像、行为评分及封禁概率不可从本地推断。'),
 )
 

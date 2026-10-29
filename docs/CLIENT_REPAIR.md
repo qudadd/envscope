@@ -18,7 +18,7 @@
 
 ## 客户端范围
 
-Windows 从固定安装目录和已知软件的只读卸载注册表识别 Clash Verge、Mihomo Party、Clash Nyanpasu。
+Windows 从固定安装目录和已知软件的只读卸载注册表识别 Clash Verge、Mihomo Party、Clash Nyanpasu、WireGuard。
 不执行 PATH、卸载命令或任意用户输入。Mac 读取已知 `.app` 的 `CFBundleExecutable`，另外支持 Shadowrocket、ClashX / Pro、Surge。
 sing-box 没有统一图形入口，按原有服务方式启动，界面提供手动处理。
 

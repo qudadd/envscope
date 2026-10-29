@@ -4,7 +4,7 @@ import json
 import re
 
 DEFAULTS = {"environment_confirmed": False, "connection_mode": "inherit", "provider": "anthropic",
-            "auth_mode": "existing", "language": "", "ipv6_mode": "observe", "protection": "standard", "target_proxy": "", "usage_country": "", "region_profile": ""}
+            "auth_mode": "existing", "language": "", "ipv6_mode": "observe", "protection": "standard", "target_proxy": "", "usage_country": "", "region_profile": "", "wireguard_service": ""}
 FIELDS = set(DEFAULTS) | {"usage", "country", "timezone", "locale", "client", "proxy_group", "webrtc_policy", "allowed_ipv4", "allowed_ipv6", "require_guard", "require_rules"}
 USAGES = {"desktop": "Claude 桌面版", "cli": "Claude Code", "both": "桌面版与 Code", "web": "Claude 网页"}
 CONNECTIONS = {"direct": "直连", "http_proxy": "HTTP / 系统代理", "tun": "TUN / VPN"}
@@ -12,6 +12,9 @@ PROVIDERS = {"anthropic": "Anthropic 官方", "custom": "自定义接口", "bedr
 
 
 def validate(values):
+    from .wireguard import valid_service
+    if not valid_service(values['wireguard_service'], empty=True):
+        raise ValueError('WireGuard 隧道服务名称无效，请从读取结果选择')
     from .region_profiles import validate_profile
     validate_profile(values)
     if not isinstance(values['usage_country'], str) or values['usage_country'] and not re.fullmatch('[A-Za-z]{2}', values['usage_country']):
@@ -38,6 +41,10 @@ def validate(values):
             raise ValueError('请明确选择使用方式和连接方式')
         if values['target_proxy'] and values['connection_mode'] != 'http_proxy':
             raise ValueError('本机 HTTP 地址仅适用于 HTTP / 系统代理方式')
+        if values.get('client') == 'wireguard' and values['connection_mode'] != 'tun':
+            raise ValueError('WireGuard 请使用 TUN / VPN 连接方式')
+        if values['wireguard_service'] and values.get('client') != 'wireguard':
+            raise ValueError('具体隧道服务仅用于 WireGuard 模式')
         if values['ipv6_mode'] == 'allowlist' and not values['allowed_ipv6']:
             raise ValueError('验证 IPv6 允许范围前，请填写允许的网段')
         if values['protection'] == 'guarded' and values['connection_mode'] != 'tun':
@@ -51,7 +58,10 @@ def validate(values):
 
 
 def fingerprint(settings):
-    return hashlib.sha256(json.dumps({k: settings.get(k) for k in sorted(FIELDS)}, sort_keys=True).encode()).hexdigest()
+    # Adding an unused tunnel selector must not invalidate older, unrelated
+    # approved non-WireGuard policies. Any actual service selection is included.
+    fields = FIELDS - ({'wireguard_service'} if settings.get('client') != 'wireguard' and not settings.get('wireguard_service') else set())
+    return hashlib.sha256(json.dumps({k: settings.get(k) for k in sorted(fields)}, sort_keys=True).encode()).hexdigest()
 
 
 def summary(settings):
@@ -83,6 +93,7 @@ def suggest(settings, inventory, cli, proxies):
     return {'state': 'completed', 'observed': actual, 'proposed': proposed,
             'profiles': profiles(actual['system']),
             'proxies': [{'url': p['url']} for p in proxies if isinstance(p.get('url'), str)],
+            'wireguard': network.get('wireguard', {'platform': actual['system'], 'complete': False, 'services': [], 'error': 'unavailable'}),
             'note': '这是只读建议。确认仅保存检测目标，不会修改系统时区、语言、网络或账号。'}
 
 
@@ -121,6 +132,11 @@ def plan(settings):
     else:
         required.update(('baseline.tun', 'target.tun_route'))
         references.update(('extra.runtime_tun', 'extra.controller_bind', 'extra.target_route', 'baseline.rules', 'baseline.guard'))
+    if settings.get('client') == 'wireguard' and mode == 'tun':
+        required.add('target.wireguard')
+        # WireGuard is not a Clash controller and has no rule injection API.
+        excluded.update({k: 'WireGuard 不提供 Clash 控制器或规则脚本；此项不适用。' for k in
+                         ('extra.runtime_tun', 'extra.controller_bind', 'baseline.rules')})
     if mode != 'http_proxy':
         excluded.update({k: '所选方式通过系统路由连接，不要求 HTTP 代理客户端或监听端口。' for k in ('baseline.proxy', 'extra.proxy_layers', 'extra.proxy_listener', 'extra.proxy_bypass')})
     else:
@@ -129,7 +145,7 @@ def plan(settings):
         required.update(('baseline.proxy', 'baseline.tun', 'baseline.ipv6', 'udp.stun'))
         if settings.get('require_guard', True):
             required.add('baseline.guard')
-        if settings.get('require_rules', True):
+        if settings.get('require_rules', True) and settings.get('client') != 'wireguard':
             required.add('baseline.rules')
         for key in required:
             excluded.pop(key, None)
@@ -233,9 +249,19 @@ def build_findings(findings, settings):
         '在系统代理设置中按目标连接方式调整后复检。TUN 另查隧道状态；PAC、浏览器扩展及进程流量需在实际应用确认。',
         ['探测路径和配置一致不证明 Claude 进程全流量经过同一路径。'])
     if mode == 'tun':
-        adapters = first('system.inventory').get('network', {}).get('adapters', [])
+        network = first('system.inventory').get('network', {})
+        adapters = network.get('adapters', [])
+        wg_state, wg_row = None, None
+        if settings.get('client') == 'wireguard':
+            from .wireguard import select_service, finding as wireguard_finding
+            observed = network.get('wireguard', {})
+            results.append(wireguard_finding(observed, settings.get('wireguard_service', '')))
+            wg_state, wg_row = select_service(observed, settings.get('wireguard_service', ''))
         tunnels = [a for a in adapters if (a.get('Status') == 'Up' or 'UP' in a.get('flags', [])) and
                    re.search(r'TUN|TAP|Wintun|WireGuard|VPN|Tailscale|utun', str(a.get('InterfaceDescription', a.get('name', ''))), re.I)]
+        if settings.get('client') == 'wireguard':
+            tunnels = [a for a in adapters if wg_state == 'healthy' and a.get('Status') == 'Up'
+                       and str(a.get('Name', '')).casefold() == wg_row['interface'].casefold()]
         names = {a.get('Name', a.get('name')) for a in tunnels} - {None}
         indices = {a.get('ifIndex') for a in tunnels if type(a.get('ifIndex')) is int}
         addresses = set()
@@ -251,10 +277,15 @@ def build_findings(findings, settings):
         routes = [r for r in evidence('extra.target_route') if r.get('destination') in addresses]
         measured = [r for r in routes if not r.get('error') and (r.get('interface') or type(r.get('interface_index')) is int)]
         mismatched = [r for r in measured if r.get('interface') not in names and r.get('interface_index') not in indices or re.search(r'REJECT|BLACKHOLE', r.get('flags', ''), re.I)]
+        if settings.get('client') == 'wireguard':
+            mismatched = [r for r in measured if (r.get('interface') and str(r['interface']).casefold() not in {n.casefold() for n in names})
+                          or (type(r.get('interface_index')) is int and r['interface_index'] not in indices)
+                          or re.search(r'REJECT|BLACKHOLE', r.get('flags', ''), re.I)] if wg_state == 'healthy' else []
         route_ok = dns_ok and bool(addresses) and addresses <= {r.get('destination') for r in measured} and not mismatched
+        route_ok = route_ok and (wg_state == 'healthy' if settings.get('client') == 'wireguard' else True)
         add('tun_route', '目标地址的 TUN 选路', 'fail' if mismatched else 'pass' if route_ok else 'unknown',
             '所检查的目标地址经系统选择隧道接口' if route_ok else '目标地址存在非隧道选路' if mismatched else '目标选路证据不完整', routes,
-            '在代理客户端核对 TUN、自动路由和 IPv6 规则，再重新检测。', ['每个目标及地址族抽样一个解析地址；不等于进程全流量证明。'])
+            '在所选 WireGuard 隧道核对 AllowedIPs、隧道激活状态与 IPv6 路由，再复检；不会在这里改动私钥。' if settings.get('client') == 'wireguard' else '在代理客户端核对 TUN、自动路由和 IPv6 规则，再重新检测。', ['每个目标及地址族抽样一个解析地址；不等于进程全流量证明。'])
     clock = raw.get('extra.clock', {})
     add('clock', '系统时钟准确性', 'fail' if clock.get('status') == 'warn' else clock.get('status', 'unknown'), clock.get('summary', '尚未取得多个可信连接的日期样本'),
         evidence('extra.clock'), '启用系统自动设置时间并同步；时区不同不等于时钟错误。', ['HTTPS 日期比较不是 NTP 校时。'])

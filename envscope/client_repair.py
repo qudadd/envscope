@@ -140,7 +140,7 @@ class ClientRepair:
         app=value['app']
         if (not all(isinstance(app.get(k),str) and 0<len(app[k])<=32768 for k in ('id','mode','label','path','sha256'))
                 or not Path(app['path']).is_absolute() or not re.fullmatch('[a-f0-9]{64}',app['sha256'])
-                or app['mode'] not in ('clash-verge','shadowrocket','clashx','surge','other')):
+                or app['mode'] not in ('clash-verge','shadowrocket','clashx','surge','wireguard','other')):
             raise ValueError('客户端原程序记录无法核对，保留备份')
         if value['tun']:
             directory=value.get('directory')

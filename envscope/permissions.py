@@ -14,6 +14,16 @@ def permission_help(report, params, home, profile, confirmed=False, runner=subpr
     if not finding or not denied(finding.get("evidence", [])):
         raise ValueError("这项没有明确的权限拒绝证据，不申请额外权限")
     system = system or platform.system()
+    if finding['id'] == 'target.wireguard':
+        if system != 'Windows':
+            return {'state': 'unavailable', 'reason': '此项仅适用于 Windows 隧道服务。'}
+        reason = '本次明确被拒绝读取 WireGuard 服务或所属进程。将打开 Windows 服务管理器供核对，不修改服务权限、启动方式或隧道；打开入口不等于授权。'
+        if confirmed is not True:
+            return {'state': 'confirmation_required', 'reason': reason}
+        root = Path(os.environ.get('SystemRoot', 'C:/Windows'))/'System32'
+        runner([str(root/'mmc.exe'), str(root/'services.msc')], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        return {'state': 'opened', 'reason': '在服务管理器找到所选 WireGuardTunnel 服务，核对所属账户和服务状态。读取权限由管理员或组织策略管理；不要修改 VPN 私钥或绕过组织限制。处理后重新检测。', 'permission_granted': False}
     scopes = {"extra.hosts": ("读取 hosts 中与 Claude 有关的记录", Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/drivers/etc/hosts"),
               "extra.config": ("读取 Claude / Code 用户配置的格式", profile),
               "target.config": ("读取所选 Claude / Code 用户配置的格式", home / '.claude' if report.get('usage') == 'cli' else profile),

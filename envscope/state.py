@@ -27,7 +27,7 @@ def validate_settings(value):
     proposed["country"] = proposed["country"].upper()
     if proposed["country"] and not re.fullmatch("[A-Z]{2}", proposed["country"]):
         raise ValueError("invalid country")
-    if proposed["client"] not in ("auto", "clash-verge", "shadowrocket", "sing-box", "clashx", "surge", "other"):
+    if proposed["client"] not in ("auto", "clash-verge", "shadowrocket", "sing-box", "clashx", "surge", "wireguard", "other"):
         raise ValueError("invalid client")
     if proposed["webrtc_policy"] not in ("proxy", "reject"):
         raise ValueError("invalid WebRTC policy")

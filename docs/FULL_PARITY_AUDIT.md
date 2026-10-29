@@ -19,7 +19,7 @@ EnvScope 已有原生城市目标、双来源一致性、写入预览 / 读回 /
 | 跨账号保留文件 | skills 白名单、暂存合并、拒绝身份 / 会话混合 | 当前有意不跨账号共享身份数据，不能以复现旧行为破坏隔离 |
 | fix：代理启动、TUN、DNS、IPv6、语言、系统地区 | 0.18 原生客户端启动 / 正常重开、Clash Verge TUN 持久化、Mac Claude 专用语言；备份、读回、失败恢复和中断入口。先修复客户端再复检，后续守护使用实际目标接口。0.17 网络事务、Code、系统地区、路由及 Watchdog 继续保留 | 旧组件迁移尚缺；其他客户端 TUN 为手动指引；实际代理 GUI、VPN 驱动、授权及瞬断仍需设备验收；见 CLIENT_REPAIR / SYSTEM_NETWORK |
 | set-region，Windows / macOS | region_profiles、region_lookup、region_setup，选择 / IP 联动测试 | 更广国家 / 城市预设覆盖；真实权限与写入设备验收 |
-| set-client，多代理客户端 | 原生目标偏好、固定安装位置 / 注册表 / Mac bundle 识别与审核后启动；目标变化暂停旧原生守护，重新审核时按新客户端生成；旧核心设置另用适配器 | 旧任务迁移及 Shadowrocket / Surge 等实际 VPN 状态验证；不以程序存在证明 VPN 已接管 |
+| set-client，多代理客户端 | 原生目标偏好、固定安装位置 / 注册表 / Mac bundle 识别与审核后启动；新增 Windows WireGuard 具体服务身份、程序摘要、对应网卡与目标选路，独立模式与原生守护共用基线；旧核心设置另用适配器 | 旧任务迁移及 Shadowrocket / Surge 等实际 VPN 状态验证；WireGuard 的实际驱动 / 握手 / 睡眠仍需设备验收，不以程序存在证明 VPN 已接管；见 WIREGUARD |
 | fingerprint，设备 / 字体 / GPU / 虚拟化 | environment_info、coverage、按需浏览器数据 | 信息项有范围，不提供未知服务端风险评分 |
 | cli-info，多入口、版本、来源、配置体积 | cli_inventory、local_facts，被动读取测试 | 无可信包元数据的版本需明确未知；可增加审核后的版本读取 |
 | open-safe，临时浏览器及清理 | isolated_browser，Windows / Mac UI 及参数测试 | 真实浏览器策略生效、异常退出恢复和 UDP 抓包验收 |

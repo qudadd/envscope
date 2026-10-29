@@ -1,5 +1,14 @@
 # Third-party origins
 
+## WireGuard interoperability
+
+The read-only Windows service adapter is EnvScope code using documented Windows
+SCM / process APIs and the WireGuard for Windows service naming / argument
+contract. It does not bundle or execute WireGuard source, binaries, drivers or
+configuration files. WireGuard is maintained by its own project; see its
+[enterprise documentation](https://git.zx2c4.com/wireguard-windows/about/docs/enterprise.md)
+and [EnvScope's scope and validation](docs/WIREGUARD.md).
+
 ## Original DMG interoperability
 
 The native macOS DMG adapter preserves the encrypted root layout and A–D marker

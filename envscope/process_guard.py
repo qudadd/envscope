@@ -30,7 +30,7 @@ from .target_environment import fingerprint
 INTERVAL = 10
 KERNELS = {'auto': (), 'other': (), 'clash-verge': ('mihomo', 'verge-mihomo'),
            'sing-box': ('sing-box',), 'clashx': ('clashx', 'clash'),
-           'shadowrocket': ('shadowrocket',), 'surge': ('surge',)}
+           'shadowrocket': ('shadowrocket',), 'surge': ('surge',), 'wireguard': ()}
 
 
 def desktop_path(value, home, system):
@@ -63,12 +63,14 @@ def desktop_path(value, home, system):
 
 
 class NativeGuardIO:
-    def __init__(self, home, system=None, ps=None, connector=None):
+    def __init__(self, home, system=None, ps=None, connector=None, service_reader=None):
         self.home, self.system = home, system or platform.system()
         if ps is None:
             import psutil as ps
         self.ps = ps
         self.connector = connector or socket.create_connection
+        from .wireguard import WireGuardReader
+        self.service_reader = service_reader or WireGuardReader(system=self.system).collect
 
     def identity(self):
         p = self.ps.Process(os.getpid())
@@ -110,6 +112,7 @@ class NativeGuardIO:
         except (self.ps.Error, OSError):
             adapters = None
         return {'targets': targets, 'unreadable': unreadable, 'clients': sorted(clients),
+                'wireguard': self.service_reader(),
                 'interfaces': [{'name': name, 'up': value.isup is True} for name, value in adapters.items()] if adapters is not None else None}
 
     def listening(self, proxy):
@@ -160,9 +163,10 @@ class NativeGuardIO:
 
 
 def validate_baseline(value):
-    if not isinstance(value, dict) or set(value) != {'mode', 'proxy', 'interface', 'client'}:
+    base = {'mode', 'proxy', 'interface', 'client'}
+    if not isinstance(value, dict) or set(value) != base | ({'wireguard'} if value.get('client') == 'wireguard' else set()):
         raise ValueError('进程守护基线格式无效')
-    if not all(isinstance(v, str) for v in value.values()):
+    if not all(isinstance(value[k], str) for k in base):
         raise ValueError('进程守护基线字段必须是文本')
     if value['mode'] not in ('http_proxy', 'tun') or value['client'] not in KERNELS:
         raise ValueError('进程守护连接方式无效')
@@ -172,6 +176,15 @@ def validate_baseline(value):
     elif (value['proxy'] or not isinstance(value['interface'], str) or not 0 < len(value['interface']) <= 200
           or any(ord(c) < 32 for c in value['interface'])):
         raise ValueError('请选择一个确切的隧道网卡')
+    if value['client'] == 'wireguard':
+        from .wireguard import valid_service, local_path, PREFIX
+        pin = value['wireguard']
+        if (value['mode'] != 'tun' or not isinstance(pin, dict) or set(pin) != {'service', 'path', 'sha256'}
+                or not valid_service(pin.get('service')) or not local_path(pin.get('path'))
+                or PureWindowsPath(pin['path']).name.casefold() != 'wireguard.exe'
+                or not re.fullmatch('[a-f0-9]{64}', str(pin.get('sha256', '')))
+                or value['interface'].casefold() != pin['service'][len(PREFIX):].casefold()):
+            raise ValueError('WireGuard 守护需要核实的具体隧道服务、程序摘要和对应网卡')
 
 
 def health(baseline, observed, io):
@@ -180,6 +193,18 @@ def health(baseline, observed, io):
         return ok, '批准的本机代理端口在线' if ok else '批准的本机代理端口离线'
     if observed['interfaces'] is None:
         return False, '网卡读取失败，无法确认隧道状态'
+    if baseline['client'] == 'wireguard':
+        from .wireguard import select_service
+        pin = baseline['wireguard']
+        state, row = select_service(observed.get('wireguard'), pin['service'])
+        if state != 'healthy':
+            notes = {'offline': '所选 WireGuard 隧道服务离线', 'missing': '所选 WireGuard 隧道服务已移除',
+                     'permission': 'WireGuard 服务或所属进程被拒绝读取'}
+            return False, notes.get(state, '所选 WireGuard 服务身份尚不能核实')
+        if row['path'].casefold() != pin['path'].casefold() or row['sha256'] != pin['sha256']:
+            return False, 'WireGuard 程序路径或文件摘要改变，请重新检测并审核守护基线'
+        present = any(str(a.get('name', '')).casefold() == baseline['interface'].casefold() and a.get('up') is True for a in observed['interfaces'])
+        return present, '所选 WireGuard 服务、程序摘要及对应网卡符合基线' if present else '所选 WireGuard 隧道网卡不在线'
     present = any(a.get('name') == baseline['interface'] and a.get('up') is True for a in observed['interfaces'])
     kernels = KERNELS[baseline['client']]
     client = not kernels or bool(set(kernels) & set(observed['clients']))
@@ -271,6 +296,12 @@ class ProcessGuard:
 
     def options(self):
         snapshot = self.io.snapshot()
+        if self.store.settings().get('client') == 'wireguard':
+            from .wireguard import select_service
+            state, row = select_service(snapshot.get('wireguard'), self.store.settings().get('wireguard_service', ''))
+            return {'interfaces': [a['name'] for a in snapshot['interfaces'] or [] if state == 'healthy'
+                                  and a['up'] and a['name'].casefold() == row['interface'].casefold()],
+                    'reason': '仅列出本次 WireGuard 服务对应的在线网卡；找不到时先核对目标隧道并复检，不以其他 VPN 网卡替代。'}
         return {'interfaces': [a['name'] for a in snapshot['interfaces'] or [] if a['up']],
                 'reason': '选择实际使用的隧道网卡；网卡在线只证明该组件状态，不证明全部流量接管。'}
 
@@ -312,8 +343,14 @@ class ProcessGuard:
         if settings['usage'] not in ('desktop', 'both') or settings['connection_mode'] not in ('tun', 'http_proxy'):
             return {'state': 'blocked', 'reason': '进程守护用于 Claude 桌面的 TUN 或本机 HTTP 代理连接；网页、Code 或直连不使用此功能。'}
         baseline = {'mode': settings['connection_mode'], 'proxy': settings['target_proxy'], 'client': settings['client'], 'interface': interface}
-        validate_baseline(baseline)
         snapshot = self.io.snapshot()
+        if baseline['client'] == 'wireguard':
+            from .wireguard import select_service
+            state, row = select_service(snapshot.get('wireguard'), settings.get('wireguard_service', ''))
+            if state != 'healthy':
+                return {'state': 'blocked', 'reason': '先在目标设置选择并激活 WireGuard 隧道，完成服务身份专项检查，再生成守护方案。'}
+            baseline['wireguard'] = {k: row[k] for k in ('service', 'path', 'sha256')}
+        validate_baseline(baseline)
         good, note = health(baseline, snapshot, self.io)
         if not good or snapshot['unreadable']:
             return {'state': 'blocked', 'reason': note if not good else 'Claude 进程所属用户或路径无法读取，未启用自动停止。'}
@@ -329,6 +366,7 @@ class ProcessGuard:
             '注册独立的当前用户进程守护，登录后运行；每 10 秒检查一次，关闭窗口后继续',
             '启用或更新方案时重启这一守护工作进程；替换期间监测会短暂中断，收到新心跳后才确认运行',
             '监测代理端口：'+baseline['proxy'] if baseline['mode'] == 'http_proxy' else '监测网卡：'+interface+'；客户端：'+baseline['client'],
+            *(['固定隧道服务：'+baseline['wireguard']['service']+'；固定 WireGuard 程序摘要：'+baseline['wireguard']['sha256']+'；升级程序后需重新审核'] if baseline['client'] == 'wireguard' else []),
             '组件离线或监测失败时终止当前用户已识别的 Claude 桌面进程；未保存内容可能丢失',
             '核对安装路径、进程创建时间和所属用户；先尝试终止，2 秒仍未退出时强制终止，随后确认结果',
             '每次状态变化和停止操作写入本机日志；不切换账号、不重启 Claude、不修改网络',

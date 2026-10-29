@@ -60,6 +60,11 @@ jobs:
         env:
           ENVSCOPE_NETWORK_ACCEPTANCE: '1'
         run: python -m scripts.network_windows_acceptance
+      - name: Actual read-only SCM and process inspection (owned inert service only)
+        if: runner.os == 'Windows'
+        env:
+          ENVSCOPE_SERVICE_ACCEPTANCE: '1'
+        run: python -m scripts.wireguard_acceptance
       - run: python -m scripts.build_desktop
       - name: Frozen Windows smoke
         if: runner.os == 'Windows'
@@ -84,6 +89,12 @@ jobs:
         with:
           name: Client-evidence-${{ runner.os }}-${{ runner.arch }}
           path: artifacts/client-lifecycle/result.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Windows'
+        with:
+          name: WireGuard-service-evidence-Windows-X64
+          path: artifacts/wireguard-service/result.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always() && runner.os == 'macOS'

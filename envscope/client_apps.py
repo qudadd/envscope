@@ -22,10 +22,11 @@ SPECS=(
     ('shadowrocket','Shadowrocket',('Shadowrocket',),'Shadowrocket.exe'),
     ('clashx','ClashX',('ClashX','ClashX Pro'),'ClashX.exe'),
     ('surge','Surge',('Surge',),'Surge.exe'),
+    ('wireguard','WireGuard',('WireGuard',),'wireguard.exe'),
     ('other','Mihomo Party',('Mihomo Party',),'Mihomo Party.exe'),
     ('other','Clash Nyanpasu',('Clash Nyanpasu',),'Clash Nyanpasu.exe'),
 )
-WINDOWS_MODES={'clash-verge','other'}
+WINDOWS_MODES={'clash-verge','wireguard','other'}
 
 
 def file_hash(path):
@@ -86,6 +87,7 @@ def discover_apps(home=None,system=None,environ=None,registry=None,*,mac_roots=N
             candidates.extend((registry or registry_candidates)())
     elif system=='Darwin':
         for mode,label,folders,exe in SPECS:
+            if mode == 'wireguard': continue  # The macOS app uses a different VPN API.
             for root in (mac_roots if mac_roots is not None else (Path('/Applications'),home/'Applications')):
                 for folder in folders:
                     app=root/(folder+'.app');info=app/'Contents/Info.plist'

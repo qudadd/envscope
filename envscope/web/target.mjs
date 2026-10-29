@@ -6,6 +6,22 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
   let lookupBusy=false,lookupTimer=null,lookupRevision=0,editRevision=0;
   const form=$('target-form');
   const field=name=>form.elements.namedItem(name);
+  function showWireguard(value={},saved=field('wireguard_service').value){
+    const select=field('wireguard_service');
+    const rows=Array.isArray(value.services)?value.services:[];
+    const options=rows.filter(r=>typeof r.service==='string').map(r=>new Option(`${r.tunnel||r.service} · ${r.error==='permission_denied'?'读取权限被拒绝':r.error?'身份未核实':r.verified===true?'服务运行，身份已核对':r.state==='stopped'?'未激活':r.state==='paused'?'已暂停':'状态待确认'}`,r.service));
+    select.replaceChildren(new Option('仅有一个隧道时自动识别',''),...options);
+    if(saved&&!options.some(o=>o.value===saved))select.add(new Option(saved+' · 已保存，尚未读取',saved));
+    select.value=saved;
+    $('target-wireguard-note').textContent=value.platform&&value.platform!=='Windows'?'此专项检查适用于 Windows 官方 WireGuard；macOS 请使用其他 VPN 模式。':value.error==='permission_denied'?'系统拒绝读取服务列表。请核对 Windows 服务读取权限后重试；未核实的服务不会通过。':value.complete===true?`已读取 ${rows.length} 个隧道。${rows.length>1?'请选择本次使用的一个隧道。':'激活后会继续检查对应网卡与目标选路。'}不读取 VPN 配置与私钥。`:'服务读取尚未完成。可以保留目标，检查时会明确显示缺失证据；不读取 VPN 配置与私钥。';
+  }
+  async function readWireguard(){
+    if(loading||saving||isBusy())return;
+    loading=true;controls();$('target-wireguard-note').textContent='正在只读核对 Windows 隧道服务…';
+    try{showWireguard(await run('wireguard-options'));}
+    catch(error){$('target-wireguard-note').textContent='未能读取隧道：'+error.message;}
+    finally{loading=false;controls();}
+  }
   function fillCity(selected){
     if(!selected)return;
     field('region_profile').value=selected.id;
@@ -23,6 +39,7 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
   function controls(){
     $('target-confirm').disabled=loading||saving||lookupBusy||!!lookupTimer;
     $('target-read-ip').disabled=loading||saving||lookupBusy||!countryCode(field('usage_country').value);
+    $('target-wireguard-read').disabled=loading||saving;
   }
   function queueLookup(delay=300){
     clearTimeout(lookupTimer);lookupTimer=null;lookupRevision++;
@@ -65,6 +82,7 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
     $('target-language-field').hidden=!['desktop','both'].includes(field('usage').value);
     if($('target-language-field').hidden)field('language').value='';
     if(!code){field('provider').value='anthropic';field('auth_mode').value='existing';}
+    $('target-wireguard').hidden=field('client').value!=='wireguard';
   }
   function populate(value){
     for(const node of form.elements){if(!node.name||!(node.name in value))continue;node.value=Array.isArray(value[node.name])?value[node.name].join('\n'):value[node.name]??'';}
@@ -98,6 +116,7 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
       profiles=value.profiles||[];
       $('target-region-profile').replaceChildren(new Option('自定义 / 仅观察',''),...profiles.map(p=>new Option(p.label,p.id)));
       populate(value.proposed||{});
+      showWireguard(value.wireguard||{},value.proposed?.wireguard_service||'');
       filterCities(countryCode(field('country').value)||countryCode(field('usage_country').value));
       if(['cli','desktop','both','web'].includes(pendingUsage)){field('usage').value=pendingUsage;pendingUsage=null;visibility();}
       const o=value.observed||{};
@@ -109,6 +128,12 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
   }
   field('usage').addEventListener('change',()=>{visibility();const p=profiles.find(p=>p.id===field('region_profile').value);if(p)fillCity(p);editRevision++;});
   field('connection_mode').addEventListener('change',()=>{visibility();queueLookup();});
+  field('client').addEventListener('change',()=>{
+    if(field('client').value==='wireguard')field('connection_mode').value='tun';
+    else field('wireguard_service').value='';
+    visibility();editRevision++;
+  });
+  $('target-wireguard-read').addEventListener('click',()=>void readWireguard());
   field('usage_country').addEventListener('input',()=>{
     if(!lookupBusy)filterCities(countryCode(field('country').value)||countryCode(field('usage_country').value));
     queueLookup();
@@ -136,6 +161,7 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
       const params=Object.fromEntries(new FormData(form));
       params.allowed_ipv6=params.allowed_ipv6.split(/[\s,]+/).filter(Boolean);
       if(params.connection_mode!=='http_proxy')params.target_proxy='';
+      if(params.client!=='wireguard')params.wireguard_service='';
       const value=await run('environment-confirm',params);
       sync(value.settings);form.hidden=true;completed=true;
       document.dispatchEvent(new CustomEvent('envscope-target-changed',{detail:{settings:value.settings}}));

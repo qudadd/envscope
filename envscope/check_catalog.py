@@ -55,6 +55,11 @@ def check_catalog():
                          'why': '按已经确认的用途与连接方式检查；自动包含需要的依赖测量。',
                          'next_step': '按本次证据处理；必要条件未测量时，环境不能判为合格。',
                          'upkeep': '用途、连接或配置改变后重新检测；持续维护记录差异，不自动修改检测目标。'})
+    for row in rows:
+        if row['id'] == 'target.wireguard':
+            row.update(why='核对指定 Windows WireGuard 隧道服务、所属进程和程序文件，再独立检查对应网卡与目标选路。',
+                       next_step='服务未激活时在 WireGuard 中激活；多个隧道时在目标设置选择。权限拒绝、其他 VPN 在线或程序同名都不会通过。',
+                       upkeep='守护固定隧道、程序路径与摘要；服务离线或程序改变时停止已批准的 Claude 桌面进程并记录原因，VPN 程序更新后重新审核。')
     for key, title in MEASUREMENTS.items():
         rows.append({'id': key, 'group': 'measurement', 'title': title, 'label': title,
                      'why': '独立保留本次测量来源和适用范围。',

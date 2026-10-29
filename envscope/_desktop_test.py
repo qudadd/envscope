@@ -47,6 +47,11 @@ def main(output=None):
         result['native_language_bindings']='not_applicable'
         result['native_pipe_transport']='not_applicable'
         if platform.system()=='Windows':
+            from .wireguard import WindowsServices, command_identity, PREFIX
+            path = 'C:\\Program Files\\WireGuard\\wireguard.exe'
+            args = WindowsServices().argv('"'+path+'" /tunnelservice "C:\\EnvScopeFixture.conf"')
+            result['native_wireguard_bindings'] = command_identity(args, PREFIX+'EnvScopeFixture', [path]) == path
+            assert result['native_wireguard_bindings']
             from .windows_pipe import validate_pipe
             assert validate_pipe(r'\\.\pipe\envscope-frozen-fixture')==r'\\.\pipe\envscope-frozen-fixture'
             result['native_pipe_transport']=True
@@ -143,6 +148,8 @@ def main(output=None):
                 assert result['system_network_controls']
                 result['client_repair_controls']=read_js("!!document.getElementById('client-prepare') && !!document.getElementById('client-restore') && !!document.getElementById('client-force')")
                 result['client_language_controls']=read_js("!!document.getElementById('language-prepare') && !!document.getElementById('language-restore')")
+                result['wireguard_controls']=read_js("!!document.getElementById('target-wireguard-read') && !!document.querySelector('#target-form select[name=client] option[value=wireguard]') && !!document.querySelector('#target-form select[name=wireguard_service]')")
+                assert result['wireguard_controls']
                 assert result['client_repair_controls'] and result['client_language_controls']
                 from .routing_config import load_yaml, update_yaml_rules, rule_strings
                 pinned = rule_strings('Fixture', 'proxy')

@@ -9,7 +9,7 @@ export function renderProcessGuard(value={},settings={}){
   $('process-guard-stop').disabled=!value.enabled&&!value.scheduler?.present;
   $('process-guard-interface-row').hidden=settings.connection_mode!=='tun';
   $('process-guard-interface').disabled=settings.connection_mode!=='tun';
-  $('process-guard-route').textContent=settings.connection_mode==='http_proxy'?'监测当前目标的本机代理端口：'+(settings.target_proxy||'尚未填写；请在检测目标中填写确切地址'):'按当前目标选择实际使用的隧道网卡；自动识别模式只监测所选网卡。';
+  $('process-guard-route').textContent=settings.client==='wireguard'?'WireGuard：核对具体隧道服务、程序路径与摘要，再监测对应网卡。程序更新后需重新审核。':settings.connection_mode==='http_proxy'?'监测当前目标的本机代理端口：'+(settings.target_proxy||'尚未填写；请在检测目标中填写确切地址'):'按当前目标选择实际使用的隧道网卡；自动识别模式只监测所选网卡。';
   $('process-guard-journal').textContent=value.journal_path||'';
   const rows=(value.events||[]).slice().reverse().map(event=>el('p',new Date(event.at).toLocaleString()+' · '+event.text));
   $('process-guard-events').replaceChildren(...(rows.length?rows:[el('p','尚无进程守护事件。')]));
@@ -25,6 +25,7 @@ export function initProcessGuard({action,reportId}){
     for(const name of value.interfaces||[]){const node=el('option',name);node.value=name;rows.push(node);}
     $('process-guard-interface').replaceChildren(...rows);
     if(rows.some(r=>r.value===before))$('process-guard-interface').value=before;
+    if((value.interfaces||[]).length===1&&!$('process-guard-interface').value)$('process-guard-interface').value=value.interfaces[0];
     $('process-guard-output').textContent=value.reason||'未读取到可选网卡，请检查读取权限。';
   });
   $('process-guard-prepare').addEventListener('click',async()=>{

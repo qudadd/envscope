@@ -35,7 +35,7 @@ def redact(report):
             return value
         if any(token in key.lower() for token in ("password", "secret", "credential", "authorization", "token", "macaddress", "physicaladdress")):
             return "[redacted]"
-        if key.lower() in ("name", "interfacedescription", "ifname"):
+        if key.lower() in ("name", "interfacedescription", "ifname", "interface", "service", "tunnel", "wireguard_service"):
             return "[interface]"
         value = re.sub(r"(?i)([A-Z]:[\\/]Users[\\/])[^\\/\r\n]+", r"\1[user]", value)
         value = re.sub(r"(/Users/|/home/)[^/\r\n]+", r"\1[user]", value)

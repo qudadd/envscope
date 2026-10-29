@@ -158,6 +158,10 @@ class Operations:
         self.network=network or SystemNetwork(store,UnavailableNetworkIO() if home is not None or environment_reader is not None else native_network_io())
         from .client_repair import ClientRepair,NativeClientIO
         isolated=home is not None or environment_reader is not None
+        from .wireguard import WireGuardReader
+        self.wireguard_reader = (lambda: (self.environment_reader() or {}).get('network', {}).get('wireguard',
+            {'platform': platform.system(), 'complete': False, 'services': [], 'error': 'unavailable'})) if environment_reader is not None else (
+            (lambda: {'platform': platform.system(), 'complete': False, 'services': [], 'error': 'isolated'}) if isolated else WireGuardReader().collect)
         self.client_repair=client_repair or ClientRepair(store,NativeClientIO(self.home,environ={} if isolated else None,
             apps=(lambda:[]) if isolated else None,stop_desktop=(lambda:False) if isolated else quit_account_claude),
             root=self.home/'.envscope/client-repair' if isolated else None,
@@ -477,6 +481,9 @@ class Operations:
             if params:raise ValueError('unexpected log parameters')
             opened=self.remedy_opener(action)
             return {'state':'opened' if opened else 'unavailable','reason':'已打开完整日志目录。日志仅在本机保存。' if opened else '尚未生成日志目录，或系统未能打开；完成一次巡检后重试。'}
+        if action == 'wireguard-options':
+            if params: raise ValueError('unexpected action parameters')
+            return self.wireguard_reader()
         if action == 'environment-suggest':
             if params:
                 raise ValueError('unexpected action parameters')

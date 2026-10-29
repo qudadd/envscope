@@ -13,7 +13,8 @@ TARGETS = {
     'target.provider': ('Code 服务提供方', ('extra.cli_env',)),
     'target.auth': ('Code 认证配置', ('extra.cli_env',)),
     'target.ipv6': ('IPv6 目标条件', ('baseline.ipv6', 'http.ipv6')),
-    'target.tun_route': ('目标地址的 TUN 选路', ('baseline.tun', 'extra.dns_resolution', 'extra.target_route')),
+    'target.tun_route': ('目标地址的 TUN 选路', ('baseline.tun', 'extra.dns_resolution', 'extra.target_route', 'system.inventory')),
+    'target.wireguard': ('WireGuard 隧道服务', ('system.inventory',)),
 }
 MEASUREMENTS = {
     'system.inventory': '系统只读资料', 'http.egress': 'HTTP IPv4 出口交叉验证', 'http.ipv6': 'HTTP IPv6 出口',
@@ -96,6 +97,7 @@ def problem_prefixes(checks):
         'extra.account': ('account.',), 'target.region': ('target.region',),
         'target.dns': ('network.dns',), 'extra.dns_resolution': ('network.dns',),
         'target.tun_route': ('target.tun_route', 'startup.tun'), 'extra.runtime_tun': ('startup.tun',),
+        'target.wireguard': ('target.wireguard',),
         'target.ipv6':('target.ipv6','policy.http.ipv6','policy.browser.http_v6'),
     }
     prefixes = set()
