@@ -1,0 +1,41 @@
+name: native network transactions
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/native-network-repair]
+    paths:
+      - native/network_worker.c
+      - envscope/system_network*.py
+      - envscope/timezone_service.py
+      - scripts/build_timezone_worker.py
+      - scripts/build_network_worker.py
+      - scripts/network_acceptance.py
+      - tests/test_system_network.py
+      - .github/workflows/network.yml
+permissions:
+  contents: read
+jobs:
+  network:
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --no-deps .
+      - run: python -m unittest tests.test_system_network tests.test_timezone_service -q
+      - name: Root transactions with a compile-time fake network backend
+        env:
+          ENVSCOPE_NETWORK_ACCEPTANCE: '1'
+        run: python -m scripts.network_acceptance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Network-evidence-${{ runner.arch }}
+          path: artifacts/network-acceptance
+          if-no-files-found: warn

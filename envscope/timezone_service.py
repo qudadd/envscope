@@ -64,20 +64,22 @@ def daemon_bytes(layout):
                           'StandardOutPath':'/dev/null','StandardErrorPath':'/dev/null'},sort_keys=True)
 
 
-def bundle_worker(root=None,cache=None):
+def bundle_worker(root=None,cache=None,*,component='timezone'):
+    if component not in ('timezone','network'):raise ValueError('不支持的系统辅助程序')
+    binary=component+'-helper';label='时区' if component=='timezone' else '网络'
     root=Path(root) if root is not None else Path(__file__).resolve().parent/'native-runtime'
     try:
-        metadata=root/'timezone-helper.json'
+        metadata=root/(binary+'.json')
         if metadata.stat().st_size>65536:raise ValueError('oversized helper metadata')
         manifest=json.loads(metadata.read_text(encoding='utf-8'))
-        payload=root/'timezone-helper.payload.zip'
+        payload=root/(binary+'.payload.zip')
         if payload.stat().st_size>2*1024**2:raise ValueError('oversized helper payload')
         with zipfile.ZipFile(payload) as archive:
-            if archive.namelist()!=['timezone-helper'] or not 0<archive.getinfo('timezone-helper').file_size<=2*1024**2:
+            if archive.namelist()!=[binary] or not 0<archive.getinfo(binary).file_size<=2*1024**2:
                 raise ValueError('invalid helper payload')
-            data=archive.read('timezone-helper')
+            data=archive.read(binary)
     except (OSError,ValueError,zipfile.BadZipFile,RuntimeError):
-        raise ValueError('请使用完整 macOS 独立桌面包，本入口需要随附的原生时区辅助程序。') from None
+        raise ValueError('请使用完整 macOS 独立桌面包，本入口需要随附的原生'+label+'辅助程序。') from None
     if (not isinstance(manifest,dict) or type(manifest.get('format')) is not int or manifest.get('format')!=1
             or manifest.get('fixture') is not False or manifest.get('release')!=__release__
             or not isinstance(manifest.get('sha256'),str) or not SHA.fullmatch(manifest['sha256'])
@@ -86,7 +88,7 @@ def bundle_worker(root=None,cache=None):
     # A compressed data resource keeps PyInstaller from rewriting Mach-O bytes.
     # Materialize as the ordinary user, then root independently copies/hashes it.
     uid=os.getuid() if hasattr(os,'getuid') else None
-    base=Path(cache) if cache is not None else Path(tempfile.gettempdir()).resolve()/('envscope-timezone-'+str(uid))
+    base=Path(cache) if cache is not None else Path(tempfile.gettempdir()).resolve()/('envscope-'+component+'-'+str(uid))
     _safe_chain(base)
     base.mkdir(mode=0o700,parents=True,exist_ok=True)
     for directory in (base,base/manifest['sha256']):
@@ -95,7 +97,7 @@ def bundle_worker(root=None,cache=None):
         info=directory.stat()
         if not stat.S_ISDIR(info.st_mode) or uid is not None and (info.st_uid!=uid or info.st_mode&0o077):
             raise ValueError('时区辅助程序缓存权限冲突，未执行。')
-    path=base/manifest['sha256']/'timezone-helper';_safe_chain(path)
+    path=base/manifest['sha256']/binary;_safe_chain(path)
     valid=False
     if path.exists():
         info=path.stat()
