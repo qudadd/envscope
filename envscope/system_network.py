@@ -125,11 +125,14 @@ class SystemNetwork:
             return {'state':'guided','reason':'当前 IPv6 目标不是关闭。请先确认目标并复检；不会按上游默认行为关闭 IPv6。'}
         chosen=[r for r in snapshot['adapters'] if r['id'] in adapter_ids and r['ipv6_enabled']]
         if not chosen and not flush_dns:return {'state':'guided','reason':'所选接口已符合关闭目标，没有需要写入的配置。'}
+        if not SolutionPlans._current(report):
+            return {'state':'retest_required','reason':'读取接口期间检测结果已过期，没有生成修改；请重新检测。'}
         token=secrets.token_urlsafe(20)
         payload={'format':1,'nonce':secrets.token_hex(16),'owner':snapshot['owner'],
                  'expected_record':record.get('id',''),'adapters':chosen,'flush_dns':flush_dns}
         self.plans={token:{'deadline':time.monotonic()+90,'fingerprint':fingerprint(settings),
-                           'snapshot':snapshot,'record':record,'payload':payload}}
+                           'snapshot':snapshot,'record':record,'payload':payload,
+                           'report':{k:report[k] for k in ('created_at','mode','diagnosis')}}}
         effects=['为本次明确修改申请一次系统授权；所选接口的变化会影响使用它的其他应用。',
                  '先保存接口原配置和受保护的事务记录，修改前重新核对，修改后独立读回；失败停止并尝试恢复本次改动。']
         effects.extend('关闭 IPv6：'+r['name']+'（'+r['id']+'）' for r in chosen)
@@ -150,11 +153,14 @@ class SystemNetwork:
         if confirmed is not True:return {'state':'confirmation_required'}
         plan=self.plans.get(token) if isinstance(token,str) else None
         if (not plan or plan.get('restore') or time.monotonic()>plan['deadline']
+                or not SolutionPlans._current(plan['report'])
                 or plan['fingerprint']!=fingerprint(self.store.settings())):
             return {'state':'retest_required','reason':'目标或方案已经变化，请重新检测并预览。'}
         snapshot=validate_snapshot(self.io.snapshot())
         if not self._same_selected(snapshot,plan) or self.io.status()!=plan['record']:
             return {'state':'retest_required','reason':'接口、原配置或恢复记录在预览后改变，没有覆盖后续修改。'}
+        if time.monotonic()>plan['deadline'] or not SolutionPlans._current(plan['report']):
+            return {'state':'retest_required','reason':'核对期间方案或检测结果已过期，尚未修改；请重新检测。'}
         del self.plans[token]
         try:
             self.io.execute('apply',plan['payload'])

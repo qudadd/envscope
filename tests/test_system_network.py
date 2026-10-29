@@ -3,6 +3,7 @@ import copy
 from datetime import datetime,timezone,timedelta
 import json
 import unittest
+from unittest.mock import patch
 
 from envscope.state import StateStore
 from envscope.system_network import SystemNetwork,validate_snapshot
@@ -100,6 +101,25 @@ class SystemNetworkTests(unittest.TestCase):
                 else:self.store.save_settings({'locale':'en-GB'})
                 self.assertEqual(self.manager.apply(plan['plan_id'],True)['state'],'retest_required')
                 self.assertFalse(self.io.calls)
+
+    def test_preview_and_prewrite_cannot_extend_report_freshness(self):
+        now=datetime.now(timezone.utc)
+        with patch('envscope.remedies.datetime') as clock:
+            clock.now.return_value=now;clock.fromisoformat.side_effect=datetime.fromisoformat
+            plan=self.manager.prepare(self.report)
+            clock.now.return_value=now+timedelta(seconds=91)
+            self.assertEqual(self.manager.apply(plan['plan_id'],True)['state'],'retest_required')
+            self.assertFalse(self.io.calls)
+        with patch('envscope.remedies.datetime') as clock:
+            clock.now.return_value=now;clock.fromisoformat.side_effect=datetime.fromisoformat
+            plan=self.manager.prepare(self.report)
+            original=self.io.snapshot
+            def slow_read():
+                clock.now.return_value=now+timedelta(seconds=91)
+                return original()
+            self.io.snapshot=slow_read
+            self.assertEqual(self.manager.apply(plan['plan_id'],True)['state'],'retest_required')
+            self.assertFalse(self.io.calls)
 
     def test_command_success_and_restored_marker_without_readback_never_pass(self):
         self.io.mutate=False;plan=self.manager.prepare(self.report)
