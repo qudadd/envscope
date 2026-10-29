@@ -41,6 +41,10 @@ jobs:
         run: python -m scripts.timezone_acceptance
       - name: Actual local Mihomo routing and rollback (isolated fixture)
         run: python -m scripts.routing_core_smoke
+      - name: Actual native client lifecycle (owned disposable GUI only)
+        env:
+          ENVSCOPE_CLIENT_ACCEPTANCE: '1'
+        run: python -m scripts.client_lifecycle_acceptance
       - name: Actual macOS network transactions (fixture paths only)
         if: runner.os == 'macOS'
         env:
@@ -70,6 +74,12 @@ jobs:
         env:
           ENVSCOPE_SCHEDULER_ACCEPTANCE: '1'
         run: python -m scripts.scheduler_acceptance dist/desktop/EnvScope.app/Contents/MacOS/EnvScope
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Client-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/client-lifecycle/result.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:

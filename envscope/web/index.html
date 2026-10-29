@@ -130,6 +130,18 @@
       <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p><p id="upkeep-watchdog-state" class="note" role="status"></p>
         <div class="actions"><button id="upkeep-run" disabled>立即复检</button><button id="upkeep-report" disabled>查看最近一次巡检</button><button id="upkeep-refresh" class="link">刷新状态</button><button id="upkeep-stop" class="link" disabled>停用并移除任务</button></div>
       </section>
+      <section class="tool-section" id="client-panel"><h2>客户端与 TUN 修复</h2>
+        <p class="note">先正常退出 Claude，再处理所选代理程序。退出代理会短暂影响其他应用连接；完成后自动复检，暂不重开 Claude。</p>
+        <h3 id="client-state">尚无操作记录</h3><p id="client-status" class="note" role="status"></p>
+        <button id="client-load" class="link">读取已安装客户端</button>
+        <label>代理程序<select id="client-app" disabled><option value="">先读取客户端</option></select></label>
+        <p id="client-policy" class="note"></p>
+        <label class="checkbox"><input id="client-tun" type="checkbox" disabled>修复 Clash Verge 的 TUN 偏好，并重开验证</label>
+        <label class="checkbox"><input id="client-restart" type="checkbox" disabled>本次需要重开客户端（未选时仅启动尚未运行的程序）</label>
+        <details><summary>正常退出受阻时</summary><p class="note">优先在托盘中保存并退出代理。下面的选择只对本次已审核操作生效。</p><label class="checkbox"><input id="client-force" type="checkbox">允许本次强制退出所选代理，未保存的代理配置可能丢失；不会强制退出 Claude</label></details>
+        <div class="actions"><button id="client-prepare" disabled>预览客户端修复</button><button id="client-restore" class="link" disabled>预览恢复原状态</button></div>
+        <div id="client-plan"></div><div id="client-output" class="solution-output" aria-live="polite"></div>
+      </section>
       <section class="tool-section" id="network-panel" hidden><h2>网络设置与恢复</h2>
         <p class="note">按已确认目标修改所选接口，申请本次所需的系统授权。修改会影响该接口上的其他应用；保留原配置与事务记录，失败后可恢复。</p>
         <h3 id="network-state">尚未读取</h3><p id="network-status" class="note" role="status"></p><p id="network-policy" class="note"></p>

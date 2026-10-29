@@ -255,7 +255,7 @@ def diagnose(report, preferences=None):
     guard = first("baseline.guard")
     if account_used and preferences.get("require_guard") and guard and not guard.get("error") and not (guard.get("registered") and guard.get("enabled") and guard.get("running")):
         add("maintenance.guard", "账号启动要求的守护任务没有运行", "设置中要求守护任务，但本次未确认它启用并运行。", "这一条件会阻止账号启动；守护不是防火墙隔离保证。",
-            ["使用修复方案安装或修复维护核心；执行前将列出系统设置影响。", "安装器结束后继续复检，以实际运行状态为准。"], "maintenance", "legacy", source="troubleshooting")
+            ["预览原生进程守护；先通过目标选路核对，再使用实际接口或已确认的本机代理端口。", "批准后台自动停止范围后，等待新心跳并复检；注册任务本身不能算守护已运行。"], "maintenance", "guard", source="troubleshooting")
     rule = first("baseline.rules")
     if account_used and preferences.get("require_rules") and status("baseline.rules") in ("warn", "fail"):
         reason = rule.get("reason", "运行规则未满足选定条件。")

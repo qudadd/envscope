@@ -122,7 +122,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None):
         self.store = store
         self.environment_reader = environment_reader
         from .region_lookup import lookup_region
@@ -156,8 +156,15 @@ class Operations:
         self.routing = routing or Routing(store, self.home, environ={} if home is not None else None)
         from .system_network import SystemNetwork,UnavailableNetworkIO,native_network_io
         self.network=network or SystemNetwork(store,UnavailableNetworkIO() if home is not None or environment_reader is not None else native_network_io())
+        from .client_repair import ClientRepair,NativeClientIO
+        isolated=home is not None or environment_reader is not None
+        self.client_repair=client_repair or ClientRepair(store,NativeClientIO(self.home,environ={} if isolated else None,
+            apps=(lambda:[]) if isolated else None,stop_desktop=(lambda:False) if isolated else quit_account_claude),
+            root=self.home/'.envscope/client-repair' if isolated else None,
+            transaction_lock=lambda:self.accounts._lock())
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
-                                      lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing,self.network)
+                                      lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing,self.network,
+                                      self.client_repair,self.process_guard)
         from .region_setup import RegionSetup
         from .inventory import collect
         self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home,timezone_service=self.timezone_service)
@@ -226,11 +233,26 @@ class Operations:
                 'region_recovery': self.regions.public_recovery(), 'routing': self.routing.status(),
                 'timezone_service': self.timezone_service.status(),
                 'system_network': self.network.status(),
+                'client_repair': self.client_repair.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action.startswith('client-'):
+            allowed={'client-options':set(),'client-status':set(),
+                     'client-plan':{'report_id','app_id','tun','restart','allow_force'},'client-apply':{'plan_id'},
+                     'client-restore-plan':{'allow_force'},'client-restore':{'plan_id'}}
+            if action not in allowed or set(params)-allowed[action]:raise ValueError('客户端修复参数无效')
+            if action=='client-options':return self.client_repair.options()
+            if action=='client-status':return self.client_repair.status()
+            if action=='client-restore-plan':return self.client_repair.prepare_restore(allow_force=params.get('allow_force',False))
+            if action=='client-restore':return self.client_repair.restore(params.get('plan_id'),confirmed)
+            if action=='client-apply':return self.client_repair.apply(params.get('plan_id'),confirmed)
+            if not report or params.get('report_id')!=report.get('report_id'):
+                return {'state':'retest_required','reason':'先按当前目标重新检测，再预览客户端修复。'}
+            return self.client_repair.prepare(report,params.get('app_id'),tun=params.get('tun',False),
+                                             restart=params.get('restart',False),allow_force=params.get('allow_force',False))
         if action.startswith('system-network-'):
             allowed={'system-network-options':set(),'system-network-status':set(),
                      'system-network-plan':{'report_id','adapter_ids','flush_dns'},
@@ -380,6 +402,7 @@ class Operations:
                 results.append(self.solutions.apply(plan['solution'], report, True))
             last = results[-1]
             return {'state': last['state'], 'results': results, 'needs_retest': last.get('needs_retest', True),
+                    'next_review':last.get('next_review',False),
                     'backups': [b for r in results for b in r.get('backups', [])],
                     'reason': last.get('reason', '操作已返回，请复检实际结果')}
         if action == 'archive-cleanup':

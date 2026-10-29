@@ -100,7 +100,11 @@ export function initDiagnosis({sessionPromise,retest}) {
     backups(result.backups);output.textContent=result.reason||'操作已返回，正在检查实际结果。';
     if(result.state==='waiting_install'){
       $('solution-plan').append(button('安装完成，继续复检',()=>action(async()=>{await retest();})));
-    }else if(result.needs_retest){await retest();}
+    }else if(result.needs_retest){
+      const nextCheck=activeCheck;
+      await retest();
+      if(result.next_review&&report)await prepare(nextCheck,options!==null);
+    }
   }
   async function prepare(checkId=null,workflow=false){
     activeCheck=checkId;$('solution-tools').hidden=false;

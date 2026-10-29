@@ -426,10 +426,11 @@ class ConfigRemedies:
 
 
 class SolutionPlans:
-    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None, network=None):
+    def __init__(self, config, legacy, discoverer, proxy_tester, routing=None, network=None, client=None, guard=None):
         self.config, self.legacy, self.discoverer, self.proxy_tester = config, legacy, discoverer, proxy_tester
         self.routing = routing
         self.network = network
+        self.client,self.guard=client,guard
         self.plans = {}
 
     @staticmethod
@@ -437,7 +438,7 @@ class SolutionPlans:
         try:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(report["created_at"])).total_seconds()
             return 0 <= age < 90 and report.get("mode") == "one-click-desktop" and isinstance(report.get("diagnosis"), dict)
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError, OverflowError):
             return False
 
     @staticmethod
@@ -478,11 +479,34 @@ class SolutionPlans:
                 raise ValueError("未知逐项检查")
             problems = [p for p in problems if any(p["id"].startswith(prefix) for prefix in CHECK_PROBLEMS[check_id])]
         tasks, effects, manual, kinds, connections = [], [], [], {}, []
+        target = report.get('environment', {}).get('targets', {})
+        findings={f['id']:f for f in report.get('findings',[])}
+        scope=set(check_ids) if check_ids is not None else None
+        def scope_chosen(keys,summary_id):
+            return bool(scope & set(keys)) if scope is not None else check_id in (None,summary_id)
+        tun_needed=target.get('connection_mode')=='tun' and scope_chosen(('baseline.tun','extra.runtime_tun','target.tun_route'),'tun') and (
+            findings.get('baseline.tun',{}).get('status') in ('warn','fail','unknown') or findings.get('target.tun_route',{}).get('status')=='fail')
+        startup_needed=target.get('connection_mode') in ('tun','http_proxy') and scope_chosen(('baseline.proxy','extra.proxy_listener','target.path'),'proxy') and (
+            findings.get('baseline.proxy',{}).get('status') in ('warn','fail') or findings.get('extra.proxy_listener',{}).get('status')=='fail')
+        if self.client and (tun_needed or startup_needed):
+            value=self.client.prepare(report,tun=tun_needed)
+            if value.get('state')=='planned':
+                # Starting a client can create a new tunnel or regenerate runtime
+                # configuration. Review later writes against a new audit instead
+                # of approving interfaces/groups that have not existed yet.
+                token=secrets.token_urlsafe(20)
+                self.plans={token:{'deadline':time.monotonic()+90,'report_id':report['report_id'],'changes':[],
+                    'tasks':['client'],'client':value['plan_id'],'problems':[p['id'] for p in problems],
+                    'before':{'problems':[{'id':p['id'],'title':p['title']} for p in problems]},'proxy':None,'context':{},'repair_json':False}}
+                return {'state':'planned','plan_id':token,'effects':value['effects'],'manual':[],
+                    'manual_items':[{'id':p['id'],'title':p['title']} for p in problems if not p.get('repair')],
+                    'connections':[],'configuration_count':0,'steps':['修复所选客户端并核对 TUN / 进程'],
+                    'staged':True,'reason':'先完成客户端修复并自动复检，再根据新读到的接口与节点生成后续方案；后续修改仍会列出具体影响供确认。'}
+            manual.append(value.get('reason','请在持续维护中选择实际安装的客户端。'))
         cli_finding = next((f for f in report.get("findings", []) if f["id"] == "extra.cli_env"), {})
         cli = next((v for v in cli_finding.get("evidence", []) if isinstance(v, dict)), {})
         cli_used = report.get("usage") in ("cli", "both") or report.get("usage") == "auto" and bool(cli.get("installation_count") or cli.get("config", {}).get("exists"))
         enhance_cli = enhance_cli and cli_used
-        target = report.get('environment', {}).get('targets', {})
         system_route = bool(target) and target.get('connection_mode') in ('direct', 'tun')
         if system_route and proxy is not None:
             raise ValueError('当前目标通过系统路由连接，请先调整目标再选择 HTTP 代理')
@@ -554,7 +578,7 @@ class SolutionPlans:
         selected = next((row for row in report.get("claude_checks", {}).get("items", []) if row["id"] == check_id), None)
         route_plan = None
         needs_routing = any(p.get('repair') == 'routing' for p in problems) or selected and selected['id'] == 'rules' and selected['status'] in ('warn', 'fail', 'unknown')
-        if needs_routing:
+        if needs_routing and not tun_needed:
             route = self.routing.prepare(report) if self.routing else {'reason': '请在持续维护中预览路由配置，或在客户端按所列规则手动处理。'}
             if route.get('state') == 'planned':
                 route_plan = route['plan_id']
@@ -580,10 +604,23 @@ class SolutionPlans:
             if value.get('state')=='planned':
                 network_plan=value['plan_id'];tasks.append('system-network');effects.extend(value['effects'])
             else:manual.append(value['reason'])
+        guard_plan=None
+        guard_needed=(scope_chosen(('baseline.guard',),'guard') and findings.get('baseline.guard',{}).get('status') in ('warn','fail','unknown')
+                      and (check_id=='guard' or scope is not None and 'baseline.guard' in scope
+                           or 'baseline.guard' in report.get('environment',{}).get('required',[])
+                           or any(p['id']=='maintenance.guard' for p in problems)))
+        if self.guard and guard_needed:
+            value=self.guard.prepare_from_report(report) if not tun_needed else {'reason':'先修复并重新检测 TUN，随后根据实际接口预览进程守护。'}
+            if value.get('state')=='planned':
+                guard_plan=value['plan_id'];tasks.append('guard');effects.extend(value['effects'])
+            else:manual.append(value['reason'])
         needs_backend = (selected and selected["id"] in ("proxy", "tun", "guard")
                          and selected["status"] in ("warn", "fail", "unknown") and report.get("usage") != "cli"
-                         and not (selected["id"] == "proxy" and kinds.get("cli")))
-        if any(p.get("repair") == "legacy" for p in problems) or needs_backend:
+                         and not (selected["id"] == "proxy" and kinds.get("cli"))
+                         and not (self.guard if selected['id']=='guard' else self.client))
+        legacy_needed=any((p.get('repair')=='legacy' or p.get('repair')=='guard' and not self.guard)
+                          and not (p['id']=='maintenance.guard' and self.guard) for p in problems)
+        if legacy_needed or needs_backend:
             caps = self.legacy.capabilities()
             fix = next((a for a in caps["actions"] if a["id"] == "fix"), {})
             install = next((a for a in caps["actions"] if a["id"] == "install"), {})
@@ -609,13 +646,13 @@ class SolutionPlans:
         before["configuration"] = [{"target": c["target"], "after_hash": c["after_hash"], "fields": c.get("fields", [])} for c in changes]
         before["configuration_pending"] = list(manual)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"], "changes": changes,
-                              "tasks": tasks, "routing": route_plan, "system_network":network_plan, "problems": [p["id"] for p in problems],
+                              "tasks": tasks, "routing": route_plan, "system_network":network_plan,'guard':guard_plan, "problems": [p["id"] for p in problems],
                               "before": before, "proxy": chosen if changes and any("HTTPS_PROXY" in c.get("fields", []) for c in changes) else None,
                               "context": context, "repair_json": "trailing_comma" in kinds.get("cli", set())}}
         return {"state": "planned", "plan_id": token, "effects": effects, "manual": manual,
                 "manual_items": manual_items, "connections": connections,
                 "configuration_count": len(changes), "enhance_cli": enhance_cli,
-                "steps": ["备份、修改并读回所选系统网络设置" if t=='system-network' else "备份、写入并验证原生路由" if t == 'routing' else "备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
+                "steps": ['注册所选接口 / 端口的进程守护并等待心跳' if t=='guard' else "备份、修改并读回所选系统网络设置" if t=='system-network' else "备份、写入并验证原生路由" if t == 'routing' else "备份并修改确定可处理的配置" if t == "config" else "运行维护核心修复" if t == "fix" else "打开维护核心安装器" for t in tasks],
                 "reason": "确认后执行；配置写入不等于故障已解决，随后自动复检。"}
 
     def apply(self, token, report, confirmed=False):
@@ -644,6 +681,16 @@ class SolutionPlans:
                 return {"state": value["state"], "steps": outputs, "backups": backups, "before": plan["before"], "needs_retest": True}
         for task in plan["tasks"]:
             if task == "config":
+                continue
+            if task=='client':
+                value=self.client.apply(plan['client'],True)
+                return {**value,'before':plan['before'],'steps':[{'step':'client',**value}],'backups':backups,
+                        'next_review':value.get('state')=='completed','needs_retest':value.get('needs_retest',False)}
+            if task=='guard':
+                value=self.guard.enable(plan['guard'],report,True)
+                outputs.append({'step':task,**value})
+                if value['state']!='enabled':
+                    return {**value,'steps':outputs,'backups':backups,'before':plan['before'],'needs_retest':True}
                 continue
             if task=='system-network':
                 try:value=self.network.apply(plan['system_network'],True)

@@ -37,6 +37,7 @@ jobs:
       - run: node --check envscope/web/routing_ui.mjs
       - run: node --check envscope/web/timezone_ui.mjs
       - run: node --check envscope/web/network_ui.mjs
+      - run: node --check envscope/web/client_ui.mjs
       - run: python -m scripts.check_release
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - run: python -m scripts.verify_package dist
@@ -62,3 +63,4 @@ jobs:
       - run: python -m scripts.routing_smoke
       - run: python -m scripts.timezone_service_smoke
       - run: python -m scripts.system_network_smoke
+      - run: python -m scripts.client_repair_smoke

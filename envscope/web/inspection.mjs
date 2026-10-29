@@ -32,7 +32,7 @@ export function initInspection({run,operate,isBusy,retest}){
         output.classList.toggle('inspection-error',['failed','partial','blocked'].includes(result.state));
         for(const r of result.results||[result])for(const step of r.steps||[])if(step.state==='manual')manualItems([{title:step.item,steps:[step.reason]}]);
         for(const b of result.backups||[])$('checks-plan').append(button('撤销 '+b.label,()=>operateHere(async()=>{const undone=await run('solution-undo',{backup_id:b.id},true);output.textContent=undone.reason;await retest(ids);})));
-        if(result.needs_retest)await retest(ids);
+        if(result.needs_retest){await retest(ids);if(result.next_review)await prepare(ids);}
         if(result.state==='waiting_install')$('checks-plan').append(button('安装完成，复检所选',()=>void check(ids)));
         await refreshRecovery();
       }));apply.id='checks-apply';$('checks-plan').prepend(el('h2','本次将修改'),effects,apply);

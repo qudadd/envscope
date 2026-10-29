@@ -280,6 +280,31 @@ class ProcessGuard:
                 and report.get('environment', {}).get('fingerprint') == fingerprint(settings)
                 and any(f['id'] == 'target.region' and f['status'] == 'pass' for f in report.get('findings', [])))
 
+    def prepare_from_report(self,report):
+        """Use only the unique, measured target tunnel; never the first NIC."""
+        interface=''
+        if self.store.settings().get('connection_mode')=='tun':
+            findings={f['id']:f for f in (report or {}).get('findings',[])}
+            route=findings.get('target.tun_route',{})
+            if route.get('status')!='pass':
+                return {'state':'guided','reason':'先修复并复检目标 TUN 选路，再根据实际接口生成进程守护方案。'}
+            inventory=next(iter(findings.get('system.inventory',{}).get('evidence',[])),{})
+            adapters=inventory.get('network',{}).get('adapters',[])
+            names=set()
+            for row in route.get('evidence',[]):
+                if row.get('error'):continue
+                name=row.get('interface')
+                if not name and type(row.get('interface_index')) is int:
+                    matches=[a.get('Name',a.get('name')) for a in adapters if a.get('ifIndex')==row['interface_index']]
+                    if len(matches)==1:name=matches[0]
+                if not isinstance(name,str) or not name:
+                    return {'state':'guided','reason':'目标选路没有可核对的接口名称，请在持续维护中手动选择已测量的隧道接口。'}
+                names.add(name)
+            if len(names)!=1:
+                return {'state':'guided','reason':'本轮目标使用多个隧道或未取得唯一接口，请在持续维护中选择具体守护范围。'}
+            interface=next(iter(names))
+        return self.prepare(report,interface)
+
     def prepare(self, report, interface=''):
         if not self.current(report):
             return {'state': 'retest_required', 'reason': '先确认实际地区和桌面连接方式并检测，再生成守护方案。'}
