@@ -146,6 +146,9 @@ class Operations:
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
+        from .timezone_service import TimezoneService
+        from .inventory import collect
+        self.timezone_service = TimezoneService(store,lambda:(self.environment_reader or collect)())
         from .process_guard import ProcessGuard
         self.process_guard = process_guard or ProcessGuard(store, self.home)
         from .routing import Routing
@@ -218,11 +221,25 @@ class Operations:
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
                 'features':feature_catalog(legacy,browser), 'isolated_browser':browser, 'dmg_archives':dmg,
                 'region_recovery': self.regions.public_recovery(), 'routing': self.routing.status(),
+                'timezone_service': self.timezone_service.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action.startswith('timezone-service-'):
+            allowed={'timezone-service-status':set(),'timezone-service-plan':{'report_id','remove','restore'},
+                     'timezone-service-apply':{'plan_id'},'timezone-service-recovery-plan':set(),
+                     'timezone-service-recover':{'plan_id'}}
+            if action not in allowed or set(params)-allowed[action]:raise ValueError('时区服务参数无效')
+            if action=='timezone-service-status':return self.timezone_service.status()
+            if action=='timezone-service-recovery-plan':return self.timezone_service.prepare_recovery()
+            if action=='timezone-service-recover':return self.timezone_service.recover(params.get('plan_id'),confirmed)
+            if action=='timezone-service-plan':
+                if not params.get('remove',False) and (not report or params.get('report_id')!=report.get('report_id')):
+                    return {'state':'retest_required','reason':'请先完成新的环境检测，再申请系统时区守护。'}
+                return self.timezone_service.prepare(report,remove=params.get('remove',False),restore=params.get('restore',False))
+            return self.timezone_service.apply(params.get('plan_id'),confirmed)
         if action.startswith('routing-'):
             allowed = {'routing-options': set(), 'routing-plan': {'report_id', 'group'},
                        'routing-apply': {'plan_id'}, 'routing-undo-plan': set(), 'routing-undo': {'plan_id'}}

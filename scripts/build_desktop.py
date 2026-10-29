@@ -28,9 +28,22 @@ def main():
                "--distpath", str(root / "dist" / "desktop"), "--workpath", str(root / "build" / "desktop"),
                "--specpath", str(root / "build"), str(root / "scripts" / "desktop_entry.py")]
     environment = dict(os.environ)
+    if platform.system() == 'Darwin':
+        from .build_timezone_worker import build
+        native = build()
+        for name in ('timezone-helper','timezone-helper.json'):
+            command.extend(['--add-data',str(native/name)+os.pathsep+'envscope/native-runtime'])
     environment["PYINSTALLER_CONFIG_DIR"] = str(root / "build" / "pyinstaller-cache")
     subprocess.run(command, cwd=root, check=True, env=environment)
     app = root / "dist" / "desktop" / ("EnvScope.app" if platform.system() == "Darwin" else "EnvScope")
+    if platform.system() == 'Darwin':
+        manifests = list(app.rglob('timezone-helper.json'))
+        assert manifests, 'Native timezone helper missing'
+        for metadata in manifests:
+            expected = json.loads(metadata.read_text())
+            helper = metadata.with_name('timezone-helper')
+            assert hashlib.sha256(helper.read_bytes()).hexdigest()==expected['sha256'], 'Frozen timezone helper bytes changed'
+            assert expected['fixture'] is False, 'Acceptance helper must never ship'
     manifests = list(app.rglob("VENDOR_MANIFEST.json"))
     if not manifests:
         raise RuntimeError("Pinned vendor bundle missing from desktop package")
