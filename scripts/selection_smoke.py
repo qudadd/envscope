@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+import time
 from unittest.mock import Mock
 
 from playwright.sync_api import expect, sync_playwright
@@ -50,6 +51,11 @@ def main():
                                          region_lookup=lambda params: {'state': 'unavailable', 'reason': '离线夹具'})
                         ops.regions = RegionSetup(store, lambda: inventory, home, system, writer, lambda: controller)
                         ops.config_remedies.environ = {}
+                        original_run=ops._run
+                        def delayed_confirmation(action,*args,**kwargs):
+                            if action=='environment-confirm':time.sleep(.2)
+                            return original_run(action,*args,**kwargs)
+                        ops._run=delayed_confirmation
                         def auditor(*args, **kwargs):
                             calls.append(kwargs.get('selected_checks'))
                             values = fixture(home, kwargs['baseline_config'], system)
@@ -86,6 +92,7 @@ def main():
                             expect(page.locator('#target-form [name=timezone]')).to_have_value(desired)
                             page.screenshot(path=str(out/f'{system}-{width}-target.png'), full_page=True)
                             page.locator('#target-confirm').click()
+                            expect(page.locator('#start')).to_be_disabled()
                             expect(page.locator('#start')).to_be_enabled(timeout=30000)
                             expect(page.locator('html')).not_to_have_attribute('data-operation-busy', 'true')
                             page.locator('.tab[data-page=checks]').click()
@@ -125,6 +132,7 @@ def main():
                             page.locator('.tab[data-page=audit]').click()
                             page.locator('#target-configure').click()
                             expect(page.locator('#checks-node-note')).to_contain_text('名称不证明')
+                            expect(page.locator('#checks-region-undo')).to_be_visible()
                             expect(page.locator('html')).not_to_have_attribute('data-operation-busy', 'true')
                             page.locator('#checks-node').select_option('美国 New York')
                             page.locator('#checks-run').click()

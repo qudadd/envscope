@@ -155,7 +155,8 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
   $('target-cancel').addEventListener('click',()=>{if(!saving&&!loading){form.hidden=true;lookupRevision++;clearTimeout(lookupTimer);lookupTimer=null;controls();$('target-edit').focus();}});
   form.addEventListener('submit',async event=>{
     event.preventDefault();if(loading||saving||lookupBusy||lookupTimer||isBusy())return;
-    saving=true;$('target-confirm').disabled=true;
+    saving=true;$('target-confirm').disabled=true;$('start').disabled=true;
+    document.dispatchEvent(new CustomEvent('envscope-operation-state',{detail:{busy:true}}));
     let completed=false;
     try{
       const params=Object.fromEntries(new FormData(form));
@@ -166,8 +167,8 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
       sync(value.settings);form.hidden=true;completed=true;
       document.dispatchEvent(new CustomEvent('envscope-target-changed',{detail:{settings:value.settings}}));
     }catch(error){$('target-output').textContent='目标未保存：'+error.message;}
-    finally{saving=false;$('target-confirm').disabled=false;}
-    if(completed)await retest();
+    finally{saving=false;$('target-confirm').disabled=false;if(!completed)$('start').disabled=false;document.dispatchEvent(new CustomEvent('envscope-operation-state',{detail:{busy:false}}));}
+    if(completed){try{await retest();}finally{$('start').disabled=isBusy();}}
   });
   document.addEventListener('envscope-catalog',event=>{sync(event.detail.settings);if((!settings?.environment_confirmed||!settings?.usage_country)&&form.hidden)void open();});
   document.addEventListener('envscope-target-review',event=>{pendingUsage=['cli','desktop','both','web'].includes(event.detail?.usage)?event.detail.usage:null;if(!loading&&pendingUsage&&!form.hidden){field('usage').value=pendingUsage;visibility();pendingUsage=null;}else if(form.hidden)void open();});

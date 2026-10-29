@@ -8,9 +8,19 @@ export function initInspection({run,operate,isBusy,retest}){
   let catalog=[],report=null,phase='not_run',selection=new Set(),visible=[],groups=[],source='current',initialized=false,defaultsKey=null;
   const selected=()=>[...selection];
   const output=$('checks-output');
-  const button=(text,fn)=>{const b=el('button',text,'link');b.type='button';b.addEventListener('click',fn);return b;};
+  const button=(text,fn)=>{const b=el('button',text,'link');b.type='button';b.disabled=phase==='running'||isBusy()||$('start').disabled;b.addEventListener('click',fn);return b;};
   const operateHere=fn=>operate(fn,output);
-  function invalidate(){$('checks-plan').replaceChildren();$('checks-selected-count').textContent=`已勾选 ${selection.size} 项。所需依赖自动包含；未选项目不算通过。`;$('checks-run').disabled=!selection.size||phase==='running';$('checks-repair').disabled=!selection.size||phase==='running'||!report||source!=='current';}
+  function updateButtons(){
+    const blocked=phase==='running'||isBusy()||$('start').disabled;
+    $('checks-run').disabled=blocked||!selection.size;
+    $('checks-repair').disabled=blocked||!selection.size||!report||source!=='current';
+    for(const id of ['checks-select-all','checks-clear','checks-select-problems','checks-select-visible','checks-load-nodes','checks-node-group','checks-node','checks-region-undo'])$(id).disabled=blocked;
+    for(const node of document.querySelectorAll('#all-checks-list button, #all-checks-list input[type=checkbox], #checks-plan button'))node.disabled=blocked;
+  }
+  function invalidate(){$('checks-plan').replaceChildren();$('checks-selected-count').textContent=`已勾选 ${selection.size} 项。所需依赖自动包含；未选项目不算通过。`;updateButtons();}
+  const busyObserver=new MutationObserver(updateButtons);
+  busyObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-operation-busy']});
+  busyObserver.observe($('start'),{attributes:true,attributeFilter:['disabled']});
   async function check(ids=selected()){
     if(isBusy()||phase==='running')return;
     if(!ids.length){output.textContent='请先勾选要检查的项目。';return;}
@@ -111,6 +121,7 @@ export function initInspection({run,operate,isBusy,retest}){
       return row;
     });
     $('all-checks-list').replaceChildren(...(nodes.length?nodes:[el('p',catalog.length?'没有符合条件的项目，试试清除搜索或切换筛选。':'检查目录尚未取得，请检查本地服务连接。','note')]));
+    updateButtons();
   }
   const applyDefaults=config=>{
     if(!config)return false;
