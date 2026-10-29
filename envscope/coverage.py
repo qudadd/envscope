@@ -1,6 +1,6 @@
 """Traceable capability parity and environment coverage, never a risk score."""
 UPSTREAM = 'https://github.com/YOURSJEYO/claude-switcher'
-REVIEWED_COMMIT = '495b9952f36b8b7b7575fa0d8de48c2465dbf486'
+REVIEWED_COMMIT = '223a5cc44edf36dfa568903ab02e73f0f015ec9e'
 
 FEATURES = (
     ('audit','14 项基础与逐项报告','native','checks','原始证据、问题说明、复检；另有 18 项扩展与目标验收。'),
@@ -18,7 +18,7 @@ FEATURES = (
     ('snapshot','加密存档导出与导入','native','accounts','两平台 AES-256-GCM 加密、认证、清单验证；只导出非活动槽位、导入空槽位。'),
     ('dmg','原版加密 DMG 兼容','snapshot-export','tools','保留 macOS 原版导入 / 导出，不把 .envsnap 当作 DMG。'),
     ('proxy','明确代理连接诊断','native','tools','HTTP / HTTPS / SOCKS5 传输验证；匿名 401 不等于登录成功。'),
-    ('guard','代理故障进程守护','install','tools','随原版维护核心安装；10 秒轮询存在间隙，不能称为防火墙 Kill Switch。'),
+    ('guard','代理故障进程守护','native','upkeep','独立用户任务每 10 秒监测指定端口或网卡 / 内核，按批准范围停止桌面进程；心跳、创建时间核对和日志，不是防火墙。'),
     ('watchdog','时区与地区格式守护','native','upkeep','按批准基线恢复并读回，缺少系统权限时转手动；macOS 特权时区守护仍可另装原版。'),
     ('routing','域名与 UDP 路由维护','fix','tools','保留原版 13 类域名及 STUN 规则入口；实际路线需要复检。'),
     ('upkeep','持续检查与配置保持','native','upkeep','用户任务 / LaunchAgent；批准字段与系统基线恢复，代理离线重开所选客户端，冷却、复检及按日事件日志。'),

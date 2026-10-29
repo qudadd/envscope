@@ -1,5 +1,22 @@
 # Feature parity and integration audit
 
+## Active full-scope work: 0.13 development
+
+[The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
+over historical status tables below. Native process protection is now implemented
+with a separate user task, ten-second checks, approved scope, PID/path/user
+validation, live-worker heartbeat and durable logs. See [its exact scope and
+verification](PROCESS_GUARD.md). Network repair, native routing writes, privileged
+Mac timezone service and DMG compatibility remain incomplete. The overall parity
+goal is not achieved. Upstream Windows `set-region` at `223a5cc` was inspected.
+
+Whole-profile account volumes now use normal client exit, APFS copy-on-write
+where supported, commit readback and a v2 journal with reviewed recovery UI.
+Interrupted recovery is resumable and displaced copies are retained. Synthetic
+identity fixtures and a real disposable child-process exit are tested; real
+Claude credentials and server device recognition remain unverified.
+See [account volume scope](ACCOUNT_VOLUMES.md).
+
 ## Current scope: 0.12.0 (2026-10-29)
 
 IP lookup now filters city presets by the observed exit country and suggests

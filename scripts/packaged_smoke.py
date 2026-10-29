@@ -48,6 +48,9 @@ def main():
         result = subprocess.run([str(executable), "--maintenance-worker", "--check-runtime"], capture_output=True,
                                 timeout=10, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         assert_worker(result, 'frozen maintenance worker imports')
+        result = subprocess.run([str(executable), '--process-guard-worker', '--check-runtime'], capture_output=True,
+                                timeout=10, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        assert_worker(result, 'frozen process guard imports')
         desktop_output = Path(directory) / "native.private.json"
         result = subprocess.run([str(executable), "--desktop-smoke", str(desktop_output)], capture_output=True,
                                 timeout=50, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

@@ -52,6 +52,15 @@ def tunnel(inventory):
 
 
 def guard_state():
+    from .process_guard import ProcessGuard
+    from .state import StateStore
+    native = ProcessGuard(StateStore()).status()
+    if native.get('state') != 'disabled' or native.get('scheduler', {}).get('present'):
+        return {'registered': native.get('scheduler', {}).get('registered') is True,
+                'enabled': native.get('enabled') is True, 'running': native.get('running') is True,
+                'kind': 'envscope-process-guard', 'configured_mode': native.get('baseline', {}).get('client'),
+                'state': native.get('state'), 'heartbeat': native.get('heartbeat'), 'note': native.get('reason'),
+                'error': None if native.get('running') else 'native_guard_not_verified'}
     try:
         if platform.system() == "Windows":
             script = "$t=Get-ScheduledTask -TaskName 'ClaudeBodyguard' -ErrorAction SilentlyContinue; if($t){@{registered=$true;enabled=([string]$t.State -ne 'Disabled');running=([string]$t.State -eq 'Running')}|ConvertTo-Json -Compress}else{'{\"registered\":false}'}"
@@ -97,6 +106,14 @@ def installed_guard_mode(system, path=None):
 
 
 def guard_finding(guard, preferences):
+    if guard.get('kind') == 'envscope-process-guard':
+        active = guard.get('registered') and guard.get('enabled') and guard.get('running')
+        expected, mode = preferences.get('client', 'auto'), guard.get('configured_mode')
+        mismatch = bool(mode and expected != 'auto' and mode != expected)
+        state = Status.FAIL if mismatch else Status.PASS if active else Status.UNKNOWN
+        return baseline_finding('guard', '守护进程', state,
+                                '原生进程守护已收到有效心跳，工作进程与任务归属已核实' if state == Status.PASS else '原生进程守护未确认正常，请在持续维护中处理',
+                                [guard], ['10 秒轮询及停止过程存在流量窗口；只守护已识别的当前用户 Claude 桌面，不是防火墙。'])
     active = guard.get('registered') and guard.get('enabled') and guard.get('running')
     expected, mode = preferences.get('client','auto'), guard.get('configured_mode')
     mismatch = bool(mode and expected!='auto' and mode!=expected)

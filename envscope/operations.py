@@ -26,22 +26,6 @@ def _process(command, timeout=8):
                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
-def stop_claude():
-    if platform.system() == "Windows":
-        # Refuse an unrecognized same-name binary, rather than killing a CLI.
-        code = r"""$p=@(Get-Process -Name Claude -ErrorAction SilentlyContinue)
-foreach($item in $p){if(-not $item.Path -or $item.Path -notmatch '\\(?:WindowsApps\\[^\\]*Claude[^\\]*|Programs\\Claude|Claude|app-[^\\]+)\\'){exit 2}}
-$p|Stop-Process -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
-if(Get-Process -Name Claude -ErrorAction SilentlyContinue){exit 1}
-"""
-        return _process(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", code]).returncode == 0
-    if platform.system() == "Darwin":
-        _process(["/usr/bin/osascript", "-e", 'tell application "Claude" to quit'], timeout=8)
-        return _process(["/usr/bin/pgrep", "-x", "Claude"]).returncode != 0
-    return False
-
-
 def launch_claude():
     if platform.system() == "Windows":
         code = "$a=Get-StartApps|Where-Object {$_.Name -eq 'Claude'}|Select-Object -First 1; if(-not $a){exit 1}; Start-Process explorer.exe -ArgumentList ('shell:AppsFolder\'+$a.AppID)"
@@ -75,13 +59,69 @@ exit 1
     return False
 
 
+def quit_account_claude():
+    """Normal exit of verified desktop processes, including helper readback."""
+    from .process_guard import NativeGuardIO
+    io = NativeGuardIO(Path.home().resolve())
+    try:
+        state = io.snapshot()
+        if state['unreadable']:
+            return False
+        if not state['targets']:
+            return True
+        if platform.system() == 'Windows':
+            # Only numeric PID/time pairs enter this fixed command. Recheck birth
+            # time before closing a window, not just a reusable process number.
+            rows = ','.join('@{id=%d;born=%.6f}' % (p['pid'], p['created']) for p in state['targets'])
+            code = "$items=@(" + rows + r""")
+foreach($item in $items){
+ $p=Get-Process -Id $item.id -ErrorAction SilentlyContinue
+ if(-not $p){continue}
+ $born=($p.StartTime.ToUniversalTime()-[DateTime]::SpecifyKind([DateTime]'1970-01-01','Utc')).TotalSeconds
+ if([Math]::Abs($born-$item.born) -gt 0.01){exit 2}
+ if($p.MainWindowHandle -ne 0){[void]$p.CloseMainWindow()}
+}
+"""
+            if _process(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', code]).returncode != 0:
+                return False
+        elif platform.system() == 'Darwin':
+            if _process(['/usr/bin/osascript', '-e', 'tell application "Claude" to quit']).returncode != 0:
+                return False
+        else:
+            return False
+        for _ in range(30):
+            state = io.snapshot()
+            if state['unreadable']:
+                return False
+            if not state['targets']:
+                return True
+            time.sleep(0.5)
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        return False
+    return False
+
+
+def force_quit_account_claude():
+    """Only used after the separately disclosed per-switch force option."""
+    from .process_guard import NativeGuardIO
+    io = NativeGuardIO(Path.home().resolve())
+    try:
+        before = io.snapshot()
+        if before['unreadable'] or io.stop(before['targets']) is not True:
+            return False
+        after = io.snapshot()
+        return not after['targets'] and not after['unreadable']
+    except (OSError, ValueError, KeyError):
+        return False
+
+
 def launch_gate(report, preferences):
     value = launch_readiness(report, preferences)
     return value["ready"], value["reasons"]
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None):
         self.store = store
         self.environment_reader = environment_reader
         from .region_lookup import lookup_region
@@ -97,12 +137,15 @@ class Operations:
         data = (Path(os.environ.get("APPDATA", str(self.home / "AppData/Roaming"))) / "Claude"
                 if platform.system() == "Windows" and home is None else self.home / "AppData/Roaming/Claude"
                 if platform.system() == "Windows" else self.home / "Library/Application Support/Claude")
-        self.accounts = account_manager or AccountManager(state, data, stop_app=stop_claude, launch_app=launch_claude)
+        self.accounts = account_manager or AccountManager(state, data, stop_app=quit_account_claude,
+                                                         launch_app=launch_claude, force_stop_app=force_quit_account_claude)
         self.isolated_browser = IsolatedBrowser(self.home)
         self.archives = SnapshotArchive(self.accounts, self.home/'.envscope/archive-work')
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
+        from .process_guard import ProcessGuard
+        self.process_guard = process_guard or ProcessGuard(store, self.home)
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}))
         from .region_setup import RegionSetup
@@ -112,9 +155,9 @@ class Operations:
 
     def _open_remedy(self, action):
         system = platform.system()
-        if action == 'maintenance-logs':
+        if action in ('maintenance-logs', 'guard-logs'):
             from .accounts import _safe_chain
-            path=self.maintenance.root/'events';_safe_chain(path)
+            path=(self.process_guard.root if action == 'guard-logs' else self.maintenance.root)/'events';_safe_chain(path)
             if not path.is_dir():return False
         elif action.startswith("config-"):
             path = self.config_remedies.backup_for_editor(action.removeprefix("config-"))
@@ -123,7 +166,7 @@ class Operations:
         else:
             path = None
         if system == "Windows":
-            if path and action=='maintenance-logs':
+            if path and action in ('maintenance-logs', 'guard-logs'):
                 command=[str(Path(os.environ.get('WINDIR','C:/Windows'))/'explorer.exe'),str(path)]
             elif path:
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/notepad.exe"), str(path)]
@@ -134,7 +177,7 @@ class Operations:
                     return False
                 command = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "explorer.exe"), uri]
         elif system == "Darwin":
-            command = ["/usr/bin/open", str(path)] if action=='maintenance-logs' else ["/usr/bin/open", "-e", str(path)] if path else ["/usr/bin/open", "-b", "com.apple.systempreferences"]
+            command = ["/usr/bin/open", str(path)] if action in ('maintenance-logs', 'guard-logs') else ["/usr/bin/open", "-e", str(path)] if path else ["/usr/bin/open", "-b", "com.apple.systempreferences"]
         else:
             return False
         subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -145,7 +188,8 @@ class Operations:
         try:
             accounts = self.accounts.list_accounts()
         except AccountError as error:
-            accounts = {"current": None, "accounts": [], "pending": [], "error": str(error)}
+            accounts = {"current": None, "accounts": [], "pending": [], "error": str(error),
+                        "recovery": self.accounts.recovery.status()}
         legacy = self.legacy.capabilities()
         # Retain the original macOS detailed readers separately from the
         # always-available native information panels.
@@ -162,7 +206,7 @@ class Operations:
                              reason=browser['reason'], effects=['使用独立临时浏览器资料；打开前复检。关闭全部临时窗口后清理，不更改日常浏览器。'])
         desktop = getattr(self, "desktop_runtime", None)
         return {"desktop": desktop.status() if desktop else {"mode": "browser"}, "legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
-                "settings": self.store.settings(), "environment": environment_summary(self.store.settings()), "history": self.store.history(), "maintenance": self.maintenance.status(),
+                "settings": self.store.settings(), "environment": environment_summary(self.store.settings()), "history": self.store.history(), "maintenance": self.maintenance.status(), "process_guard": self.process_guard.status(),
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
                 'features':feature_catalog(legacy,browser), 'isolated_browser':browser,
                 'region_recovery': self.regions.public_recovery(),
@@ -171,6 +215,31 @@ class Operations:
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action in ('account-recovery-plan', 'account-recovery-apply'):
+            allowed = set() if action == 'account-recovery-plan' else {'plan_id'}
+            if set(params) - allowed:
+                raise ValueError('invalid account recovery parameters')
+            return (self.accounts.recovery.plan() if action == 'account-recovery-plan' else
+                    self.accounts.recovery.apply(params.get('plan_id'), confirmed))
+        if action.startswith('guard-'):
+            allowed = {'guard-options': set(), 'guard-status': set(), 'guard-disable': set(), 'guard-logs': set(),
+                       'guard-plan': {'report_id', 'interface'}, 'guard-enable': {'plan_id'}}
+            if action not in allowed or set(params) - allowed[action]:
+                raise ValueError('进程守护参数无效')
+            if action == 'guard-options':
+                return self.process_guard.options()
+            if action == 'guard-plan':
+                if not report or params.get('report_id') != report.get('report_id'):
+                    return {'state': 'retest_required', 'reason': '先完成本轮检测，再生成守护方案。'}
+                return self.process_guard.prepare(report, params.get('interface', ''))
+            if action == 'guard-enable':
+                return self.process_guard.enable(params.get('plan_id'), report, confirmed)
+            if action == 'guard-disable':
+                return self.process_guard.disable(confirmed)
+            if action == 'guard-logs':
+                opened = self.remedy_opener('guard-logs')
+                return {'state': 'opened' if opened else 'unavailable', 'reason': '已打开本机守护日志目录。' if opened else '尚无日志目录；首次启用后会创建。'}
+            return {'state': 'completed', 'guard': self.process_guard.status(), 'reason': '已刷新进程守护状态。'}
         if action == 'region-options':
             if params:
                 raise ValueError('unexpected action parameters')
@@ -301,7 +370,7 @@ class Operations:
         if action == "permission-help":
             from .permissions import permission_help
             return permission_help(report, params, self.home, self.accounts.data_dir, confirmed)
-        native_parameters = {"account-label": {"slot", "label"}, "account-switch": {"slot"},
+        native_parameters = {"account-label": {"slot", "label"}, "account-switch": {"slot", "allow_force"},
                              "account-export": {"slot", "file"}, "account-import": {"slot", "file"}, "app-launch": set(), "app-restart": set(),
                              "proxy-diagnose": {"proxy"}, "support-bundle": set(), "history-compare": {"before", "after"},
                              "history-report": {"id"}, "settings-restore": set(), "learning-complete": {"version"}}
@@ -379,7 +448,8 @@ class Operations:
             if confirmed is not True:
                 return {"state": "confirmation_required", "reason": "此操作会影响应用进程或账号文件"}
             if action == "account-switch":
-                return {"state": "completed", "result": self.accounts.switch(params.get("slot"), preflight=gate)}
+                return {"state": "completed", "result": self.accounts.switch(params.get("slot"), preflight=gate,
+                                                                             allow_force=params.get('allow_force', False))}
             if action == "account-export":
                 return {"state": "completed", "result": self.accounts.copy_snapshot_to(params.get("slot"), params.get("file")),
                         "note": "这是未加密的本地目录备份，不能直接公开分享。请优先使用账号页的加密存档功能。"}

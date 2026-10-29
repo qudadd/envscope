@@ -24,13 +24,13 @@ def execution(scheduler):
     if scheduler.system == "Windows":
         result = scheduler._powershell(
             "$s=Get-ScheduledTaskInfo -TaskName 'EnvScopeMaintenance' -TaskPath '\\' -ErrorAction Stop;"
-            "@{last_run=$s.LastRunTime.ToUniversalTime().ToString('o');result=[long]$s.LastTaskResult}|ConvertTo-Json -Compress")
+            "@{last_run=$s.LastRunTime.ToUniversalTime().ToString('o');result=[long]$s.LastTaskResult}|ConvertTo-Json -Compress".replace('EnvScopeMaintenance',scheduler.task))
         if result.returncode:
             raise RuntimeError("OS task execution record unavailable")
         value = json.loads(result.stdout)
         when = datetime.fromisoformat(value["last_run"].replace("Z", "+00:00"))
         return {"key": when.isoformat(), "at": when, "result": value["result"]}
-    result = scheduler._run(["/bin/launchctl", "print", f"gui/{scheduler.uid}/{LABEL}"])
+    result = scheduler._run(["/bin/launchctl", "print", f"gui/{scheduler.uid}/{scheduler.label}"])
     if result.returncode:
         raise RuntimeError("launchd execution record unavailable")
     runs = re.search(r"^\s*runs\s*=\s*(\d+)\s*$", result.stdout, re.M)
@@ -72,37 +72,44 @@ def main(argv=None):
                 "network_probes": False, "user_config_edits": False, "interval_minutes": 5,
                 "registration": False, "automatic_runs": 0, "removed": False,
                 "scope": "real OS scheduler lifecycle, not real Claude/network acceptance", "os_commands": commands}
+    guard = UserScheduler(home, home/'.envscope/process-guard', role='guard', runner=runner,
+                          command=[str(executable),'--process-guard-worker','--check-runtime'],cwd=str(executable.parent))
+    guard_spec = guard.build(5)
+    evidence['guard'] = {'worker':'frozen-process-guard-check-runtime','registration':False,'automatic_runs':0,'removed':False}
+    jobs = [(scheduler,spec,evidence),(guard,guard_spec,evidence['guard'])]
     path = Path("artifacts/scheduler-acceptance.json")
     path.parent.mkdir(exist_ok=True)
     started = datetime.now(timezone.utc)
-    attempted = False
+    attempted = []
     try:
-        if scheduler.inspect()["present"] is not False:
-            raise RuntimeError("A job already exists or ownership cannot be established; it was not changed")
-        attempted = True
-        scheduler.install(spec)
-        if scheduler.inspect(spec).get("registered") is not True:
-            raise RuntimeError("OS registration was not independently confirmed")
-        evidence["registration"] = True
-        print("OS registration confirmed; waiting for two automatic executions (no manual task trigger).", flush=True)
-        seen = set()
+        for job,definition,proof in jobs:
+            if job.inspect()['present'] is not False:
+                raise RuntimeError('A job already exists or ownership cannot be established; it was not changed')
+            attempted.append((job,definition,proof))
+            job.install(definition)
+            if job.inspect(definition).get('registered') is not True:
+                raise RuntimeError('OS registration was not independently confirmed: '+job.role)
+            proof['registration'] = True
+        print("Both OS registrations confirmed; waiting for two automatic executions each (no manual task trigger).", flush=True)
+        seen = {job.role:set() for job,_,_ in jobs}
         deadline = time.monotonic() + 480
         while time.monotonic() < deadline:
-            value = execution(scheduler)
-            if scheduler.system == "Windows":
-                if value["at"] >= started and value["result"] == 0:
-                    seen.add(value["key"])
-                runs = len(seen)
-            else:
-                runs = value["key"] if value["result"] == 0 else 0
-            if runs > evidence["automatic_runs"]:
-                evidence["automatic_runs"] = runs
-                print("Successful automatic worker executions: " + str(runs), flush=True)
-                path.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
-            if runs >= 2:
+            for job,_,proof in jobs:
+                value = execution(job)
+                if job.system == 'Windows':
+                    if value['at'] >= started and value['result'] == 0:
+                        seen[job.role].add(value['key'])
+                    runs = len(seen[job.role])
+                else:
+                    runs = value['key'] if value['result'] == 0 else 0
+                if runs > proof['automatic_runs']:
+                    proof['automatic_runs'] = runs
+                    print(job.role+': successful automatic executions: '+str(runs),flush=True)
+                    path.write_text(json.dumps(evidence,indent=2),encoding='utf-8')
+            if all(proof['automatic_runs'] >= 2 for _,_,proof in jobs):
                 break
             time.sleep(5)
-        if evidence["automatic_runs"] < 2:
+        if not all(proof['automatic_runs'] >= 2 for _,_,proof in jobs):
             raise RuntimeError("Two successful automatic runs were not observed within eight minutes")
     except Exception as error:
         evidence["error"] = type(error).__name__ + ": " + str(error)
@@ -116,17 +123,20 @@ def main(argv=None):
         raise
     finally:
         try:
-            if attempted:
-                state = scheduler.inspect(spec)
-                if state.get("present") is False or state.get("owned") is True:
-                    scheduler.remove(spec)
-                    evidence["removed"] = scheduler.inspect(spec).get("present") is False
+            for job,definition,proof in attempted:
+                try:
+                    state = job.inspect(definition)
+                    if state.get("present") is False or state.get("owned") is True:
+                        job.remove(definition)
+                        proof['removed'] = job.inspect(definition).get('present') is False
+                except (OSError, ValueError, RuntimeError) as error:
+                    proof['cleanup_error'] = type(error).__name__
         finally:
             path.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
             # Verify the absolute cleanup boundary before a recursive removal.
-            if evidence["removed"] and base.parent == Path(tempfile.gettempdir()).resolve() and base.name.startswith("envscope-scheduler-acceptance-"):
+            if all(proof['removed'] for _,_,proof in jobs) and base.parent == Path(tempfile.gettempdir()).resolve() and base.name.startswith("envscope-scheduler-acceptance-"):
                 shutil.rmtree(base)
-    if not evidence["removed"]:
+    if not all(proof['removed'] for _,_,proof in jobs):
         raise RuntimeError("OS job removal was not independently confirmed")
     print("Verified actual OS registration, repeated automatic execution and removal.")
     return 0

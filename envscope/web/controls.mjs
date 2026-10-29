@@ -1,6 +1,8 @@
 // Fixed desktop actions. No user input becomes an executable or shell command.
 import {describeProxy} from './diagnosis.mjs';
 import {DISCONNECTED, disconnected} from './connection.mjs';
+import {initProcessGuard,renderProcessGuard} from './process_guard_ui.mjs';
+import {initAccountRecovery,renderAccountRecovery} from './account_recovery_ui.mjs';
 const $=id=>document.getElementById(id);
 const LABELS={install:"安装维护核心与后台保护",uninstall:"卸载原版维护组件",status:"读取原版账号状态",check:"原版概要检测",checkdetail:"原版完整检测",fix:"修复环境", "update-check":"检查维护核心更新","update-apply":"更新维护核心","set-region":"按出口重设系统地区","set-client":"更换原版代理客户端",fingerprint:"设备信息","cli-info":"CLI 安装信息","open-safe":"打开临时浏览器","snapshot-export":"导出加密 DMG","snapshot-import":"导入加密 DMG","diagnose-proxy":"原版代理诊断"};
 import {watchdogSelection} from './watchdog_ui.mjs';
@@ -27,7 +29,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     try{
     const response=await fetch("/api/catalog",{signal:controller.signal,headers:{"X-EnvScope-Token":session.token},cache:"no-store"});
     if(!response.ok)throw new Error("无法读取本机功能列表，请刷新状态或重新打开程序。");
-    catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderBackups();$('catalog-error').hidden=true;
+    catalog=await response.json();renderAccounts();renderHistory();renderSettings();renderMaintenance();renderUpkeep(catalog.maintenance);renderProcessGuard(catalog.process_guard,catalog.settings);renderBackups();$('catalog-error').hidden=true;
     document.dispatchEvent(new CustomEvent('envscope-catalog',{detail:{desktop:catalog.desktop,learning:catalog.learning,settings:catalog.settings,maintenance:catalog.maintenance,proxies:catalog.proxies,checks:catalog.checks,features:catalog.features}}));
     const options=[el("option","手动填写")];options[0].value="";
     for(const proxy of catalog.proxies||[]){const option=el("option",proxy.url+" · "+proxy.sources.join(" / "));option.value=proxy.url;options.push(option);}
@@ -51,7 +53,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
-    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button')].map(node=>[node,node.disabled]);
+    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button')].map(node=>[node,node.disabled]);
     for(const [node] of disabledBefore)node.disabled=true;
     busy=true;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     $(output).scrollIntoView({block:'nearest'});
@@ -65,9 +67,10 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(id==='archive-choose-file'){if(result.file)$('encrypted-path').value=result.file;$(output).textContent=result.reason||(result.file?'文件位置已选择。':'已取消选择。');}
       else if(['archive-export','archive-import','browser-cleanup','open-safe'].includes(id))$(output).textContent=[result.reason,result.boundary].filter(Boolean).join('\n');
       else if(['cli-info','fingerprint'].includes(id)&&result.rows)information(result);
-      else if(id.startsWith('maintenance-'))$(output).textContent=result.reason||({planned:'方案已生成，请核对下方影响。',enabled:'持续维护已启用。',disabled:'持续维护已停用。',completed:'已刷新维护结果。',confirmation_required:'请先审核方案并确认。'})[result.state]||'本次操作尚未确认完成。';
+      else if(id.startsWith('maintenance-')||id.startsWith('guard-'))$(output).textContent=result.reason||({planned:'方案已生成，请核对下方影响。',enabled:'持续维护已启用。',disabled:'持续维护已停用。',completed:'已刷新维护结果。',confirmation_required:'请先审核方案并确认。'})[result.state]||'本次操作尚未确认完成。';
       else if(result.state==="completed"&&["settings-save","settings-restore"].includes(id))$(output).textContent=id==="settings-save"?"已保存，后续检测使用新偏好。":"已恢复上次偏好。";
       else if(result.state==="completed"&&id==="account-label")$(output).textContent="账号名称已保存。";
+      else if(id.startsWith('account-recovery-'))$(output).textContent=[result.reason,result.manual].filter(Boolean).join('\n');
       else if(result.state==="completed"&&id==="account-switch")$(output).textContent="已准备槽位 "+result.result.slot+(result.result.launched?"，已提交应用启动请求。":"，应用未启动，请查看安装状态。")+(result.result.warnings?.length?"\n"+result.result.warnings.join("\n"):"");
       else if(id==='app-launch')$(output).textContent=[result.reason,...result.reasons||[]].filter(Boolean).join('\n');
       else if(result.state==="completed"&&id==="support-bundle")$(output).textContent="诊断包已导出，分享前请复核。"+(!result.bundle?.report?' 本轮尚无检测报告，包内仅含设置与维护能力信息。':'');
@@ -83,19 +86,27 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
         try{await refresh();}catch{$(output).append(el('p','操作已返回，但功能列表刷新失败。请重新打开程序核对状态。','note'));}
       }return result;
     }catch(error){if(error instanceof TypeError){disconnected();$(output).textContent=DISCONNECTED;}else $(output).textContent=error.name==="AbortError"?"等待已超时。操作可能仍在后台执行；请查看实际状态，避免重复执行。":String(error.message);return null;}
-    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog)renderAccounts();}
+    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();renderProcessGuard(catalog.process_guard,catalog.settings);}}
   }
   function renderAccounts(){
     const value=catalog.accounts;
+    renderAccountRecovery(value,busy);
+    const locked=!!value.pending?.length||!!value.error;
+    $('account-note').classList.toggle('manual-guidance',locked);
+    for(const id of ['account-add','account-export','account-import','encrypted-export','encrypted-import'])$(id).disabled=busy||locked;
     $("account-note").textContent=value.error|| (value.pending?.length?"发现未完成的事务，已保留所有副本并阻止切换。请检查："+value.pending.join("、"):
       value.current?"当前资料："+value.current+"。当前只代表已载入该资料，登录是否有效请在 Claude 中确认。":"尚未归档当前资料。首次使用会先将现有桌面资料保留为 A；不会自动注册账号。");
     const [t,body]=table(["槽位","名称","状态","存档大小",""]);
     for(const a of value.accounts){const r=el("tr");r.dataset.account=a.slot;cell(r,a.slot);cell(r,a.label||"未命名");cell(r,({active:"当前资料",archived:"已有存档",empty:"空资料",recovery_required:"需恢复"})[a.state]||a.state);
       cell(r,a.bytes===null?"—":(a.bytes/1048576).toFixed(1)+" MB");const c=cell(r,"");
       const first=!value.current&&a.slot==='A';
-      const b=button(a.is_current?'打开当前账号':first?'保存当前资料到 A':a.has_snapshot?'切换并打开':'首次登录',()=>action(a.is_current?'app-launch':'account-switch',a.is_current?{}:{slot:a.slot},'account-output',
-        a.is_current?'将重新检测并打开当前 Claude 桌面资料；登录有效性仍需在 Claude 中确认。':`请先保存 Claude 中的工作。将重新检测、退出桌面应用，再${first?'把现有资料归为 A':`保留当前资料并载入 ${a.label||a.slot}` }。${!value.current&&!first?'现有资料先保留在 A。':''}${!a.has_snapshot&&!first?'目标为空资料，需要在 Claude 中手动登录自己的另一个账号。':''}`));
-      b.disabled=busy||!!value.pending?.length||!!value.error;const rename=button("命名",()=>{const label=window.prompt("显示名称（仅作本机备注，不是登录邮箱）",a.label||"");if(label!==null)void action("account-label",{slot:a.slot,label},"account-output");});rename.disabled=busy;c.append(b,rename);body.append(r);
+      const b=button(a.is_current?'打开当前账号':first?'保存当前资料到 A':a.has_snapshot?'切换并打开':'首次登录',async()=>{
+        const force=!a.is_current&&$('account-force-close').checked;
+        const result=await action(a.is_current?'app-launch':'account-switch',a.is_current?{}:{slot:a.slot,allow_force:force},'account-output',
+          a.is_current?'将重新检测并打开当前 Claude 桌面资料；登录有效性仍需在 Claude 中确认。':`请先保存 Claude 中的工作。将重新检测、退出桌面应用，再${first?'把现有资料归为 A':`保留当前资料并载入 ${a.label||a.slot}` }。${!value.current&&!first?'现有资料先保留在 A。':''}${!a.has_snapshot&&!first?'目标为空资料，需要在 Claude 中手动登录自己的另一个账号。':''}${force?'\n已选择：正常退出失败时强制退出已识别的 Claude 桌面进程，未保存内容可能丢失。':''}`);
+        if(result?.state==='completed')$('account-force-close').checked=false;
+      });
+      b.disabled=busy||locked;const rename=button("命名",()=>{const label=window.prompt("显示名称（仅作本机备注，不是登录邮箱）",a.label||"");if(label!==null)void action("account-label",{slot:a.slot,label},"account-output");});rename.disabled=busy||locked;c.append(b,rename);body.append(r);
     }$("account-list").replaceChildren(t);
   }
   function renderHistory(){
@@ -107,6 +118,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     if(history.length){$("history-after").value=history.at(-1).id;$("history-before").value=history.at(-2)?.id||history.at(-1).id;}
     $("history-compare").disabled=history.length<2;
   }
+  initAccountRecovery(action);
   function renderSettings(){
     const form=$("settings-form");for(const [key,value] of Object.entries(catalog.settings)){const field=form.elements.namedItem(key);if(!field)continue;
       if(field.type==="checkbox")field.checked=value;else field.value=Array.isArray(value)?value.join("\n"):value;}
@@ -167,6 +179,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     }
     $('config-backups').replaceChildren(records.length?t:el('p','尚无配置恢复记录。','note'));
   }
+  initProcessGuard({action,reportId:()=>lastReportId});
   $('upkeep-prepare').addEventListener('click',async()=>{
     $('upkeep-plan').replaceChildren();
     const value=await action('maintenance-plan',{report_id:lastReportId,interval:Number($('upkeep-interval').value),auto_restore:$('upkeep-restore').checked,watchdog:watchdogSelection('upkeep')},'upkeep-output');
@@ -256,6 +269,10 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     try{
       const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'maintenance-status',params:{},confirmed:false})});
       if(response.ok){const value=await response.json();renderUpkeep(value.maintenance);document.dispatchEvent(new CustomEvent('envscope-maintenance-status',{detail:value.maintenance}));}
+      if(!$('page-upkeep').hidden){
+        const guardResponse=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action:'guard-status',params:{},confirmed:false})});
+        if(guardResponse.ok){const value=await guardResponse.json();renderProcessGuard(value.guard,catalog?.settings||{});}
+      }
     }catch{/* Keep the explicit last completion time; never fabricate a new heartbeat. */}
   },15000);
   try{await refresh();}catch(error){$("backend-note").textContent=error.message;document.dispatchEvent(new CustomEvent('envscope-catalog-error'));}

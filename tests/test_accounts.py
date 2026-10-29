@@ -412,7 +412,7 @@ class AccountTests(unittest.TestCase):
             if Path(destination).name == "session.txt":
                 Path(destination).write_text("corrupt")
             return result
-        with patch.object(accounts.shutil, "copy2", side_effect=corrupt):
+        with patch.object(accounts, "copy_profile_file", side_effect=corrupt):
             with self.assertRaises(AccountError):
                 _copy_verified(self.root / "source", self.root / "copy")
         self.assertEqual(self.text(self.root / "source"), "original")

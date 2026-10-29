@@ -221,7 +221,7 @@ class EnvironmentCoverageTests(unittest.TestCase):
                 rows = feature_catalog(legacy,{'available':False})['rows']
                 self.assertEqual(len(rows),len(FEATURES))
                 indexed = {r['id']:r['state'] for r in rows}
-                self.assertEqual(indexed['guard'],'needs_core')
+                self.assertEqual(indexed['guard'],'native')
                 self.assertEqual(indexed['browser'],'needs_browser')
                 self.assertEqual(indexed['watchdog'],'native')
 

@@ -90,3 +90,11 @@ and installation documentation, Claude API error semantics, curl error codes,
 and Microsoft Settings URI documentation. These are factual interface and
 troubleshooting references; no implementation code is copied. Research captures
 stay outside the repository, with provenance in docs/sources.lock.json.
+
+## psutil
+
+Native process and network-interface inspection and identity-checked process
+termination use [psutil](https://github.com/giampaolo/psutil), BSD-3-Clause.
+It is a runtime dependency; the desktop build includes its distribution license.
+Source use follows the [official API reference](https://psutil.readthedocs.io/).
+No psutil process operation runs merely from importing EnvScope.

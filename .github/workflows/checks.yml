@@ -32,6 +32,8 @@ jobs:
       - run: node --check envscope/web/desktop.mjs
       - run: node --check envscope/web/target.mjs
       - run: node --check envscope/web/coverage.mjs
+      - run: node --check envscope/web/process_guard_ui.mjs
+      - run: node --check envscope/web/account_recovery_ui.mjs
       - run: python -m scripts.check_release
       - run: python -m pip wheel . --no-deps --wheel-dir dist
       - run: python -m scripts.verify_package dist
@@ -52,3 +54,5 @@ jobs:
       - run: python -m scripts.selection_smoke
       - run: python -m scripts.region_lookup_smoke
       - run: python -m scripts.watchdog_smoke
+      - run: python -m scripts.process_guard_smoke
+      - run: python -m scripts.account_recovery_smoke

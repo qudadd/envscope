@@ -17,6 +17,8 @@ import stat
 import time
 import uuid
 
+from .profile_copy import copy_profile_file
+
 
 class AccountError(RuntimeError):
     """A requested account action could not safely complete."""
@@ -64,7 +66,7 @@ def _file_signature(path):
     descriptor = os.open(path, flags)
     with os.fdopen(descriptor, "rb") as stream:
         info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode):
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise AccountError("A profile entry changed while being read.")
         hasher = hashlib.sha256()
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -92,6 +94,8 @@ def _manifest(root, hashes=True):
                 result[key] = ("directory",)
                 todo.append(path)
             elif stat.S_ISREG(info.st_mode):
+                if info.st_nlink != 1:
+                    raise AccountError("Shared hard-linked files are forbidden in isolated account profiles.")
                 result[key] = _file_signature(path) if hashes else ("file", info.st_size, None)
             else:
                 raise AccountError("Special files are forbidden in profile snapshots.")
@@ -110,10 +114,17 @@ def _copy_verified(source, destination):
     before = _manifest(source)
     if os.path.lexists(destination):
         raise RecoveryRequired("A staging directory already exists; it was preserved.")
-    shutil.copytree(source, destination, copy_function=shutil.copy2, symlinks=True)
+    shutil.copytree(source, destination, copy_function=copy_profile_file, symlinks=True)
     if before != _manifest(source) or before != _manifest(destination):
         raise AccountError("Snapshot verification failed or its source changed during copying.")
     destination.chmod(0o700)
+
+
+def _tree_digest(path):
+    _safe_chain(path)
+    if not os.path.lexists(path):
+        return None
+    return hashlib.sha256(json.dumps(_manifest(path), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
 def _remove_staging(path):
@@ -139,7 +150,7 @@ def _atomic_text(path, text):
 
 
 class AccountManager:
-    def __init__(self, state_dir, data_dir, current_filename=None, stop_app=None, launch_app=None):
+    def __init__(self, state_dir, data_dir, current_filename=None, stop_app=None, launch_app=None, force_stop_app=None):
         self.state_dir = Path(os.path.abspath(os.fspath(state_dir)))
         self.data_dir = Path(os.path.abspath(os.fspath(data_dir)))
         self.accounts_dir = self.state_dir / "accounts"
@@ -156,10 +167,13 @@ class AccountManager:
         if common in {state, data}:
             raise AccountError("Account storage and live profile paths must not overlap.")
         self.stop_app = stop_app
+        self.force_stop_app = force_stop_app
         self.launch_app = launch_app
         self.labels_file = self.state_dir / "account-labels.json"
         self.journal_file = self.state_dir / "account-transaction.json"
         self.keep_file = self.state_dir / "keep-in-workspace.txt"
+        from .account_recovery import AccountRecovery
+        self.recovery = AccountRecovery(self)
 
     def _check_roots(self):
         for path in (self.accounts_dir, self.data_dir, self.labels_file, self.journal_file, self.keep_file):
@@ -261,7 +275,8 @@ class AccountManager:
             accounts.append({"slot": slot, "label": labels.get(slot, ""), "has_snapshot": has_snapshot,
                              "is_current": slot == current, "bytes": size, "updated_at": modified,
                              "state": "recovery_required" if pending else "active" if slot == current else "archived" if has_snapshot else "empty"})
-        return {"current": current, "accounts": accounts, "pending": pending}
+        return {"current": current, "accounts": accounts, "pending": pending,
+                "recovery": self.recovery.status()}
 
     def inspect_integrity(self):
         """Read structural metadata without walking or hashing profile contents."""
@@ -448,8 +463,10 @@ class AccountManager:
             launched = launch_app() is True
             return {"launched": launched, "stop_confirmed": True if restart else None, "profiles_changed": False}
 
-    def switch(self, slot, preflight):
+    def switch(self, slot, preflight, allow_force=False):
         slot = validate_slot(slot)
+        if type(allow_force) is not bool:
+            raise AccountError('强制退出选项必须明确选择。')
         if not callable(preflight):
             raise PreflightError("A preflight callback is required.")
         try:
@@ -496,8 +513,15 @@ class AccountManager:
                 record('exit_failed')
                 raise AccountError("Application termination failed; profile data was preserved.") from exc
             if stopped is not True:
-                record('exit_unconfirmed')
-                raise AccountError("Application exit was not confirmed; profile data was preserved.")
+                if allow_force and callable(self.force_stop_app):
+                    record('forced_exit_approved')
+                    try:
+                        stopped = self.force_stop_app()
+                    except Exception:
+                        stopped = False
+                if stopped is not True:
+                    record('exit_unconfirmed')
+                    raise AccountError('Claude 退出未确认，资料没有交换。请保存工作并从 Claude 托盘菜单退出后重试；也可单独选择允许强制退出。')
             live_stage = self.data_dir.with_name(self.data_dir.name + ".new")
             live_previous = self.data_dir.with_name(self.data_dir.name + ".previous")
             archive = self.accounts_dir / current if current and live_exists else None
@@ -506,7 +530,17 @@ class AccountManager:
             originals = {path: path.read_text(encoding="utf-8-sig") for path in self._current_paths() if path.exists()}
             archive_old_moved = archive_committed = live_old_moved = live_committed = False
             committed = False
+            journal = {"schema_version": 2, "transaction": transaction, "slot": slot,
+                       "previous": original_current, "archived": current if archive else None,
+                       "profile_path": hashlib.sha256(os.path.normcase(str(self.data_dir)).encode()).hexdigest(),
+                       "state": "preparing", "live_digest": _tree_digest(self.data_dir),
+                       "archive_digest": _tree_digest(archive) if archive else None,
+                       "target_digest": None,
+                       "markers": {p.name: value for p, value in originals.items()}}
             try:
+                # Written before copying: a process exit at any later step leaves
+                # enough evidence to recover without guessing an account identity.
+                _atomic_text(self.journal_file, json.dumps(journal) + '\n')
                 if archive:
                     _copy_verified(self.data_dir, archive_stage)
                 # First-run target A must load the newly archived live identity.
@@ -517,9 +551,8 @@ class AccountManager:
                     live_stage.mkdir(parents=True, mode=0o700)
                     _manifest(live_stage)
                 self._merge_retained(live_stage, keep_paths)
-                _atomic_text(self.journal_file, json.dumps({"schema_version": 1, "transaction":transaction, "slot": slot,
-                                                          "previous": original_current, "archived": current,
-                                                          "state": "staged"}) + "\n")
+                journal.update(state='staged', target_digest=_tree_digest(live_stage))
+                _atomic_text(self.journal_file, json.dumps(journal) + '\n')
                 record('staged_and_verified')
                 if archive:
                     if archive.exists():
@@ -534,7 +567,12 @@ class AccountManager:
                 live_committed = True
                 self._write_current(slot, originals)
                 if self._read_current()!=slot:raise AccountError('Current account marker did not read back')
+                if (_tree_digest(self.data_dir) != journal['target_digest']
+                        or archive and _tree_digest(archive) != journal['live_digest']):
+                    raise AccountError('Committed account data did not read back')
                 record('committed')
+                journal['state'] = 'committed'
+                _atomic_text(self.journal_file, json.dumps(journal) + '\n')
                 committed = True
             except Exception as exc:
                 rollback_errors = []

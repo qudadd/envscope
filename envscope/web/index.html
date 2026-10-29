@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.12.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span>0.13.0 alpha</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="coverage">环境全览</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -130,6 +130,14 @@
       <section class="upkeep-state"><h2 id="upkeep-state">尚未启用</h2><p id="upkeep-status" class="note" aria-live="polite">后台任务需先生成方案并明确启用。</p><p id="upkeep-egress" class="note"></p><p id="upkeep-watchdog-state" class="note" role="status"></p>
         <div class="actions"><button id="upkeep-run" disabled>立即复检</button><button id="upkeep-report" disabled>查看最近一次巡检</button><button id="upkeep-refresh" class="link">刷新状态</button><button id="upkeep-stop" class="link" disabled>停用并移除任务</button></div>
       </section>
+      <section class="tool-section" id="process-guard-panel"><h2>代理故障时停止 Claude</h2>
+        <p class="note">独立的 10 秒进程守护。端口或指定隧道异常时停止当前用户的 Claude 桌面，避免继续重试；未保存内容可能丢失。需要先审核并启用，轮询不是防火墙。</p>
+        <h3 id="process-guard-state">未启用</h3><p id="process-guard-status" class="note" role="status"></p><p id="process-guard-route" class="note"></p>
+        <div id="process-guard-interface-row"><button id="process-guard-load" class="link">读取网卡</button><label>要守护的隧道网卡<select id="process-guard-interface"><option value="">选择隧道网卡</option></select></label></div>
+        <div class="actions"><button id="process-guard-prepare">生成进程守护方案</button><button id="process-guard-refresh" class="link">刷新守护状态</button><button id="process-guard-stop" class="link" disabled>停用进程守护</button></div>
+        <div id="process-guard-plan"></div><div id="process-guard-output" class="solution-output" aria-live="polite"></div>
+        <details><summary>进程守护记录</summary><p id="process-guard-journal" class="note"></p><button id="process-guard-logs" class="link">打开守护日志</button><div id="process-guard-events" class="note"></div></details>
+      </section>
       <section class="tool-section"><h2>维护方案</h2><p class="note">先完成一键检测，再以当前设置生成方案。Windows 使用当前用户计划任务，macOS 使用用户 LaunchAgent，无需管理员常驻服务。移动应用目录后需重新启用。</p>
         <label>复检间隔<select id="upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label>
         <label class="checkbox"><input id="upkeep-restore" type="checkbox">保持已批准的 Code 代理和 TLS 配置</label>
@@ -141,7 +149,7 @@
         <button id="upkeep-prepare">生成维护方案</button><div id="upkeep-plan"></div><div id="upkeep-output" class="solution-output" aria-live="polite"></div>
       </section>
       <section class="tool-section"><h2>最近事件</h2><p class="note">此处展示最近 20 条；完整事件按日追加到本机日志，不随界面记录轮替删除。先记录漂移与计划动作，再执行、读回和复检。备份仅存本机。</p><p id="upkeep-journal" class="note"></p><button id="upkeep-open-logs" class="link">打开完整日志目录</button><div id="upkeep-events"><p class="note">尚无维护事件。</p></div></section>
-      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、账号登录和系统授权需本人确认。后台不弹出提权对话框、不安装代理、不切换账号或停止 Claude；没有时区写入权限时保留失败记录和手动指引。macOS 可另行配置随附开源维护核心的时区守护。</p></section>
+      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、账号登录和系统授权需本人确认。只有单独批准进程守护才会自动停止 Claude。后台不弹出提权对话框、不安装代理、不切换账号；没有时区写入权限时保留失败记录和手动指引。macOS 可另行配置随附开源维护核心的时区守护。</p></section>
     </div>
 
     <div id="page-coverage" class="page" hidden>
@@ -153,11 +161,14 @@
     </div>
 
     <div id="page-accounts" class="page" hidden>
-      <h1>账号</h1><p class="subtle">按账号封存完整本地资料目录，校验后载入对应存档；切换不调用登出接口，也不重新生成已有本地设备标识。</p>
+      <h1>账号</h1><p class="subtle">每个账号使用独立本地数据卷。切换时正常退出 Claude，完整封存并载入对应资料；保留已有身份与会话，不调用登出接口。</p>
       <details><summary>数据隔离与切换记录</summary><p class="note">各账号保存其目录内已有的会话、设备标识与本地状态。交换前退出 Claude，逐文件校验暂存副本，再以目录重命名提交；失败回滚，未完成事务保留恢复资料并停止启动。切换事件按日保存在 ~/.claude-switcher/account-events，不记录凭据内容。跨账号保留仅限显式选择的 skills/ 文件。</p><p class="note">系统钥匙串、系统凭据库和服务端会话状态不等于资料目录内容，登录过期仍可能需要本人重新认证。本功能不保证服务端设备判断、账号稳定性或跨机器登录迁移。</p></details>
       <section class="account-guide" aria-label="账号使用步骤"><h2>第一次怎样使用</h2><ol><li>只有一个账号：正常在 Claude 登录即可，无需添加槽位。</li><li>需要多个账号：先给 A 命名，检测通过后点“保存当前资料到 A”。</li><li>给 B 命名，点“首次登录”；现有资料会保留在 A，在新打开的 Claude 中登录自己的另一个账号。</li><li>以后用“切换并打开”返回已有存档。请先保存工作；切换会退出桌面应用。</li></ol><p class="note">A、B 是资料文件夹的代号，不是邮箱或已注册账号。添加名称不会创建 Claude 账号，也不会登录。Claude Code 和浏览器的登录不随此处切换。</p><button id="account-check" class="link">检测启动条件</button></section>
       <p id="account-readiness" class="note" role="status">先检测环境；切换时还会重新检测。</p><button id="account-view-checks" class="link">查看启动条件与处理办法</button>
-      <p id="account-note" class="note"></p><div id="account-list"></div>
+      <p id="account-note" class="note" role="status"></p>
+      <section id="account-recovery" class="tool-section" hidden aria-label="恢复未完成的资料交换"><h2>恢复未完成的资料交换</h2><p id="account-recovery-status" class="note" role="status"></p><button id="account-recovery-check">检查恢复方案</button><div id="account-recovery-plan" hidden><ul id="account-recovery-effects"></ul><button id="account-recovery-confirm">确认恢复资料</button></div></section>
+      <div id="account-list"></div>
+      <label class="checkbox"><input id="account-force-close" type="checkbox">正常退出失败时允许强制退出（未保存内容可能丢失，仅用于本次选择的切换）</label>
       <div class="inline-form"><label>新增资料代号<input id="new-slot" maxlength="32" placeholder="work" aria-describedby="slot-help"></label><label>显示名称<input id="new-label" maxlength="80" placeholder="例如：工作账号"></label><button id="account-add">添加</button></div><p id="slot-help" class="note">代号使用英文字母、数字、下划线或短横线，以字母或数字开头；最多 32 字符。可先使用现有的 A、B。</p>
       <section class="tool-section"><h2>加密备份与恢复</h2><p class="note">Windows / macOS 均可使用 .envsnap 加密存档。先切换到其他账号，再导出非活动槽位；导入只能选择空槽位。密码不保存，丢失无法恢复。存档不保证登录凭据能跨设备或系统迁移。</p>
         <div class="form-grid"><label>槽位<input id="encrypted-slot" placeholder="B" maxlength="32"></label><label>密码<input id="encrypted-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" placeholder="至少 12 个字符"></label></div>
@@ -180,7 +191,7 @@
         <p class="note">仅经指定代理检测 Claude 网页与 API，区分连接失败、需认证、拒绝访问、限流及服务错误。代理失败不回退直连。</p>
       </section>
       <section class="tool-section" id="environment-tools"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">点击后在下方显示，不会打开额外窗口。设备和浏览器信息用于排障，不推断账号风险。</p><div id="environment-output" class="information-output" role="status" tabindex="-1"><p class="note">选择一项查看；无需先安装维护核心。</p></div></section>
-      <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生实现检测和资料交换，系统级修复与进程守护仍通过原版维护核心。随附源码不等于已安装维护核心。</p><table><thead><tr><th>用途</th><th>claude-switcher</th><th>EnvScope</th></tr></thead><tbody><tr><td>检查与解释</td><td>14 类环境检查</td><td>14 项基础 + 18 项扩展，另列独立测量；提供用途和下一步</td></tr><tr><td>桌面账号</td><td>Mac A–D；Windows A/B 界面</td><td>可命名的动态槽位，校验复制、失败回滚、切换前复检</td></tr><tr><td>配置修复</td><td>偏重系统、代理和路由</td><td>增加 Code 配置预览、备份撤销与自动复检；系统修复仍接入原版</td></tr><tr><td>长期保持</td><td>进程守护；Mac 时区守护</td><td>增加定时复检、历史与批准的 Code 字段恢复；进程守护需另装原版核心</td></tr><tr><td>仍有边界</td><td>Mac 有加密 DMG、临时浏览器等</td><td>这些 Mac 工具仍由原版提供；Windows 尚无原生等价功能，定时复检也不是断网保护</td></tr></tbody></table><p class="note">对照随附固定版本 870c4ca；2026-10-28 核对上游 f20a38a，后续 Windows 控制接口回退修复尚未纳入随附核心。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FEATURE_PARITY.md" target="_blank" rel="noopener noreferrer">完整源码对照与功能边界</a></details>
+      <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生提供逐项检查、配置预览与恢复、独立账号资料、加密存档、临时浏览器、托盘和完整软件更新。持续维护同时提供分钟级基线恢复，以及单独批准的 10 秒进程守护。</p><p class="note">系统网络修复、置顶路由写入、Mac 特权时区服务与原版 DMG 兼容仍有维护核心依赖；没有把这些功能算作原生实现。功能对照见环境全览。</p><p class="note">上游核对至 223a5cc，已核对其新增 Windows 地区设置；随附源码仍固定在 870c4ca。完整升级尚未完成，当前缺口和验证要求持续记录。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FULL_PARITY_AUDIT.md" target="_blank" rel="noopener noreferrer">完整功能升级核对表</a></details>
       <section class="tool-section"><h2>配置备份</h2><p class="note">最近 20 份可识别恢复记录，关闭后仍保留。撤销会先停用持续维护，并校验备份和当前文件；后续已有修改时拒绝覆盖。原文位于 ~/.envscope/config-backups，可能含密钥，不可分享。</p><div id="config-backups"></div></section>
       <section class="tool-section"><h2>维护</h2><p id="backend-note" class="note">正在读取已安装的维护核心。</p>
         <label>操作<select id="maintenance-action"></select></label>

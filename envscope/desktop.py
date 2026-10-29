@@ -8,6 +8,9 @@ from .service import expire_idle, make_server
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--process-guard-worker":
+        from .process_guard import main as guard_main
+        return guard_main(sys.argv[2:])
     if len(sys.argv) == 3 and sys.argv[1] == "--desktop-smoke":
         from ._desktop_test import main as desktop_test
         return desktop_test(sys.argv[2])

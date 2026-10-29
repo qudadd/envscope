@@ -117,6 +117,7 @@ def main():
 
                 page.get_by_role('button', name='账号', exact=True).click()
                 expect(page.locator('.account-guide')).to_contain_text('不是邮箱或已注册账号')
+                expect(page.locator('#account-force-close')).not_to_be_checked()
                 page.locator('#new-slot').fill('错误代号')
                 page.locator('#account-add').click()
                 expect(page.locator('#account-output')).to_contain_text('显示名称可以使用中文')
@@ -134,9 +135,19 @@ def main():
                     page.once('dialog', lambda d: d.accept())
                     page.locator('[data-account="A"]').get_by_role('button', name='保存当前资料到 A', exact=True).click()
                     expect(page.locator('#account-output')).to_contain_text('已准备槽位 A')
-                    page.once('dialog', lambda d: d.accept())
+                    normal_stop = manager.stop_app
+                    manager.stop_app = lambda: False
+                    manager.force_stop_app = lambda: events.append('forced-exit') or True
+                    page.locator('#account-force-close').check()
+                    def approve_force(dialog):
+                        assert '强制退出' in dialog.message and '未保存内容可能丢失' in dialog.message
+                        dialog.accept()
+                    page.once('dialog', approve_force)
                     page.locator('[data-account="B"]').get_by_role('button', name='首次登录', exact=True).click()
                     expect(page.locator('#account-output')).to_contain_text('已准备槽位 B')
+                    expect(page.locator('#account-force-close')).not_to_be_checked()
+                    assert 'forced-exit' in events
+                    manager.stop_app = normal_stop
                     assert (manager.accounts_dir / 'A/fixture.txt').read_text() == 'ACCOUNT_A_FIXTURE'
                     (manager.data_dir / 'fixture.txt').write_text('ACCOUNT_B_FIXTURE', encoding='utf-8')
                     page.once('dialog', lambda d: d.accept())
@@ -191,7 +202,7 @@ def main():
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), name
                 page.get_by_role('button', name='工具', exact=True).click()
                 page.locator('#project-comparison>summary').click()
-                expect(page.locator('#project-comparison')).to_contain_text('仍通过原版维护核心')
+                expect(page.locator('#project-comparison')).to_contain_text('仍有维护核心依赖')
                 # A visible, idle page renews activity without running diagnostics.
                 page.clock.install()
                 server.last_activity = time.monotonic() - 901

@@ -41,6 +41,35 @@ def main(output=None):
         assert not list((Path(directory)/'.envscope/archive-work').iterdir())
         import cryptography
         result.update(encrypted_archive_roundtrip=True,cryptography_version=cryptography.__version__)
+        import psutil
+        result['psutil_version']=psutil.__version__
+        # The shipped account transaction/recovery code touches only this fixture.
+        manager.stop_app = lambda: True
+        manager.launch_app = None
+        manager.force_stop_app = Mock(side_effect=AssertionError('No real processes'))
+        (manager.data_dir/'Local State').write_bytes(b'NATIVE_ACCOUNT_A')
+        manager.switch('B', lambda: True)
+        assert (manager.data_dir/'fixture.txt').read_bytes() == b'NATIVE_ARCHIVE_FIXTURE'
+        assert not (manager.data_dir/'Local State').exists()
+        manager.switch('A', lambda: True)
+        assert (manager.data_dir/'Local State').read_bytes() == b'NATIVE_ACCOUNT_A'
+        result['account_volume_roundtrip'] = True
+        class Interrupted(BaseException):
+            pass
+        from unittest.mock import patch
+        with patch.object(manager, '_write_current', side_effect=Interrupted()):
+            try:
+                manager.switch('B', lambda: True)
+            except Interrupted:
+                pass
+            else:
+                raise AssertionError('Fixture failed to interrupt account exchange')
+        recovery = manager.recovery.plan()
+        assert recovery['state'] == 'planned'
+        assert manager.recovery.apply(recovery['plan_id'], True)['state'] == 'completed'
+        assert (manager.data_dir/'Local State').read_bytes() == b'NATIVE_ACCOUNT_A'
+        assert not manager._pending()
+        result['account_recovery'] = True
         server = make_server(store=store, operations=operations, auditor=Mock(side_effect=AssertionError('No public probes')))
         window = webview.create_window('EnvScope isolated test', 'http://127.0.0.1:' + str(server.server_port), width=1040, height=760, hidden=True)
         runtime = DesktopRuntime(server, window)
@@ -67,11 +96,15 @@ def main(output=None):
                     result['page_state'] = read_js("({ready:document.readyState, text:document.body.innerText.slice(0,1500), scripts:[...document.scripts].map(s=>s.src)})")
                     raise AssertionError('Native UI did not connect to the fixture server')
                 result['native_window'] = True
+                result['account_volume_controls'] = read_js("!!document.getElementById('account-recovery-check') && !!document.getElementById('account-force-close')")
+                assert result['account_volume_controls']
                 result['select_all_control'] = read_js("document.getElementById('checks-select-all')?.textContent === '全选' && !!document.getElementById('checks-repair') && !!document.getElementById('target-region-profile')")
                 assert result['select_all_control'], 'Selective checks and region presets must ship in the native UI'
                 result['watchdog_controls']=read_js("!!document.getElementById('upkeep-guard-timezone') && !!document.getElementById('upkeep-guard-proxy')")
                 result['ip_lookup_control']=read_js("!!document.getElementById('target-read-ip')")
                 assert result['watchdog_controls'] and result['ip_lookup_control']
+                result['process_guard_controls']=read_js("!!document.getElementById('process-guard-prepare') && !!document.getElementById('process-guard-stop')")
+                assert result['process_guard_controls']
                 assert runtime.ready.wait(5), 'Tray did not initialize'
                 result['tray'] = True
                 ids = read_js("[...document.querySelectorAll('[id]')].map(n=>n.id)")

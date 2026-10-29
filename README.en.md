@@ -2,7 +2,11 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-A minimal Windows/macOS Claude environment toolkit. Alpha v0.12.0.
+Current source: **0.13.0 Alpha**, with reviewed native ten-second desktop process protection. Full upstream parity remains in progress; see the [complete requirement ledger](docs/FULL_PARITY_AUDIT.md) and [guard scope](docs/PROCESS_GUARD.md). Published installers are listed under Releases.
+
+Account slots preserve complete independent local profile trees, with normal exit, APFS copy-on-write, verified commits and reviewed recovery after interruption. Recovery preserves displaced copies and never logs in or launches the client. See [account volume scope and tests](docs/ACCOUNT_VOLUMES.md).
+
+A minimal Windows/macOS Claude environment toolkit. Installed version and update availability are shown inside the app.
 
 Confirm the intended application, connection mode and comparison targets once,
 then run a scoped check, review repairs and recheck automatically. Exit-IP lookup

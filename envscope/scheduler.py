@@ -21,15 +21,22 @@ LABEL = "org.envscope.maintenance"
 MARKER = "https://github.com/qudadd/envscope/maintenance-v1"
 NS = "http://schemas.microsoft.com/windows/2004/02/mit/task"
 INTERVALS = (5, 15, 60)
+ROLES = {"maintenance": (TASK, LABEL, MARKER),
+         "guard": ("EnvScopeProcessGuard", "org.envscope.process-guard", "https://github.com/qudadd/envscope/process-guard-v1")}
 
 
-def runtime():
+def runtime(role="maintenance"):
+    if role not in ROLES:
+        raise ValueError("invalid scheduler role")
+    module, flag = ("envscope.process_guard", "--process-guard-worker") if role == "guard" else ("envscope.maintenance", "--maintenance-worker")
     if getattr(sys, "frozen", False):
-        return [str(Path(sys.executable).resolve()), "--maintenance-worker"], str(Path(sys.executable).resolve().parent)
-    return [str(Path(sys.executable).resolve()), "-m", "envscope.maintenance"], str(Path(__file__).resolve().parents[1])
+        return [str(Path(sys.executable).resolve()), flag], str(Path(sys.executable).resolve().parent)
+    return [str(Path(sys.executable).resolve()), "-m", module], str(Path(__file__).resolve().parents[1])
 
 
-def windows_xml(command, cwd, interval, sid, start=None):
+def windows_xml(command, cwd, interval, sid, start=None, role="maintenance"):
+    if role not in ROLES:
+        raise ValueError("invalid scheduler role")
     if type(interval) is not int or interval not in INTERVALS or not re.fullmatch(r"S-1-[0-9-]+", sid):
         raise ValueError("invalid user schedule")
     ET.register_namespace("", NS)
@@ -40,7 +47,7 @@ def windows_xml(command, cwd, interval, sid, start=None):
             item.text = str(text)
         return item
     info = node(task, "RegistrationInfo")
-    node(info, "Description", MARKER)
+    node(info, "Description", ROLES[role][2])
     triggers = node(task, "Triggers")
     trigger = node(triggers, "TimeTrigger")
     node(trigger, "Enabled", "true")
@@ -58,7 +65,7 @@ def windows_xml(command, cwd, interval, sid, start=None):
     settings = node(task, "Settings")
     for name, value in (("MultipleInstancesPolicy", "IgnoreNew"), ("DisallowStartIfOnBatteries", "false"),
                         ("StopIfGoingOnBatteries", "false"), ("StartWhenAvailable", "true"),
-                        ("Enabled", "true"), ("Hidden", "true"), ("ExecutionTimeLimit", "PT3M")):
+                        ("Enabled", "true"), ("Hidden", "true"), ("ExecutionTimeLimit", "PT0S" if role == "guard" else "PT3M")):
         node(settings, name, value)
     execute = node(node(task, "Actions", Context="CurrentUser"), "Exec")
     node(execute, "Command", command[0])
@@ -94,6 +101,9 @@ def windows_identity(body):
         "login_sid": "Triggers/LogonTrigger/UserId", "login_enabled": "Triggers/LogonTrigger/Enabled",
         "logon": "Principals/Principal/LogonType", "level": "Principals/Principal/RunLevel",
         "enabled": "Settings/Enabled"}.items()}
+    if value.get("marker") == ROLES['guard'][2]:
+        value['execution_limit'] = text('Settings/ExecutionTimeLimit', 'PT72H')
+        value['instances'] = text('Settings/MultipleInstancesPolicy', 'IgnoreNew')
     # Export-ScheduledTask elides OS defaults. Absence is a documented value,
     # unlike an empty/invalid element or an unresolved account identity.
     for key, path in (("enabled", "Settings/Enabled"), ("login_enabled", "Triggers/LogonTrigger/Enabled"),
@@ -104,16 +114,22 @@ def windows_identity(body):
     return value
 
 
-def mac_plist(command, cwd, interval):
+def mac_plist(command, cwd, interval, role="maintenance"):
+    if role not in ROLES:
+        raise ValueError("invalid scheduler role")
     if type(interval) is not int or interval not in INTERVALS:
         raise ValueError("invalid interval")
-    return plistlib.dumps({"Label": LABEL, "ProgramArguments": command, "WorkingDirectory": cwd,
+    return plistlib.dumps({"Label": ROLES[role][1], "ProgramArguments": command, "WorkingDirectory": cwd,
                           "StartInterval": interval * 60, "RunAtLoad": True, "ProcessType": "Background",
-                          "EnvScopeOwner": MARKER}, sort_keys=True)
+                          "EnvScopeOwner": ROLES[role][2]}, sort_keys=True)
 
 
 class UserScheduler:
-    def __init__(self, home, root, system=None, runner=None, command=None, cwd=None, sid=None, uid=None):
+    def __init__(self, home, root, system=None, runner=None, command=None, cwd=None, sid=None, uid=None, role="maintenance"):
+        if role not in ROLES:
+            raise ValueError("invalid scheduler role")
+        self.role = role
+        self.task, self.label, self.marker = ROLES[role]
         home_path = Path(os.path.abspath(home))
         self.home = home_path.resolve()
         root_path = Path(os.path.abspath(root))
@@ -123,11 +139,11 @@ class UserScheduler:
         self.root = self.home / root_path.relative_to(home_path) if root_path.is_relative_to(home_path) else root_path
         self.system = system or platform.system()
         self.runner = runner or subprocess.run
-        actual_command, actual_cwd = runtime()
+        actual_command, actual_cwd = runtime(role)
         self.command, self.cwd = command or actual_command, cwd or actual_cwd
         self.sid = sid
         self.uid = uid if uid is not None else (os.getuid() if hasattr(os, "getuid") else None)
-        self.path = (self.home / "Library/LaunchAgents" / (LABEL + ".plist") if self.system == "Darwin"
+        self.path = (self.home / "Library/LaunchAgents" / (self.label + ".plist") if self.system == "Darwin"
                      else self.root / "task.xml")
 
     def _run(self, args):
@@ -147,9 +163,9 @@ class UserScheduler:
                 if result.returncode:
                     raise ValueError("无法读取当前用户标识，未生成后台任务")
                 sid = result.stdout.strip()
-            body = windows_xml(self.command, self.cwd, interval, sid)
+            body = windows_xml(self.command, self.cwd, interval, sid, role=self.role)
         elif self.system == "Darwin" and self.uid is not None:
-            body = mac_plist(self.command, self.cwd, interval)
+            body = mac_plist(self.command, self.cwd, interval, role=self.role)
         else:
             raise ValueError("持续维护仅支持 Windows 和 macOS")
         return {"system": self.system, "body": definition_text(body), "command": self.command,
@@ -164,7 +180,7 @@ class UserScheduler:
                         "$d.XmlResolver=$null;foreach($n in $d.SelectNodes('//*[local-name()=\"Principal\" or local-name()=\"LogonTrigger\"]/*[local-name()=\"UserId\"]')){"
                         "if($n.InnerText -notmatch '^S-1-[0-9-]+$'){$n.InnerText=[Security.Principal.NTAccount]::new($n.InnerText).Translate([Security.Principal.SecurityIdentifier]).Value}};"
                         "@{present=$true;xml=$d.OuterXml}|ConvertTo-Json -Compress}}catch{exit 2}")
-                result = self._powershell(code)
+                result = self._powershell(code.replace("EnvScopeMaintenance", self.task))
                 if result.returncode:
                     raise ValueError("task query failed")
                 value = json.loads(result.stdout)
@@ -178,7 +194,7 @@ class UserScheduler:
                 body = _read(self.path)
                 present = body is not None
                 owned = bool(present and spec and plistlib.loads(body) == plistlib.loads(spec["body"].encode("utf-8")))
-                result = self._run(["/bin/launchctl", "print", f"gui/{self.uid}/{LABEL}"])
+                result = self._run(["/bin/launchctl", "print", f"gui/{self.uid}/{self.label}"])
                 loaded = result.returncode == 0
                 present = present or loaded
                 registered = owned and loaded
@@ -200,13 +216,13 @@ class UserScheduler:
         try:
             if self.system == "Windows":
                 args = [str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/schtasks.exe"),
-                        "/Create", "/TN", TASK, "/XML", str(self.path)]
+                        "/Create", "/TN", self.task, "/XML", str(self.path)]
                 if state["present"]:
                     args.append("/F")
                 result = self._run(args)
             else:
                 if state["registered"]:
-                    result = self._run(["/bin/launchctl", "bootout", f"gui/{self.uid}/{LABEL}"])
+                    result = self._run(["/bin/launchctl", "bootout", f"gui/{self.uid}/{self.label}"])
                     if result.returncode:
                         raise ValueError("旧的维护任务未能停用，未重复加载")
                 result = self._run(["/bin/launchctl", "bootstrap", f"gui/{self.uid}", str(self.path)])
@@ -218,13 +234,26 @@ class UserScheduler:
             raise ValueError("后台任务注册未确认；自动恢复保持停用，可检查权限后重试") from None
         return {"state": "registered"}
 
+    def start(self, spec):
+        if not self.inspect(spec).get("registered"):
+            raise ValueError("任务归属或注册状态未确认，未启动")
+        if self.role == 'guard' and self.system == 'Windows':
+            code = ("$ErrorActionPreference='Stop';$t=Get-ScheduledTask -TaskName 'EnvScopeProcessGuard' -TaskPath '\\';"
+                    "if([string]$t.State -eq 'Running'){Stop-ScheduledTask -InputObject $t}")
+            if self._powershell(code).returncode:
+                raise ValueError('旧的守护任务未确认停止，未重复启动')
+        command = ([str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/schtasks.exe"), "/Run", "/TN", self.task]
+                   if self.system == "Windows" else ["/bin/launchctl", "kickstart", *(['-k'] if self.role == 'guard' else []), f"gui/{self.uid}/{self.label}"])
+        if self._run(command).returncode:
+            raise ValueError("系统未接受启动请求；需核对后台任务权限")
+
     def remove(self, spec):
         state = self.inspect(spec)
         if state["present"] is None or state["present"] and not state["owned"]:
             raise ValueError("后台任务归属无法确认；配置保持已停用，不删除同名任务")
         if state["present"] and (self.system == "Windows" or state["registered"]):
-            args = ([str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/schtasks.exe"), "/Delete", "/TN", TASK, "/F"]
-                    if self.system == "Windows" else ["/bin/launchctl", "bootout", f"gui/{self.uid}/{LABEL}"])
+            args = ([str(Path(os.environ.get("WINDIR", "C:/Windows")) / "System32/schtasks.exe"), "/Delete", "/TN", self.task, "/F"]
+                    if self.system == "Windows" else ["/bin/launchctl", "bootout", f"gui/{self.uid}/{self.label}"])
             if self._run(args).returncode:
                 raise ValueError("维护已停用，但操作系统任务移除尚未确认")
         body = _read(self.path)
