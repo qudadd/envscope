@@ -255,11 +255,35 @@ class MaintenanceTests(unittest.TestCase):
         for ip in ("1.1.1.1", "1.1.1.1", None, "8.8.8.8"):
             self.auditor.side_effect = lambda *a, ip=ip, **k: findings(ip)
             self.manager.run_once()
-        self.assertEqual(self.manager.status()["egress_48h"], {"observations": 3, "changes": 1})
+        self.assertEqual(self.manager.status()["egress_48h"], {"observations": 3, "unique_sets": 2, "changes": 1})
         self.assertNotIn("1.1.1.1", json.dumps(self.manager._read("egress", [])))
         report = self.manager.latest_report()["report"]
         self.assertEqual(report["mode"], "scheduled-native")
         self.assertEqual(next(x for x in report["findings"] if x["id"] == "maintenance.browser")["status"], "skipped")
+
+    def test_returning_to_an_observed_set_changes_counter_without_inventing_an_ip_count(self):
+        self.enable()
+        for ip in ('1.1.1.1','8.8.8.8','1.1.1.1'):
+            self.auditor.side_effect = lambda *a, ip=ip, **k: findings(ip)
+            self.manager.run_once()
+        self.assertEqual(self.manager.status()['egress_48h'], {'observations':3,'unique_sets':2,'changes':2})
+        saved=json.dumps(self.manager._read('egress',[]))
+        self.assertNotIn('1.1.1.1',saved)
+        self.assertNotIn('8.8.8.8',saved)
+
+    def test_expired_egress_sets_and_missing_samples_do_not_inflate_distinct_count(self):
+        self.enable()
+        self.auditor.side_effect=lambda *a,**k:findings('1.1.1.1')
+        self.manager.run_once()
+        timeline=self.manager._read('egress',[])
+        timeline[0]['at']=(datetime.now(timezone.utc)-timedelta(hours=49)).isoformat()
+        self.manager._write('egress',timeline)
+        self.auditor.side_effect=lambda *a,**k:findings(None)
+        self.manager.run_once()
+        self.assertEqual(self.manager.status()['egress_48h'], {'observations':0,'unique_sets':0,'changes':0})
+        self.auditor.side_effect=lambda *a,**k:findings('8.8.8.8')
+        self.manager.run_once()
+        self.assertEqual(self.manager.status()['egress_48h'], {'observations':1,'unique_sets':1,'changes':0})
 
     def test_undo_works_across_restart_and_refuses_later_edits(self):
         self.enable(True)
@@ -304,7 +328,7 @@ class MaintenanceTests(unittest.TestCase):
         self.manager.run_once()
         self.manager.data._write("history-key.private.json", "b" * 64)
         report = self.manager.run_once()["report"]
-        self.assertEqual(self.manager.status()["egress_48h"], {"observations": 1, "changes": 0})
+        self.assertEqual(self.manager.status()["egress_48h"], {"observations": 1, "unique_sets": 1, "changes": 0})
         self.assertEqual(next(f for f in report["findings"] if f["id"] == "baseline.ip_stability")["status"], "unknown")
 
     def test_unverifiable_repair_timestamps_pause_instead_of_resetting_budget(self):

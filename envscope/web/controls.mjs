@@ -165,7 +165,8 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const states={disabled:'尚未启用持续维护',active:'最近一轮巡检已完成',attention:'巡检已完成，配置保持需要处理',waiting:'已注册，等待首次巡检',stale:'巡检已超期',failed:'最近一轮没有完成',schedule_unverified:'系统任务状态未确认',invalid:'维护记录无法核实'};
     $('upkeep-state').textContent=states[value.state]||'维护状态待核实';
     $('upkeep-status').textContent=[value.completed_at?'最近完成：'+new Date(value.completed_at).toLocaleString():'还没有完成记录。',value.enabled?`每 ${value.interval} 分钟复检。`:'',value.has_report?`${value.problem_count} 个待处理问题。`:'',value.auto_restore?(value.restore_note||'Code 配置保持已选择，等待首次执行。'):'Code 配置保持未开启。',value.reason].filter(Boolean).join(' ');
-    const e=value.egress_48h||{};$('upkeep-egress').textContent=`48 小时有效出口观测 ${e.observations||0} 次，集合变化 ${e.changes||0} 次；变化本身不判定为账号风险。`;
+    const e=value.egress_48h||{},samples=Number.isInteger(e.observations)&&e.observations>0;
+    $('upkeep-egress').textContent=samples?`最近 48 小时有效观测 ${e.observations} 次，不同出口集合 ${Number.isInteger(e.unique_sets)?e.unique_sets:'待统计'} 种，集合变化 ${e.changes||0} 次。仅统计已保存的最近 600 次观测；变化本身不判定为账号风险。`:'尚无有效出口观测，无法统计出口集合与变化；不会据此判定环境合格。';
     $('upkeep-watchdog-state').textContent=value.watchdog_enabled?Object.entries(value.watchdog||{}).map(([k,v])=>`${({timezone:'时区',locale:'地区格式',proxy:'代理'})[k]||k}：${v.note||'等待首次巡检'}`).join('；')||'守护已批准，等待首次巡检。':'系统与代理守护尚未开启。';
     $('upkeep-watchdog-state').classList.toggle('manual-guidance',Object.values(value.watchdog||{}).some(v=>['attention','paused'].includes(v.state)));
     $('upkeep-journal').textContent=value.journal_path?'完整事件日志（按日追加，停用后保留）：'+value.journal_path:'';

@@ -421,7 +421,8 @@ class Maintenance:
                 if signature:
                     timeline.append({"at": utc_now(), "signature": signature, "comparison_key": comparison_key})
                     self._write("egress", timeline)
-                stats["egress_48h"] = {"observations": len(timeline), "changes": sum(a["signature"] != b["signature"] for a, b in zip(timeline, timeline[1:]))}
+                stats["egress_48h"] = {"observations": len(timeline), "unique_sets": len({x['signature'] for x in timeline}),
+                                       "changes": sum(a["signature"] != b["signature"] for a, b in zip(timeline, timeline[1:]))}
                 for f in findings:
                     if f.id == "baseline.ip_stability" and signature and previous:
                         f.status = Status.WARN if signature != previous else Status.PASS

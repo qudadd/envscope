@@ -47,6 +47,7 @@ def main():
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
                     page.locator('#start').click();expect(page.locator('#start')).to_be_enabled(timeout=30000)
                     page.locator('.tab[data-page=upkeep]').click()
+                    expect(page.locator('#upkeep-egress')).to_contain_text('尚无有效出口观测')
                     page.locator('#upkeep-guard-timezone').check()
                     page.locator('#upkeep-prepare').click();expect(page.locator('#upkeep-plan')).to_contain_text('保持时区')
                     assert not writes and not maintenance.scheduler.definition
@@ -55,6 +56,7 @@ def main():
                     inventory['network']['timezone_id']='China Standard Time' if system=='Windows' else 'Asia/Shanghai'
                     page.locator('#upkeep-run').click()
                     expect(page.locator('#upkeep-watchdog-state')).to_contain_text('已恢复',timeout=30000)
+                    expect(page.locator('#upkeep-egress')).to_contain_text('不同出口集合 1 种')
                     assert writes==[('timezone',zone)]
                     expect(page.locator('#upkeep-events')).to_contain_text('漂移')
                     expect(page.locator('#upkeep-journal')).to_contain_text('完整事件日志')
@@ -64,7 +66,7 @@ def main():
                     page.locator('#upkeep-stop').click();expect(page.locator('#upkeep-state')).to_contain_text('尚未启用')
                     assert not maintenance.scheduler.definition and not errors
                     assert list((maintenance.root/'events').glob('*.jsonl'))
-                    results.append({'platform':system,'preview_before_write':True,'drift_restored_and_rechecked':True,'durable_log':True,'stopped':True,'real_user_changes':False})
+                    results.append({'platform':system,'preview_before_write':True,'drift_restored_and_rechecked':True,'distinct_set_count_visible':True,'no_sample_is_not_a_pass':True,'durable_log':True,'stopped':True,'real_user_changes':False})
                 finally:
                     context.close();server.shutdown();server.server_close();thread.join(3)
         browser.close()
