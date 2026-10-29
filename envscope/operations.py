@@ -19,6 +19,7 @@ from .environment_info import cli_information, device_information
 from .coverage import feature_catalog
 from .isolated_browser import IsolatedBrowser
 from .snapshot_archive import SnapshotArchive
+from .csnap_archive import CsnapArchive
 from .dmg_archive import DmgArchive
 from .target_environment import FIELDS as TARGET_FIELDS, summary as environment_summary, suggest as environment_suggest, fingerprint
 
@@ -145,6 +146,7 @@ class Operations:
                                                          launch_app=launch_claude, force_stop_app=force_quit_account_claude)
         self.isolated_browser = IsolatedBrowser(self.home)
         self.archives = SnapshotArchive(self.accounts, self.home/'.envscope/archive-work')
+        self.csnap_archives = CsnapArchive(self.accounts, self.home/'.envscope/csnap-work')
         self.dmg_archives = DmgArchive(self.accounts, self.home/'.envscope/dmg-work')
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
@@ -510,17 +512,17 @@ class Operations:
                     not {'slot','file','password'} <= set(params) or set(params) - {'slot','file','password','format'}):
                 raise ValueError('invalid archive parameters')
             format_name = 'dmg' if old else params.get('format','envsnap')
-            if format_name not in ('envsnap','dmg'):
+            if format_name not in ('envsnap','dmg','csnap'):
                 raise ValueError('invalid archive format')
             if confirmed is not True:
                 return {'state':'confirmation_required','reason':'将处理加密账号存档，密码不保存；只允许非活动槽位导出、空槽位导入。临时明文会限制读取权限并在完成后清理。'}
-            archive = self.dmg_archives if format_name == 'dmg' else self.archives
+            archive = {'envsnap': self.archives, 'dmg': self.dmg_archives, 'csnap': self.csnap_archives}[format_name]
             slot, exporting = params['account' if old else 'slot'], action.endswith('-export')
             result = archive.export(slot,params['file'],params['password']) if exporting else archive.import_archive(params['file'],slot,params['password'])
             return {'state':'completed','result':result,'reason':'加密存档已校验并导出。请单独保管密码，丢失后无法恢复。' if exporting else '已校验并导入空槽位，未启动 Claude；登录状态是否可迁移需在实际客户端确认。',
                     'boundary': 'DMG 已检查映像校验和与复制结果；旧版没有逐文件清单，DMG 校验和不等于 .envsnap 的认证加密。' if result.get('verification') == 'legacy_image_checksum_and_copy_readback' else ''}
         if action == 'archive-choose-file':
-            if not {'mode'} <= set(params) or set(params)-{'mode','format'} or params['mode'] not in ('export','import') or params.get('format','envsnap') not in ('envsnap','dmg'):
+            if not {'mode'} <= set(params) or set(params)-{'mode','format'} or params['mode'] not in ('export','import') or params.get('format','envsnap') not in ('envsnap','dmg','csnap'):
                 raise ValueError('invalid file dialog mode')
             format_name = params.get('format','envsnap')
             if format_name == 'dmg' and not self.dmg_archives.status()['available']:

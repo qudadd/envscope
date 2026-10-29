@@ -2,7 +2,7 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-Current source: **0.13.0 Alpha**, with reviewed native ten-second desktop process protection. Full upstream parity remains in progress; see the [complete requirement ledger](docs/FULL_PARITY_AUDIT.md) and [guard scope](docs/PROCESS_GUARD.md). Published installers are listed under Releases.
+Current source: **0.22.0 Alpha**, with native Windows `.csnap` interoperability on both desktop platforms: original A–D slots, authentication before decryption, bounded ZIP validation and full export readback. See [archive scope and independent .NET verification](docs/CSNAP_ARCHIVES.md). Persistent check preferences, FlClash maintenance and privacy-filtered diagnostic ZIPs remain available. Full upstream parity is tracked in the [requirement ledger](docs/FULL_PARITY_AUDIT.md). Published installers are listed under Releases.
 
 Account slots preserve complete independent local profile trees, with normal exit, APFS copy-on-write, verified commits and reviewed recovery after interruption. Recovery preserves displaced copies and never logs in or launches the client. See [account volume scope and tests](docs/ACCOUNT_VOLUMES.md).
 
@@ -17,8 +17,9 @@ visible; unrelated checks no longer block the selected use case. See the
 
 An optional Watchdog restores approved system/configuration baselines, reopens
 a selected offline proxy client, verifies recovery and keeps daily local logs.
-Background elevation is not attempted; macOS timezone permissions may require
-manual action or the separately installed upstream privileged service. Account
+Ordinary background jobs do not request elevation. macOS timezone restoration
+can use the explicitly approved native privileged service with rollback and
+recovery; otherwise it provides manual guidance. Account
 switching preserves separate full profiles and restricts cross-profile retention
 to explicitly selected `skills/` files. It does not guarantee server-side device
 identity or portability of OS credentials. [Current scope](docs/WATCHDOG_AND_IDENTITIES.md).

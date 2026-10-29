@@ -246,21 +246,23 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   for(const id of ["account-export","account-import"])$(id).addEventListener("click",()=>action(id,{slot:$("archive-slot").value.trim(),file:$("archive-path").value.trim()},"account-output",
     id==="account-export"?"将创建未加密的账号目录备份。文件含登录资料，请保存在受保护的本机目录。":"将读取指定目录并导入空的非活动槽位。不会覆盖现有槽位。"));
   $('encrypted-format').addEventListener('change',()=>{
-    const dmg=$('encrypted-format').value==='dmg';
-    $('encrypted-format-note').textContent=dmg?'兼容原版 macOS DMG，仅支持 A–D；导入必须选择存档原槽位。新密码至少 12 字符，旧备份使用原密码。DMG 校验和与 .envsnap 认证加密的验证范围不同。':'.envsnap 使用认证加密，可导入任意空槽位。';
-    $('encrypted-password').placeholder=dmg?'导出至少 12 字符；导入用原密码':'至少 12 个字符';
+    const format=$('encrypted-format').value,dmg=format==='dmg',csnap=format==='csnap';
+    $('encrypted-format-note').textContent=csnap?'兼容原版 Windows .csnap，可在 Windows / macOS 导入、导出；仅支持 A–D，导入必须选择存档原槽位。新密码至少 8 字符，旧备份使用原密码。先验签再解密，导出后回读比对全部文件。':dmg?'兼容原版 macOS DMG，仅支持 A–D；导入必须选择存档原槽位。新密码至少 12 字符，旧备份使用原密码。DMG 校验和与 .envsnap 认证加密的验证范围不同。':'.envsnap 使用认证加密，可导入任意空槽位。';
+    $('encrypted-password').placeholder=csnap?'导出至少 8 字符；导入用原密码':dmg?'导出至少 12 字符；导入用原密码':'至少 12 个字符';
+    $('encrypted-password').minLength=csnap||dmg?1:12;
     $('encrypted-path').value='';$('encrypted-password').value='';
-    $('encrypted-path').placeholder=dmg?'选择或填写 .dmg 文件的绝对路径':'选择或填写 .envsnap 文件的绝对路径';
+    $('encrypted-path').placeholder=`选择或填写 .${format} 文件的绝对路径`;
   });
   $('encrypted-cleanup').addEventListener('click',()=>action('archive-cleanup',{},'account-output','将核实并卸载 EnvScope 的临时 DMG，随后清理暂存副本。账号槽位、原备份和已导出文件保留。'));
   for(const mode of ['export','import']){
     $('encrypted-choose-'+mode).addEventListener('click',()=>action('archive-choose-file',{mode,format:$('encrypted-format').value},'account-output'));
     $('encrypted-'+mode).addEventListener('click',async()=>{
-      const input=$('encrypted-password'),format=$('encrypted-format').value,min=format==='dmg'&&mode==='import'?1:12;
-      if(input.value.length<min){$('account-output').textContent=`请填写${min===1?'原存档':'至少 12 个字符的存档'}密码。`;input.focus();return;}
+      const input=$('encrypted-password'),format=$('encrypted-format').value,min=format!=='envsnap'&&mode==='import'?1:format==='csnap'?8:12;
+      if(input.value.length<min){$('account-output').textContent=`请填写${min===1?'原存档':`至少 ${min} 个字符的存档`}密码。`;input.focus();return;}
+      if(format!=='envsnap'&&!/^[A-D]$/i.test($('encrypted-slot').value.trim())){$('account-output').textContent=`.${format} 仅支持 A–D 槽位；导入请选择存档原来的槽位。`;$('encrypted-slot').focus();return;}
       $('account-output').classList.remove('manual-guidance');
       const password=input.value;input.value='';
-      await action('archive-'+mode,{slot:$('encrypted-slot').value.trim(),file:$('encrypted-path').value.trim(),password,format},'account-output',mode==='export'?'将复制非活动槽位，在受限临时目录中打包，使用密码加密并回读校验后导出。密码不会保存；临时明文随后清理。':'将用密码打开存档，校验格式与复制结果，再导入空槽位。DMG 只读挂载且槽位须与原存档一致。不覆盖现有资料，不启动 Claude。');
+      await action('archive-'+mode,{slot:$('encrypted-slot').value.trim(),file:$('encrypted-path').value.trim(),password,format},'account-output',mode==='export'?'将复制非活动槽位，在受限临时目录中打包，使用密码加密并回读校验后导出。密码不会保存；临时明文随后清理。':`将用密码打开存档，校验格式与复制结果，再导入空槽位。${format==='dmg'?'DMG 只读挂载且槽位须与原存档一致。':format==='csnap'?'.csnap 先验签再解密，槽位须与原存档一致。':''}不覆盖现有资料，不启动 Claude。`);
     });
   }
   $('browser-cleanup').addEventListener('click',()=>action('browser-cleanup',{},'tool-output'));

@@ -9,6 +9,16 @@ configuration files. WireGuard is maintained by its own project; see its
 [enterprise documentation](https://git.zx2c4.com/wireguard-windows/about/docs/enterprise.md)
 and [EnvScope's scope and validation](docs/WIREGUARD.md).
 
+## Original CSNAP001 interoperability
+
+The native `.csnap` adapter follows the Windows CSNAP001 byte-format and root
+marker contract in claude-switcher at
+`a45cede34042922f881ef9672148cc7c8ddccff1` (MIT, credited below).
+No source scripts are run. The implementation uses Python's PBKDF2/HMAC and
+cryptography's AES-CBC/PKCS7. Independent, self-authored .NET crypto and ZIP
+fixture code checks interoperability; it is test tooling and is not bundled
+into the application. See [format and verification scope](docs/CSNAP_ARCHIVES.md).
+
 ## Original DMG interoperability
 
 The native macOS DMG adapter preserves the encrypted root layout and A–D marker

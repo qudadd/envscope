@@ -618,6 +618,20 @@ class AccountManager:
                     raise RecoveryRequired("The exchange committed, but backup cleanup needs review; the application was not launched.") from exc
             return self._launch({"slot": slot, "previous": original_current, "changed": True}, preflight, checked_at)
 
+    def archive_preflight(self, slot, importing=False):
+        """Check under the account lock; the final copy/import rechecks it too."""
+        slot = validate_slot(slot)
+        with self._lock():
+            self._require_clean(slot)
+            target = self.accounts_dir / slot
+            if self._read_current() == slot:
+                raise AccountError('备份只允许导出非活动槽位，导入需要空的非活动槽位。')
+            if importing and os.path.lexists(target):
+                raise AccountError('导入需要空槽位，已有资料已保留。')
+            if not importing and not target.is_dir():
+                raise AccountError('此槽位没有已归档的资料，请先保存或切换账号。')
+        return slot
+
     def copy_snapshot_to(self, slot, destination):
         """Verified *unencrypted* directory hook for an encryption/export layer."""
         slot = validate_slot(slot)

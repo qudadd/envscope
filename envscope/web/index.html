@@ -222,8 +222,8 @@
       <div id="account-list"></div>
       <label class="checkbox"><input id="account-force-close" type="checkbox">正常退出失败时允许强制退出（未保存内容可能丢失，仅用于本次选择的切换）</label>
       <div class="inline-form"><label>新增资料代号<input id="new-slot" maxlength="32" placeholder="work" aria-describedby="slot-help"></label><label>显示名称<input id="new-label" maxlength="80" placeholder="例如：工作账号"></label><button id="account-add">添加</button></div><p id="slot-help" class="note">代号使用英文字母、数字、下划线或短横线，以字母或数字开头；最多 32 字符。可先使用现有的 A、B。</p>
-      <section class="tool-section"><h2>加密备份与恢复</h2><p class="note">Windows / macOS 均可使用 .envsnap 加密存档。先切换到其他账号，再导出非活动槽位；导入只能选择空槽位。密码不保存，丢失无法恢复。存档不保证登录凭据能跨设备或系统迁移。</p>
-        <label>备份格式<select id="encrypted-format"><option value="envsnap">EnvScope 加密备份（Windows / macOS）</option><option value="dmg" disabled>原版加密 DMG（macOS，A–D 槽位）</option></select></label><p id="encrypted-format-note" class="note" role="status">.envsnap 使用认证加密，可导入任意空槽位。</p>
+      <section class="tool-section"><h2>加密备份与恢复</h2><p class="note">Windows / macOS 均支持 .envsnap 和原版 Windows .csnap；macOS 另支持原版 DMG。先切换到其他账号，再导出非活动槽位；导入只能选择空槽位。密码不保存，丢失无法恢复。存档不保证登录凭据能跨设备或系统迁移。</p>
+        <label>备份格式<select id="encrypted-format"><option value="envsnap">EnvScope 加密备份（Windows / macOS）</option><option value="csnap">原版 Windows .csnap（A–D 槽位）</option><option value="dmg" disabled>原版加密 DMG（macOS，A–D 槽位）</option></select></label><p id="encrypted-format-note" class="note" role="status">.envsnap 使用认证加密，可导入任意空槽位。</p>
         <div class="form-grid"><label>槽位<input id="encrypted-slot" placeholder="B" maxlength="32"></label><label>密码<input id="encrypted-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" placeholder="至少 12 个字符"></label></div>
         <label>加密文件路径<input id="encrypted-path" placeholder="选择或填写 .envsnap 文件的绝对路径"></label>
         <div class="actions"><button id="encrypted-choose-export" class="link">选择导出位置</button><button id="encrypted-choose-import" class="link">选择已有存档</button></div>

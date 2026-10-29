@@ -2,8 +2,8 @@ include README.en.md AGENTS.md CONTRIBUTING.md SECURITY.md THIRD_PARTY_NOTICES.m
 include start-windows.cmd start-macos.command .gitattributes .gitignore
 recursive-include docs *.md *.json *.png
 recursive-include licenses *.txt
-recursive-include scripts *.py
+recursive-include scripts *.py *.ps1
 recursive-include native *.c
-recursive-include tests *.py *.mjs
+recursive-include tests *.py *.mjs *.json
 recursive-include .github *.md *.yml
 global-exclude __pycache__ *.py[cod] *.private.json *.private.jsonl *.private.bin *.private.plist

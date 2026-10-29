@@ -15,8 +15,9 @@ EnvScope 已有原生城市目标、双来源一致性、写入预览 / 读回 /
 必需依赖和证书 / 地址策略失败不能借可选开关放行。FlClash TUN 与规则仍在原客户端手动处理。
 
 随后 7 个 Windows 提交增加四账号工具流、隔离浏览器与 `.csnap` 加密快照等内容。
-现有整目录事务、原生工具、隔离浏览器和 `.envsnap` 仍需逐条与新来源核对；尤其 `.csnap`
-是独立的上游格式，不能以已有 `.envsnap` / DMG 冒称兼容。并发客户端切换和暂存保留也需
+现有整目录事务、原生工具、隔离浏览器仍需逐条与新来源核对；`.csnap` 已独立实现，
+包含源格式协议、.NET 双向样本与原生入口，验证范围见 [CSNAP_ARCHIVES](CSNAP_ARCHIVES.md)。
+它是独立的上游格式，原有 `.envsnap` / DMG 仍可选择。并发客户端切换和暂存保留也需
 完成新提交的专项对比。0.20 已完成旧任务可逆迁移，完整旧软件清理尚未完成。
 
 ## 功能与证明要求
@@ -33,7 +34,7 @@ EnvScope 已有原生城市目标、双来源一致性、写入预览 / 读回 /
 | fingerprint，设备 / 字体 / GPU / 虚拟化 | environment_info、coverage、按需浏览器数据 | 信息项有范围，不提供未知服务端风险评分 |
 | cli-info，多入口、版本、来源、配置体积 | cli_inventory、local_facts，被动读取测试 | 无可信包元数据的版本需明确未知；可增加审核后的版本读取 |
 | open-safe，临时浏览器及清理 | isolated_browser，Windows / Mac UI 及参数测试 | 真实浏览器策略生效、异常退出恢复和 UDP 抓包验收 |
-| snapshot-export / import | 原生 AES-256-GCM .envsnap；0.15 新增 macOS 原生 DMG 根目录兼容、A–D 原槽位约束、旧密码导入、只读挂载、文件清单、回读与暂存恢复 | Windows / Linux 只做模拟 DMG 回归；实际 hdiutil 与两种 Mac 冻结包结果见本次发布 CI。真实钥匙串 / 跨机认证不由存档验证覆盖；见 DMG_ARCHIVES |
+| snapshot-export / import | 原生 .envsnap、macOS DMG；新增 Windows CSNAP001 原格式兼容，跨平台 A–D 原槽位导入 / 导出、先认证后解密、ZIP 路径与资源限制、独立 .NET 交叉验证及导出回读 | .csnap 不执行上游代码；实际登录 / 钥匙串迁移不由存档验证覆盖。DMG 实际 hdiutil 与两种 Mac 冻结包证据范围仍单列；见 CSNAP_ARCHIVES / DMG_ARCHIVES |
 | update、检查更新、后台自动检查 | updates、完整包替换与回滚、三平台冻结包更新验收 | 商业签名 / Apple 公证、上游新功能持续差异提示；不能把校验和等同签名 |
 | diagnose-proxy，多协议与 TLS | 明确代理传输测试、禁止失败后直连、transport 测试 | 实际第三方服务认证不属于匿名连接成功 |
 | 10 秒进程守护、安装 / 卸载 | 0.13 新增 process_guard、独立任务、路径 / PID / 用户核对、日志和 UI；三架构真实 OS 用户任务均已执行至少两次并移除 | 真实断线 / 升级 / 睡眠场景与抓包仍需核实 |

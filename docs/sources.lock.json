@@ -4,6 +4,13 @@
   "sources": [
     {
       "repository": "YOURSJEYO/claude-switcher",
+      "revision": "a45cede34042922f881ef9672148cc7c8ddccff1",
+      "path": "windows/claude-switch.ps1",
+      "reviewed_on": "2026-10-30",
+      "role": "CSNAP001 byte-format and root marker requirements only; independently implemented, no vendor execution, frozen bundle unchanged"
+    },
+    {
+      "repository": "YOURSJEYO/claude-switcher",
       "revision": "870c4ca0754234965878ef58144d7a755d965037",
       "license": "MIT",
       "role": "complete pinned source bundle, fixed maintenance adapters, diagnostic categories and rewritten STUN derivative"

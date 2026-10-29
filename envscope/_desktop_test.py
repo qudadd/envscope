@@ -54,6 +54,18 @@ def main(output=None):
         assert not list((Path(directory)/'.envscope/archive-work').iterdir())
         import cryptography
         result.update(encrypted_archive_roundtrip=True,cryptography_version=cryptography.__version__)
+        # Independent legacy-format path in the frozen runtime, still fixtures.
+        csnap = directory/'native.csnap'
+        operations.run('archive-export', {'slot':'B','file':str(csnap),'password':'fixture8','format':'csnap'}, True)
+        archived_file = archived/'fixture.txt'
+        expected = archived_file.read_bytes()
+        archived_file.unlink()
+        archived.rmdir()
+        operations.run('archive-import', {'slot':'B','file':str(csnap),'password':'fixture8','format':'csnap'}, True)
+        assert archived_file.read_bytes() == expected
+        assert csnap.read_bytes().startswith(b'CSNAP001')
+        assert not list((directory/'.envscope/csnap-work').iterdir())
+        result['native_csnap_roundtrip'] = True
         result['native_dmg_roundtrip'] = 'not_applicable'
         result['native_timezone_worker'] = 'not_applicable'
         result['native_network_worker'] = 'not_applicable'

@@ -1,9 +1,13 @@
 # Feature parity and integration audit
 
-## Active full-scope work: 0.21 development
+## Active full-scope work: 0.22 development
 
 [The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
-over historical status tables below. Native process protection is now implemented
+over historical status tables below. Windows CSNAP001 interoperability is now
+implemented separately from ENVSNAP1, with original A–D slot constraints,
+authentication before decryption, bounded ZIP inspection, exclusive publication
+and independent .NET crypto/ZIP exchange. See [its scope](CSNAP_ARCHIVES.md).
+Native process protection is now implemented
 with a separate user task, ten-second checks, approved scope, PID/path/user
 validation, live-worker heartbeat and durable logs. See [its exact scope and
 verification](PROCESS_GUARD.md). The native privileged Mac timezone service now has

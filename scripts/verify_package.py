@@ -38,6 +38,7 @@ def main():
             verify(lambda name: (target / name).read_bytes(), [p.relative_to(target).as_posix() for p in target.rglob("*") if p.is_file()])
             return
     with zipfile.ZipFile(target) as wheel:
+        assert wheel.read('envscope/csnap_archive.py'), 'missing CSNAP001 compatibility module'
         metadata=[n for n in wheel.namelist() if n.endswith('.dist-info/METADATA')]
         assert len(metadata)==1,'Missing or ambiguous package metadata'
         values=BytesParser().parsebytes(wheel.read(metadata[0]))

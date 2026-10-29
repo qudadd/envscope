@@ -1,0 +1,36 @@
+{
+  "vectors": [
+    {
+      "password": "fixture8",
+      "encrypted_base64": "Q1NOQVAwMDEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH0gXJCVyLxLP16CWkj0aAd4WqrqE/0EcSDNtwl5yo/rPWri4cBFE2wmIspWb2r+FAQ==",
+      "plaintext_base64": ""
+    },
+    {
+      "password": "fixture8",
+      "encrypted_base64": "Q1NOQVAwMDEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH5IJHC8dXulds5nyoYjG2tlU6cFq+s4a+3H7HKSS7Fv7TFubYP10CevXORZECWh912euLOSGhRMJtDZ2wju1gwQ=",
+      "plaintext_base64": "ByZFZIOiweD/Hj1ce5q52A=="
+    },
+    {
+      "password": "fixture8",
+      "encrypted_base64": "Q1NOQVAwMDEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHysdF/9hKiLC1QRBUbGPXG9++g3GmqaUm/6GRUkwXEx4TFubYP10CevXORZECWh9146AwZroEW3Ox5G1oejxPVAyvneuSG09dU18jjkzXQHB",
+      "plaintext_base64": "ByZFZIOiweD/Hj1ce5q52PcWNVRzkrHQ7w4tTGuKqcjn"
+    },
+    {
+      "password": "public-unicode-测试🔒",
+      "encrypted_base64": "Q1NOQVAwMDEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHwSlvty/qd9hlIaDQ+v4fHkcKGhyuYeOE0N5uX6yGfdb4VbrJkrRFTgEG8o8LgOT5g==",
+      "plaintext_base64": ""
+    },
+    {
+      "password": "public-unicode-测试🔒",
+      "encrypted_base64": "Q1NOQVAwMDEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH2boRT/51RKiVwJPIlBHCWDdiOMmzAjXs6zCPRhTBk9jZjlGwCId5kX3I1mImyWxZSkyEVMPynXKJkWyw9QZa08=",
+      "plaintext_base64": "ByZFZIOiweD/Hj1ce5q52A=="
+    },
+    {
+      "password": "public-unicode-测试🔒",
+      "encrypted_base64": "Q1NOQVAwMDEAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eH2bc+gk7DJNyDJHq82tnz5rotf0saznOKEMbI/yYusNRZjlGwCId5kX3I1mImyWxZUeAEMCG+4J2eApXk3KRmVwKfJOH0rZwj48kIt7PyAoB",
+      "plaintext_base64": "ByZFZIOiweD/Hj1ce5q52PcWNVRzkrHQ7w4tTGuKqcjn"
+    }
+  ],
+  "version": 1,
+  "oracle": "Self-authored .NET AES / PBKDF2 / HMAC; no vendor execution"
+}

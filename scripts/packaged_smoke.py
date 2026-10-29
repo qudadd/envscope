@@ -65,6 +65,7 @@ def main():
         assert not native['errors'] and all(native[key] for key in ('native_window', 'tray', 'close_hides', 'reopened', 'quit')), native
         assert native['release'] == __release__, 'Built executable release does not match the source'
         assert native['native_diagnostics_export'] is True, 'Frozen diagnostic ZIP / consent check failed'
+        assert native['native_csnap_roundtrip'] is True, 'Frozen CSNAP001 archive check failed'
     print("Packaged worker and local resource checks passed; no public network was contacted.")
 
 
