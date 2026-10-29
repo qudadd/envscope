@@ -12,6 +12,9 @@ def main():
     root = Path(__file__).resolve().parents[1]
     if not __release__.startswith('v'+__version__+'-'):
         raise SystemExit('App and updater versions must agree')
+    project=re.search(r'(?ms)^\[project\]\s*\n(.*?)(?=^\[|\Z)',(root/'pyproject.toml').read_text(encoding='utf-8'))
+    if not project or re.findall(r'(?m)^version\s*=\s*"([^"]+)"\s*$',project[1])!=[__version__]:
+        raise SystemExit('Package metadata and app versions must agree')
     if os.environ.get('GITHUB_REF_TYPE') == 'tag' and os.environ.get('GITHUB_REF_NAME') != __release__:
         raise SystemExit('Build tag and installed release identifier must agree')
     result = subprocess.run(["git", "-c", "safe.directory=" + root.as_posix(), "ls-files", "-z"], cwd=root,

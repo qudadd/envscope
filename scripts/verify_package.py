@@ -1,11 +1,13 @@
 """Verify all vendor bytes and the desktop UI inside a built wheel or app tree."""
 import hashlib
 import json
+from email.parser import BytesParser
 from pathlib import Path
 import sys
 import zipfile
 
 from envscope.legacy import MANIFEST_NAME, VENDOR_MANIFEST_SHA256
+from envscope import __version__
 
 
 def verify(read, names):
@@ -34,6 +36,10 @@ def main():
             verify(lambda name: (target / name).read_bytes(), [p.relative_to(target).as_posix() for p in target.rglob("*") if p.is_file()])
             return
     with zipfile.ZipFile(target) as wheel:
+        metadata=[n for n in wheel.namelist() if n.endswith('.dist-info/METADATA')]
+        assert len(metadata)==1,'Missing or ambiguous package metadata'
+        values=BytesParser().parsebytes(wheel.read(metadata[0]))
+        assert values['Name']=='envscope' and values['Version']==__version__,'Wheel and app versions differ'
         verify(wheel.read, wheel.namelist())
 
 
