@@ -75,6 +75,12 @@ class ComponentMigration:
 
     def _snapshot(self): return validate_snapshot(self.io.snapshot())
 
+    def peek(self):
+        if not self.cached:
+            return {'state': 'not_checked', 'rows': [], 'can_restore': False, 'needs_recovery': False,
+                    'reason': '进入持续维护后自动读取旧组件。此处只核对系统任务，账号与原脚本保留。'}
+        return {**deepcopy(self.cached[1]), 'cached': True, 'cache_age_seconds': round(max(0, self.clock()-self.cached[0]))}
+
     def status(self, fresh=False):
         if not fresh and self.cached and self.clock()-self.cached[0] < 10:
             return {**deepcopy(self.cached[1]), 'cached': True}
@@ -122,6 +128,8 @@ class ComponentMigration:
                 rows = snapshot['rows']
                 selected = roles if roles is not None else [r['id'] for r in rows if r.get('owned') and (r.get('present') or r.get('registered'))]
                 if not selected: return {'state': 'not_needed', 'reason': '没有可自动迁移的已识别旧任务；未知或权限拒绝的项目请按说明处理。'}
+                if receipt.get('state') == 'committed':
+                    return {'state': 'guided', 'reason': '已有可恢复的迁移记录，未用新事务覆盖它。需要改变迁移范围时，先停用对应原生保护、恢复原事务，再一次选择所需旧组件。'}
                 found = {r['id']: r for r in rows}
                 if any(r not in found or not retirable(found[r]) for r in selected):
                     return {'state': 'guided', 'reason': '所选任务的定义、账户、权限或脚本尚未核实，未停止或覆盖；请在系统任务入口核对。'}
@@ -167,7 +175,8 @@ class ComponentMigration:
                     ok = ok and set(originals) == set(plan['roles'])
                     for role in plan['roles']:
                         row, original = found.get(role, {}), originals.get(role, {})
-                        ok = ok and row.get('owned') is True and not row.get('error') and all(row.get(k) == original.get(k) for k in ('present', 'registered', 'enabled', 'script_sha'))
+                        keys = ('present', 'registered', 'enabled', 'script_sha') + (('definition_sha', 'mode', 'group') if snapshot['system'] == 'Darwin' else ())
+                        ok = ok and row.get('owned') is True and not row.get('error') and all(row.get(k) == original.get(k) for k in keys)
                 else:
                     ok = ok and all(found.get(r, {}).get('present') is False and found[r].get('registered') is False and not found[r].get('error') for r in plan['roles'])
                 self.plans.clear(); self.cached = None

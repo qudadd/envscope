@@ -31,7 +31,7 @@ def main():
     environment = dict(os.environ)
     if platform.system() == 'Darwin':
         from .build_timezone_worker import build
-        for component in ('timezone','network'):
+        for component in ('timezone','network','components'):
             native = build(component=component);name=component+'-helper'
             # Keep the separately signed worker byte exact. PyInstaller rewrites
             # the code signature of raw Mach-O files passed as data.
@@ -43,7 +43,7 @@ def main():
     subprocess.run(command, cwd=root, check=True, env=environment)
     app = root / "dist" / "desktop" / ("EnvScope.app" if platform.system() == "Darwin" else "EnvScope")
     if platform.system() == 'Darwin':
-        for component in ('timezone','network'):
+        for component in ('timezone','network','components'):
             name=component+'-helper';manifests=list(app.rglob(name+'.json'))
             assert manifests, 'Native '+component+' helper missing'
             for metadata in manifests:

@@ -107,7 +107,10 @@ function Restore($r) {
   $service=New-Object -ComObject 'Schedule.Service';$service.Connect();$folder=$service.GetFolder('\')
   [void]$folder.RegisterTask($TaskName,$xml,50,$Actor,$null,3,$r.before.security)
  }
- $live=ReadTask;if(-not(Same $live $r.before $false)){throw 'restore readback'}
+ $live=ReadTask;if(-not(Same $live $r.before $false)){
+  $xml=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($r.before.definition))
+  throw ('restore readback; acl='+($live.sddl -ceq $r.before.security)+'; definition='+((Canonical $live.xml) -ceq (Canonical $xml)))
+ }
  if($r.before.running -and $r.before.enabled){
   $service=New-Object -ComObject 'Schedule.Service';$service.Connect();[void]$service.GetFolder('\').GetTask($TaskName).Run($null)
   $until=[DateTime]::UtcNow.AddSeconds(10);do{$live=ReadTask;if($live.state -eq 4 -or $live.instances -gt 0){break};Start-Sleep -Milliseconds 200}while([DateTime]::UtcNow -lt $until)
@@ -126,7 +129,8 @@ try{
   $saved=Join-Path $Root ('record-'+$last.id+'.private.json');Safe $saved
   $r=[IO.File]::ReadAllText($saved,[Text.Encoding]::UTF8)|ConvertFrom-Json
   if($r.id -cne $last.id -or $r.actor -cne $Actor -or $r.fixture -ne $Fixture -or (Hash ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($r.before.definition)))) -cne $r.before.definition_sha){throw 'original record invalid'}
-  Restore $r;Publish $r 'restored'
+  Publish $r 'prepared'
+  try{Restore $r;Publish $r 'restored'}catch{Publish $r 'partial';throw}
  }else{
   if($last.state -in @('prepared','partial')){throw 'pending recovery'}
   if(Test-Path -LiteralPath (Join-Path $Root ('record-'+$plan.id+'.private.json'))){throw 'nonce reused'}

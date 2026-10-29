@@ -32,8 +32,19 @@ def windows(home, result):
     preserve = home/'.claude-switcher/accounts/A/fixture.private.bin'; preserve.parent.mkdir(parents=True); preserve.write_bytes(b'ACCOUNT_FIXTURE_ONLY')
     layout = Layout(home, 'Windows', fixture={'root': home/'privileged/receipt', 'task': marker,
         'labels': {}, 'daemons': home/'not-used', 'scripts': home/'not-used'})
-    io = WindowsComponents(home, layout=layout)
     shell = powershell()
+    def runner(args, **kwargs):
+        # The hosted actor is already elevated. Execute the identical encoded
+        # transaction directly so CI retains its failure output; this does not
+        # simulate or claim a Windows UAC interaction.
+        if kwargs.get('input'):
+            encoded = kwargs.pop('input').decode('ascii')
+            value = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], **kwargs)
+            if value.returncode:
+                print('Owned fixture transaction stderr:', value.stderr.decode(errors='replace')[-4000:])
+            return value
+        return subprocess.run(args, **kwargs)
+    io = WindowsComponents(home, layout=layout, runner=runner)
     setup = ("$ErrorActionPreference='Stop';$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
         "$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "+quote('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(source)+'"')+';'
         "$t=New-ScheduledTaskTrigger -AtLogOn;$p=New-ScheduledTaskPrincipal -UserId $sid -LogonType Interactive -RunLevel Limited;"
@@ -60,7 +71,7 @@ def windows(home, result):
             value = subject.apply(plan['plan_id'], True); assert value['state'] == 'completed', value
             assert io.snapshot()['rows'][0]['present'] is False
             # New object proves recovery uses OS-protected originals, not memory.
-            subject = ComponentMigration(StateStore(home/'state'), home, io=WindowsComponents(home, layout=layout))
+            subject = ComponentMigration(StateStore(home/'state'), home, io=WindowsComponents(home, layout=layout, runner=runner))
             plan = subject.prepare(restore=True); assert plan['state'] == 'planned', plan
             value = subject.apply(plan['plan_id'], True); assert value['state'] == 'restored', value
             after = io.snapshot()['rows'][0]; assert after['running'] is running and after['enabled'] is running, after
@@ -100,7 +111,8 @@ def mac(home, result):
     worker = {'path': str(binary), 'sha256': metadata['sha256']}
     import shlex
     source = home/'root-fixture.sh'; source.write_text('#!/bin/bash\nwhile true; do /bin/sleep 1; done\n'); source.chmod(0o700)
-    setup = '/bin/mkdir '+shlex.quote(str(system_root))+'; /bin/chmod 755 '+shlex.quote(str(system_root))+'; '
+    setup = 'if [ ! -d /Library/PrivilegedHelperTools ]; then /bin/mkdir /Library/PrivilegedHelperTools; /bin/chmod 755 /Library/PrivilegedHelperTools; fi; '
+    setup += '/bin/mkdir '+shlex.quote(str(system_root))+'; /bin/chmod 755 '+shlex.quote(str(system_root))+'; '
     setup += '/bin/mkdir '+shlex.quote(str(layout.daemons))+' '+shlex.quote(str(layout.scripts))+'; '
     for name in ('claude-bodyguard.sh', 'tz-watchdog.sh', 'claude-switch.sh'):
         setup += '/bin/cp '+shlex.quote(str(source))+' '+shlex.quote(str(layout.scripts/name))+'; /bin/chown 0:0 '+shlex.quote(str(layout.scripts/name))+'; /bin/chmod 755 '+shlex.quote(str(layout.scripts/name))+'; '
@@ -147,6 +159,11 @@ def mac(home, result):
                 subprocess.run(['/usr/bin/sudo', '-n', '/bin/launchctl', 'bootout', 'system/'+labels[role]], capture_output=True, timeout=15)
             assert str(system_root).startswith('/Library/PrivilegedHelperTools/envscope-components-fixture-') and len(marker) == 32
             command(['/usr/bin/sudo', '-n', '/bin/rm', '-rf', str(system_root)])
+            assert not system_root.exists()
+        for role in labels:
+            target = ('gui/'+str(os.getuid()) if role == 'update.user' else 'system')+'/'+labels[role]
+            probe = subprocess.run(['/bin/launchctl', 'print', target], capture_output=True, timeout=6)
+            assert probe.returncode and b'could not find service' in (probe.stdout+probe.stderr).lower(), target
         result['jobs_removed'] = True
 
 

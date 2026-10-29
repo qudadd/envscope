@@ -122,7 +122,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None, language_repair=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None, language_repair=None, components=None):
         self.store = store
         self.environment_reader = environment_reader
         from .region_lookup import lookup_region
@@ -170,6 +170,10 @@ class Operations:
         self.language_repair=language_repair or LanguageRepair(store,LanguageIO(
             available=False if isolated else None,close_desktop=(lambda:False) if isolated else quit_account_claude),
             root=self.home/'.envscope/client-language' if isolated else None,transaction_lock=lambda:self.accounts._lock())
+        from .legacy_components import ComponentMigration, UnavailableComponents
+        self.components = components or ComponentMigration(store, self.home,
+            io=UnavailableComponents() if isolated else None, transaction_lock=lambda: self.accounts._lock(),
+            replacements=self._component_replacements)
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing,self.network,
                                       self.client_repair,self.process_guard,self.language_repair)
@@ -177,6 +181,11 @@ class Operations:
         from .inventory import collect
         self.regions = RegionSetup(store, lambda: (self.environment_reader or collect)(), self.home,timezone_service=self.timezone_service)
         self.inspection_plans = {}
+
+    def _component_replacements(self):
+        guard, zone = self.process_guard.status(), self.timezone_service.status()
+        return {'guard': guard.get('enabled') is not False or guard.get('state') == 'invalid',
+                'timezone': zone.get('state') not in ('not_applicable', 'not_installed')}
 
     def _open_remedy(self, action):
         system = platform.system()
@@ -214,7 +223,7 @@ class Operations:
         return {'settings':self.store.settings(),'maintenance':self.maintenance.status(),
                 'process_guard':self.process_guard.status(),'timezone_service':self.timezone_service.status(),
                 'system_network':self.network.status(),'client_repair':self.client_repair.status(),
-                'client_language':self.language_repair.status()}
+                'client_language':self.language_repair.status(), 'legacy_components': self.components.peek()}
 
     def catalog(self):
         try:
@@ -250,11 +259,20 @@ class Operations:
                 'system_network': self.network.status(),
                 'client_repair': self.client_repair.status(),
                 'client_language': self.language_repair.status(),
+                'legacy_components': self.components.peek(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
     def run(self, action, params, confirmed=False, report=None, preflight=None):
         if not isinstance(params, dict):
             raise ValueError("invalid action parameters")
+        if action.startswith('components-'):
+            allowed = {'components-status': set(), 'components-plan': {'roles', 'restore'}, 'components-apply': {'plan_id'}}
+            if action not in allowed or set(params)-allowed[action]: raise ValueError('旧组件参数无效')
+            if action == 'components-status': return self.components.status(True)
+            if action == 'components-plan': return self.components.prepare(params.get('roles'), restore=params.get('restore', False))
+            value = self.components.apply(params.get('plan_id'), confirmed)
+            if value.get('retest') or value.get('state') == 'partial': value['needs_retest'] = True
+            return value
         if action.startswith('language-'):
             allowed={'language-status':set(),'language-plan':{'report_id'},'language-apply':{'plan_id'},
                      'language-restore-plan':set(),'language-restore':{'plan_id'}}

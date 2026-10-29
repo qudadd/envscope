@@ -29,10 +29,13 @@ class GuardSchedulerFixture(FakeScheduler):
 class GuardIOFixture:
     def __init__(self):
         self.online, self.live, self.stop_ok = True, True, True
+        self.old_guard = False
         self.stops = []
         self.observation = {'targets': [], 'unreadable': False, 'clients': ['mihomo'], 'interfaces': [{'name': 'utun9', 'up': True}]}
     def snapshot(self):
         return deepcopy(self.observation)
+    def legacy(self):
+        return {'rows': [{'id': 'guard', 'present': self.old_guard, 'registered': self.old_guard}]}
     def identity(self):
         return {'pid': 12345, 'created': 1.0, 'exe': 'fixture-not-running'}
     def alive(self, *args):

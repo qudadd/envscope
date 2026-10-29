@@ -251,13 +251,14 @@ static int restore_rows(CFArrayRef rows){
 static int execute(int root,CFDictionaryRef plan,int restoring){
  char id[40],owner[32],expected[40];CFArrayRef requested=CFDictionaryGetValue(plan,CFSTR("roles")),before=CFDictionaryGetValue(plan,CFSTR("before"));
  if(!get_text(plan,CFSTR("id"),id,sizeof(id))||!hex(id,32)||!get_text(plan,CFSTR("actor"),owner,sizeof(owner))||!set_actor(owner)||!get_text(plan,CFSTR("expected_record"),expected,sizeof(expected))||!is_array(requested)||CFArrayGetCount(requested)<1||CFArrayGetCount(requested)>4)return 65;
- CFMutableDictionaryRef last=read_record(root,"latest.plist",1);if(!last)return 78;char lastid[40]="",phase[40]="";get_text(last,CFSTR("id"),lastid,sizeof(lastid));get_text(last,CFSTR("state"),phase,sizeof(phase));if(strcmp(expected,lastid)){CFRelease(last);return 79;}
+  CFMutableDictionaryRef last=read_record(root,"latest.plist",1);if(!last)return 78;char lastid[40]="",phase[40]="";get_text(last,CFSTR("id"),lastid,sizeof(lastid));get_text(last,CFSTR("state"),phase,sizeof(phase));if(strcmp(expected,lastid)){CFRelease(last);return 79;}
+  if(CFDictionaryGetCount(last)){long long format=0;if(!integer_at(last,CFSTR("format"),&format)||format!=1||!hex(lastid,32)||true_at(last,CFSTR("fixture"))!=ENVSCOPE_COMPONENT_FIXTURE||!eq(last,plan,CFSTR("actor"))){CFRelease(last);return 79;}}
  CFMutableDictionaryRef record=NULL;
  if(restoring){char saved[90],saved_owner[32];if(!hex(lastid,32)||(strcmp(phase,"prepared")&&strcmp(phase,"partial")&&strcmp(phase,"committed"))){CFRelease(last);return 79;}
   snprintf(saved,sizeof(saved),"record-%s.private.plist",lastid);record=read_record(root,saved,0);
    long long format=0;char saved_id[40];
    if(!record||!integer_at(record,CFSTR("format"),&format)||format!=1||true_at(record,CFSTR("fixture"))!=ENVSCOPE_COMPONENT_FIXTURE||!get_text(record,CFSTR("id"),saved_id,sizeof(saved_id))||strcmp(saved_id,lastid)||!eq(record,last,CFSTR("roles"))||!eq(record,plan,CFSTR("roles"))||!get_text(record,CFSTR("actor"),saved_owner,sizeof(saved_owner))||strcmp(saved_owner,owner)){if(record)CFRelease(record);CFRelease(last);return 79;}
-  CFRelease(last);before=CFDictionaryGetValue(record,CFSTR("before"));if(!is_array(before)||!restore_rows(before)){publish(root,record,"partial");CFRelease(record);return 74;}
+   CFRelease(last);before=CFDictionaryGetValue(record,CFSTR("before"));if(!is_array(before)||!publish(root,record,"prepared")||!restore_rows(before)){publish(root,record,"partial");CFRelease(record);return 74;}
   int ok=publish(root,record,"restored");CFRelease(record);return ok?0:74;
  }
  if(!strcmp(phase,"prepared")||!strcmp(phase,"partial")||!is_array(before)){CFRelease(last);return 79;}CFRelease(last);

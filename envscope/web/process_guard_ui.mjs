@@ -2,10 +2,10 @@ const $=id=>document.getElementById(id);
 const el=(tag,text)=>{const node=document.createElement(tag);node.textContent=text;return node;};
 export function renderProcessGuard(value={},settings={}){
   if(!$('process-guard-state'))return;
-  const states={disabled:'未启用',waiting:'等待首次心跳',armed:'正在守护',blocked:'连接异常，已确认桌面未运行',attention:'需要手动处理',paused:'目标改变，已暂停',stale:'守护心跳失效',outdated:'需要更新守护任务',schedule_unverified:'系统任务待核实',invalid:'守护记录无法读取'};
+  const states={disabled:'未启用',waiting:'等待首次心跳',armed:'正在守护',blocked:'连接异常，已确认桌面未运行',attention:'需要手动处理',paused:'目标改变，已暂停',stale:'守护心跳失效',outdated:'需要更新守护任务',conflict:'旧守护需先处理',schedule_unverified:'系统任务待核实',invalid:'守护记录无法读取'};
   $('process-guard-state').textContent=states[value.state]||'状态待核实';
   $('process-guard-status').textContent=[value.reason,value.heartbeat?'最近心跳：'+new Date(value.heartbeat).toLocaleString():''].filter(Boolean).join(' ');
-  $('process-guard-status').classList.toggle('manual-guidance',['blocked','attention','paused','stale','outdated','invalid','schedule_unverified'].includes(value.state));
+  $('process-guard-status').classList.toggle('manual-guidance',['blocked','attention','paused','stale','outdated','invalid','conflict','schedule_unverified'].includes(value.state));
   $('process-guard-stop').disabled=!value.enabled&&!value.scheduler?.present;
   $('process-guard-interface-row').hidden=settings.connection_mode!=='tun';
   $('process-guard-interface').disabled=settings.connection_mode!=='tun';
