@@ -23,6 +23,7 @@ class ComponentsIntegrationTests(unittest.TestCase):
         self.io = ComponentsFixture(); self.subject = ComponentMigration(self.store, self.home, io=self.io)
         self.ops = Operations(self.store, self.home, components=self.subject, discoverer=lambda: [])
         self.ops.timezone_service.status = Mock(return_value={'state':'not_applicable','supported':False})
+        self.ops.maintenance.status = Mock(return_value={'state':'disabled','enabled':False})
         self.subject.transaction_lock = lambda: self.ops.accounts._lock()
         self.server = make_server(store=self.store, operations=self.ops)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True); self.thread.start()
