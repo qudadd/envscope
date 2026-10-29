@@ -15,6 +15,11 @@ from . import __release__
 from .component_inventory import Layout, WINDOWS_READ, windows_snapshot
 from .system_network_windows import powershell, quote
 
+# CreateProcess accepts at most 32,767 UTF-16 code units, including the NUL.
+# Encoded payloads contain ASCII; leave room for the executable and switches.
+MAX_ENCODED = 32400
+MAX_COMMAND = 32600
+
 
 PROTECT = r'''
 function NoLinks($path) {
@@ -230,10 +235,10 @@ class WindowsComponents:
             body = self._body(action, input_path=path, sha=hashlib.sha256(raw).hexdigest())
             body = '\n'.join(line.lstrip() for line in body.splitlines() if line.strip())
             encoded = base64.b64encode(body.encode('utf-16-le')).decode()
-            if (len(encoded) > 31800 or len(subprocess.list2cmdline([self.executable, '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded])) > 32000):
+            if (len(encoded) > MAX_ENCODED or len(subprocess.list2cmdline([self.executable, '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded])) > MAX_COMMAND):
                 raise ValueError('旧组件操作超过系统命令长度，未执行')
             launcher = ("$ErrorActionPreference='Stop';$code=[Console]::In.ReadToEnd();"
-                "if($code.Length -gt 31800 -or $code -cnotmatch '^[A-Za-z0-9+/=]+$'){exit 65};"
+                "if($code.Length -gt "+str(MAX_ENCODED)+" -or $code -cnotmatch '^[A-Za-z0-9+/=]+$'){exit 65};"
                 "$o=@{FilePath="+quote(self.executable)+";ArgumentList=@('-NoProfile','-NonInteractive','-EncodedCommand',$code);WindowStyle='Hidden';Wait=$true;PassThru=$true};"
                 "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent());"
                 "if(-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){$o.Verb='RunAs'};"

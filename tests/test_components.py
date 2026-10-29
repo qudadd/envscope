@@ -12,7 +12,7 @@ import os
 from unittest.mock import Mock, patch
 
 from envscope.component_inventory import Layout, mac_definition, mac_snapshot, blocking, windows_definition, windows_snapshot, LABELS
-from envscope.components_windows import WindowsComponents
+from envscope.components_windows import WindowsComponents, MAX_ENCODED, MAX_COMMAND
 from envscope.legacy_components import ComponentMigration
 from envscope.state import StateStore
 
@@ -105,10 +105,20 @@ class ComponentTests(unittest.TestCase):
         io = WindowsComponents(self.home, runner=Mock(), executable='powershell.exe'); io.actor = SID
         body = io._body('retire', input_path='C:/fixture/plan.private.bin', sha='e'*64)
         encoded = base64.b64encode('\n'.join(s.lstrip() for s in body.splitlines() if s.strip()).encode('utf-16-le'))
-        self.assertLess(len(encoded), 31800)
+        self.assertLess(len(encoded), MAX_ENCODED)
         self.assertIn('PSModulePath', body); self.assertIn('RegisterTask(', body); self.assertIn('DeleteTask(', body)
         self.assertNotIn('Invoke-Expression', body); self.assertNotIn('Remove-Item -Recurse', body)
         self.assertNotIn('Stop-Process', body); self.assertNotIn('Set-TimeZone', body)
+        if os.name=='nt':
+            home=Path('C:/Users/runneradmin/AppData/Local/Temp/envscope-components-fixture-12345678')
+            layout=Layout(home,'Windows',fixture={'root':home/'privileged/receipt','task':'EnvScopeLegacyFixture'+'1'*32,
+                'labels':{},'daemons':home/'unused','scripts':home/'unused'})
+            value=WindowsComponents(home,layout=layout);value.actor='S-1-5-21-3776380004-1005456608-3524014338-500'
+            body=value._body('restore',input_path='C:/Users/runneradmin/AppData/Local/Temp/envscope-components-plan-12345678/plan.private.bin',sha='a'*64)
+            payload=base64.b64encode('\n'.join(s.lstrip() for s in body.splitlines() if s.strip()).encode('utf-16-le')).decode()
+            self.assertLessEqual(len(payload),MAX_ENCODED)
+            self.assertLessEqual(len(subprocess.list2cmdline([value.executable,'-NoProfile','-NonInteractive','-EncodedCommand',payload])),MAX_COMMAND)
+            self.assertLess(MAX_COMMAND+1,32767)
 
     @unittest.skipUnless(os.name=='nt','Windows descriptor math only; no jobs or filesystem ACLs change')
     def test_descriptor_math_preserves_meaning_and_rejects_real_permission_changes(self):
