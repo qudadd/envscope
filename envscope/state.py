@@ -69,7 +69,7 @@ class StateStore:
             if not path.is_file() or path.is_symlink() or path.stat().st_size > 2097152:
                 return fallback
             return json.loads(path.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
+        except (ValueError, OSError, RecursionError):
             return fallback
 
     def _write(self, name, value):

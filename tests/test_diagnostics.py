@@ -141,11 +141,13 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_unreadable_consent_never_reenables_logging_from_default_settings(self):
         self.store.save_settings({'check_config':{'logging':False}})
-        (self.store.root/'settings.private.json').write_bytes(b'NOT_VALID_JSON')
-        self.assertFalse(self.log.safe_record('audit','completed'))
-        self.assertEqual(self.log.status()['state'],'unavailable')
-        self.assertEqual(self.unpack(self.log.archive())['commands.jsonl'],b'')
-        self.assertFalse(self.log.root.exists())
+        for invalid in (b'NOT_VALID_JSON',b'['*2000+b'0'+b']'*2000):
+            with self.subTest(length=len(invalid)):
+                (self.store.root/'settings.private.json').write_bytes(invalid)
+                self.assertFalse(self.log.safe_record('audit','completed'))
+                self.assertEqual(self.log.status()['state'],'unavailable')
+                self.assertEqual(self.unpack(self.log.archive())['commands.jsonl'],b'')
+                self.assertFalse(self.log.root.exists())
 
     def test_explicit_clear_can_remove_an_oversized_regular_log(self):
         self.log.record('audit','completed')
@@ -154,3 +156,20 @@ class DiagnosticTests(unittest.TestCase):
             self.assertEqual(self.log.clear(True)['state'],'completed')
         self.assertEqual(self.log.status()['state'],'ready')
         self.assertEqual(self.log.entries(),[])
+
+    def test_status_and_export_never_create_a_missing_lock_during_read(self):
+        self.log.record('audit','completed')
+        path=self.log.root/'.commands.lock';path.unlink()
+        self.assertEqual(self.log.status()['state'],'unavailable')
+        self.unpack(self.log.archive())
+        self.assertFalse(path.exists())
+        self.assertTrue(self.log.safe_record('audit','completed'))
+        self.assertEqual(len(self.log.entries()),2)
+
+    def test_deeply_nested_poisoned_log_line_does_not_block_valid_entries_or_export(self):
+        self.log.record('audit','completed')
+        with (self.log.root/FILES[1]).open('ab') as stream:
+            stream.write(b'['*2000+b'"PRIVATE_POISON"'+b']'*2000+b'\n')
+        self.assertEqual(len(self.log.entries()),1)
+        content=b''.join(self.unpack(self.log.archive()).values())
+        self.assertNotIn(b'PRIVATE_POISON',content)

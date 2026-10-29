@@ -276,7 +276,7 @@ class Operations:
             return result
         finally:
             # No parameters, result payloads or exception text enter this log.
-            if action not in ('audit-plan', 'check-config', 'diagnostics-clear'):
+            if action not in ('audit-plan', 'check-config', 'diagnostics-clear', 'desktop-show'):
                 self.diagnostics.safe_record(action, state, time.monotonic() - started)
 
     def _run(self, action, params, confirmed=False, report=None, preflight=None):

@@ -21,12 +21,33 @@ from .diagnosis import compare_diagnoses
 from . import __version__, __release__
 
 
+class LoopbackServer(ThreadingHTTPServer):
+    """Stop accepting operations, then drain the active mutation before teardown.
+
+    Worker threads finish before owned state is released. Socket reads have a
+    short deadline; an idle connection cannot hold teardown indefinitely.
+    """
+    closing = False
+    daemon_threads = False
+
+    def server_close(self):
+        self.closing = True
+        super().server_close()
+        lock = getattr(self, 'audit_lock', None)
+        if lock is not None:
+            with lock: pass
+
+
 class DesktopHandler(SimpleHTTPRequestHandler):
     # Windows MIME registrations can override Python's module defaults.
     # ES modules must have a JavaScript type when nosniff is enabled.
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map,
                       ".mjs": "text/javascript", ".js": "text/javascript",
                       ".css": "text/css", ".html": "text/html"}
+
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(5)
 
     def log_message(self, *args):
         pass
@@ -60,6 +81,9 @@ class DesktopHandler(SimpleHTTPRequestHandler):
         if not self.valid_host() or self.headers.get("Sec-Fetch-Site") == "cross-site":
             self.json_response(403, {"error": "invalid_origin"})
             return
+        if self.server.closing:
+            self.json_response(503, {'error': 'service_stopping'})
+            return
         self.server.last_activity = time.monotonic()
         if self.path == "/api/session":
             self.json_response(200, {"token": self.server.session_token, "mode": "desktop", "version": __version__, "release": __release__,
@@ -85,6 +109,9 @@ class DesktopHandler(SimpleHTTPRequestHandler):
         if (not self.valid_host() or self.headers.get("Origin") != self.expected_origin() or not token.isascii()
                 or not secrets.compare_digest(token, self.server.session_token)):
             self.json_response(403, {"error": "invalid_session"})
+            return
+        if self.server.closing:
+            self.json_response(503, {'error': 'service_stopping'})
             return
         self.server.last_activity = time.monotonic()
         if self.path == "/api/quit":
@@ -134,6 +161,10 @@ class DesktopHandler(SimpleHTTPRequestHandler):
             return
         if not self.server.audit_lock.acquire(blocking=False):
             self.json_response(409, {"error": "audit_running"})
+            return
+        if self.server.closing:
+            self.server.audit_lock.release()
+            self.json_response(503, {'error': 'service_stopping'})
             return
         response_status=200
         try:
@@ -251,7 +282,7 @@ def _collect_report(server, snapshot, selected_checks=None):
 
 def make_server(port=0, auditor=None, store=None, operations=None):
     web = Path(__file__).parent / "web"
-    server = ThreadingHTTPServer(("127.0.0.1", port), partial(DesktopHandler, directory=str(web)))
+    server = LoopbackServer(("127.0.0.1", port), partial(DesktopHandler, directory=str(web)))
     server.session_token = secrets.token_urlsafe(32)
     server.audit_lock = threading.Lock()
     server.last_activity = time.monotonic()

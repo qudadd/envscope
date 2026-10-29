@@ -94,30 +94,33 @@ class DiagnosticLog:
         return validate(self.store.settings().get('check_config',{}))['logging']
 
     @contextmanager
-    def lock(self):
+    def lock(self, create=True):
         with _mutex:
             if self.store.memory:
                 yield
                 return
             _safe_chain(self.root)
-            self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if create:self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
             path = self.root / '.commands.lock'
             _safe_chain(path)
-            fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0), 0o600)
-            with os.fdopen(fd, 'r+b') as stream:
+            flags = os.O_RDWR | os.O_CREAT if create else os.O_RDONLY
+            fd = os.open(path, flags | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0), 0o600)
+            with os.fdopen(fd, 'r+b' if create else 'rb') as stream:
                 info = os.fstat(stream.fileno())
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 1:
                     raise ValueError('诊断锁文件无法核对')
-                if not info.st_size: stream.write(b'0'); stream.flush()
+                if not info.st_size:
+                    if not create:raise ValueError('诊断锁尚未完整写入，读取未创建文件')
+                    stream.write(b'0'); stream.flush()
                 for attempt in range(20):
                     stream.seek(0)
                     try:
                         if os.name == 'nt':
                             import msvcrt
-                            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK if create else msvcrt.LK_NBRLCK, 1)
                         else:
                             import fcntl
-                            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            fcntl.flock(stream.fileno(), (fcntl.LOCK_EX if create else fcntl.LOCK_SH) | fcntl.LOCK_NB)
                         break
                     except OSError:
                         if attempt == 19: raise ValueError('诊断日志正被另一进程使用') from None
@@ -162,13 +165,13 @@ class DiagnosticLog:
         if not self.enabled(): return []
         # A read never creates the log directory or a lock file.
         if not self.store.memory and not self.root.exists(): return []
-        with self.lock():
+        with self.lock(create=False):
             if self.store.memory: return [e for v in self.memory if (e := _safe_entry(v))]
             result = []
             for name in FILES:
                 for line in _read_file(self.root / name).splitlines():
                     try: entry = _safe_entry(json.loads(line))
-                    except (ValueError, TypeError): entry = None
+                    except (ValueError, TypeError, RecursionError): entry = None
                     if entry: result.append(entry)
             return result
 
