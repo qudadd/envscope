@@ -190,6 +190,33 @@ class WireGuardTests(unittest.TestCase):
         self.assertNotIn('baseline.rules', guarded['required'])
         self.assertIn('baseline.guard', guarded['required'])
 
+    def test_conflicting_interface_identifiers_and_selective_scope(self):
+        with tempfile.TemporaryDirectory() as home:
+            settings = target(mode='tun', client='wireguard', wireguard_service=SERVICE)
+            rows = wireguard_findings(home, settings)
+            route = next(f for f in rows if f.id == 'extra.target_route').evidence[0]
+            route['interface'] = 'Other VPN'  # A correct numeric index cannot hide a conflicting name.
+            value = make_report(rows, fixture_policy(settings), 'one-click-desktop', settings)
+            self.assertEqual(next(f['status'] for f in value['findings'] if f['id'] == 'target.tun_route'), 'fail')
+            value = make_report(rows, fixture_policy(settings), 'one-click-desktop', settings, ['target.wireguard'])
+            self.assertEqual(next(f['status'] for f in value['findings'] if f['id'] == 'target.wireguard'), 'pass')
+            self.assertEqual(next(f['status'] for f in value['findings'] if f['id'] == 'target.tun_route'), 'skipped')
+            self.assertNotEqual(value['assessment']['verdict'], 'qualified_in_scope')
+
+    def test_service_changes_after_review_cannot_enable_guard(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary); store = StateStore(home/'state')
+            settings = target(usage='desktop', mode='tun', client='wireguard', wireguard_service=SERVICE, usage_country='US')
+            store.save_settings({k: v for k, v in settings.items() if k != 'environment_confirmed'}, confirm_environment=True)
+            io, scheduler = GuardIOFixture(), GuardSchedulerFixture()
+            io.observation.update(wireguard=observed(), interfaces=[{'name': 'EnvScope Fixture US', 'up': True}])
+            guard = ProcessGuard(store, home, io, scheduler)
+            current = wireguard_report(home, store.settings()); prepared = guard.prepare_from_report(current)
+            self.assertEqual(prepared['state'], 'planned')
+            io.observation['wireguard']['services'][0]['sha256'] = 'a' * 64
+            self.assertEqual(guard.enable(prepared['plan_id'], current, True)['state'], 'retest_required')
+            self.assertFalse(scheduler.calls); self.assertFalse(guard.config())
+
     def test_guard_pins_service_binary_and_stops_on_loss_without_restarting_vpn(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary); store = StateStore(home/'state')

@@ -13,6 +13,7 @@ import time
 import uuid
 
 from envscope.wireguard import PREFIX, WireGuardReader, select_service
+from envscope import __release__
 
 
 def run(command):
@@ -28,7 +29,7 @@ def main():
             or os.environ.get('ENVSCOPE_SERVICE_ACCEPTANCE') != '1'):
         raise SystemExit('Owned SCM fixture is restricted to explicitly enabled Windows CI')
     output = Path('artifacts/wireguard-service'); output.mkdir(parents=True, exist_ok=True)
-    result = {'passed': False, 'scope': 'actual Windows SCM and process identity, one inert owned fixture; no VPN/network changes',
+    result = {'passed': False, 'release': __release__, 'scope': 'actual Windows SCM and process identity, one inert owned fixture; no VPN/network changes',
               'network_changes': False, 'fixture_removed': False}
     marker = 'EnvScopeFixture' + uuid.uuid4().hex
     name = PREFIX + marker

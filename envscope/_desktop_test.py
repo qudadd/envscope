@@ -46,6 +46,7 @@ def main(output=None):
         result['native_network_worker'] = 'not_applicable'
         result['native_language_bindings']='not_applicable'
         result['native_pipe_transport']='not_applicable'
+        result['native_wireguard_bindings']='not_applicable'
         if platform.system()=='Windows':
             from .wireguard import WindowsServices, command_identity, PREFIX
             path = 'C:\\Program Files\\WireGuard\\wireguard.exe'

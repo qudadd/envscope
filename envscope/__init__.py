@@ -1,4 +1,4 @@
 """EnvScope: evidence-first environment diagnostics."""
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
 __release__ = "v" + __version__ + "-alpha.1"

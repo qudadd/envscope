@@ -2,7 +2,7 @@
 
 面向 Windows 和 macOS 的极简桌面环境工具。以 [claude-switcher](https://github.com/YOURSJEYO/claude-switcher) 为功能底座，保留原版维护能力，增加独立检测、事务式账号管理、代理诊断和历史对比。
 
-当前开发新增 **Windows WireGuard 专项模式**：选择具体隧道，分别核对服务、所属进程、程序摘要、对应网卡与实际目标选路；原生守护固定同一服务基线。服务停止、读取权限拒绝及其他 VPN 选路分别显示原因和处理步骤。参见 [WireGuard 检测与守护](docs/WIREGUARD.md)。公开安装包以 Releases 为准。
+当前代码 **0.19.0 Alpha** 新增 Windows WireGuard 专项模式：选择具体隧道，分别核对服务、所属进程、程序摘要、对应网卡与实际目标选路；原生守护固定同一服务基线。服务停止、读取权限拒绝及其他 VPN 选路分别显示原因和处理步骤。参见 [WireGuard 检测与守护](docs/WIREGUARD.md)。公开安装包以 Releases 为准。
 
 **0.18.0 已加入**原生客户端启动 / 重开、Clash Verge TUN 持久化修复，以及 macOS Claude 专用语言设置与恢复。先正常退出 Claude，审核所选程序与改动；备份、读回、失败恢复和中断恢复都有入口。一键流程先修复客户端并自动复检，再使用实际测到的网卡预览后续守护，减少手动选择。参见 [客户端与应用语言修复](docs/CLIENT_REPAIR.md)。
 
