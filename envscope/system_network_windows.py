@@ -196,6 +196,7 @@ try {
  try {
   $code=[string]$_.FullyQualifiedErrorId
   if($code.Length -gt 160){$code='system_operation_failed'}
+  $code+=' [line '+[int]$_.InvocationInfo.ScriptLineNumber+']'
   Save (Join-Path $Root 'failure.json') @{format=1;data_sha='@DATA_SHA@';code=$code} $true
  }catch{}
  throw
