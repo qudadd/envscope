@@ -131,7 +131,7 @@ class TimezoneIntegrationTests(unittest.TestCase):
         plan=self.maintenance.prepare(self.report,5,watchdog={'timezone':True})
         original=self.maintenance._write
         def write(name,value):
-            if name=='config':raise OSError('fixture full disk')
+            if name in ('config','events'):raise OSError('fixture full disk')
             return original(name,value)
         self.maintenance._write=write
         self.assertEqual(self.maintenance.enable(plan['plan_id'],self.report,True)['state'],'failed')

@@ -206,8 +206,9 @@ class Maintenance:
             root_plan=plan.get('timezone_plan')
             if root_plan:
                 result=self.timezone_service.apply(root_plan['plan_id'],True)
-                self._event('timezone_service',result.get('reason','系统时区服务操作已返回'),state=result['state'],nonce=root_plan['transaction_nonce'])
                 if result['state']!='completed':
+                    try:self._event('timezone_service',result.get('reason','系统时区服务操作已返回'),state=result['state'],nonce=root_plan['transaction_nonce'])
+                    except (OSError,ValueError):pass  # Root-owned transaction evidence remains authoritative.
                     return {'state':'partial','reason':'系统时区守护未完成，尚未启用本次巡检。'+result.get('reason',''),
                             'timezone_service':result,'needs_retest':True}
             elif config.get('watchdog',{}).get('timezone') and self.timezone_service and self.timezone_service.system=='Darwin':
@@ -218,6 +219,7 @@ class Maintenance:
             # Fail closed: a registered job cannot repair until enabled is saved.
             try:
                 self._write("config", config)
+                if root_plan:self._event('timezone_service',result.get('reason','系统时区服务已安装'),state=result['state'],nonce=root_plan['transaction_nonce'])
                 self.scheduler.install(config["schedule"], previous.get("schedule"))
             except (OSError, ValueError):
                 if root_plan:
