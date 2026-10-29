@@ -27,7 +27,6 @@
 static volatile sig_atomic_t stopped=0;
 static void stop_now(int sig){(void)sig;stopped=1;}
 static CFMutableDictionaryRef dict(void){return CFDictionaryCreateMutable(NULL,0,&kCFTypeDictionaryKeyCallBacks,&kCFTypeDictionaryValueCallBacks);}
-static CFMutableArrayRef array(void){return CFArrayCreateMutable(NULL,0,&kCFTypeArrayCallBacks);}
 static int protected_fd(int fd,int directory){struct stat s;return !fstat(fd,&s)&&s.st_uid==0&&!(s.st_mode&0022)&&
     (directory?S_ISDIR(s.st_mode):S_ISREG(s.st_mode)&&s.st_nlink==1);}
 static void text(CFMutableDictionaryRef d,CFStringRef k,const char *v){CFStringRef s=CFStringCreateWithCString(NULL,v,kCFStringEncodingUTF8);CFDictionarySetValue(d,k,s);CFRelease(s);}
@@ -63,6 +62,7 @@ static int valid_id(const char *s,int uuid){size_t n=strlen(s);if(n!=(uuid?36:32
     for(size_t i=0;i<n;i++){if(uuid&&(i==8||i==13||i==18||i==23)){if(s[i]!='-')return 0;}
         else if(!((s[i]>='0'&&s[i]<='9')||(s[i]>='a'&&s[i]<='f')||(s[i]>='A'&&s[i]<='F')))return 0;}return 1;}
 #if !ENVSCOPE_NET_FIXTURE
+static CFMutableArrayRef array(void){return CFArrayCreateMutable(NULL,0,&kCFTypeArrayCallBacks);}
 static CFMutableDictionaryRef normal_config(CFDictionaryRef config){CFMutableDictionaryRef d=config?CFDictionaryCreateMutableCopy(NULL,0,config):dict();
     CFDictionaryRemoveValue(d,CFSTR("__INACTIVE__"));return d;}
 #endif
