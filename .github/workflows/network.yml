@@ -10,7 +10,9 @@ on:
       - scripts/build_timezone_worker.py
       - scripts/build_network_worker.py
       - scripts/network_acceptance.py
+      - scripts/network_windows_acceptance.py
       - tests/test_system_network.py
+      - tests/test_system_network_windows.py
       - .github/workflows/network.yml
 permissions:
   contents: read
@@ -38,4 +40,24 @@ jobs:
         with:
           name: Network-evidence-${{ runner.arch }}
           path: artifacts/network-acceptance
+          if-no-files-found: warn
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --no-deps .
+      - run: python -m unittest tests.test_system_network tests.test_system_network_windows -q
+      - name: Actual ACL and transaction transport, fake binding backend only
+        env:
+          ENVSCOPE_NETWORK_ACCEPTANCE: '1'
+        run: python -m scripts.network_windows_acceptance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Network-evidence-Windows
+          path: artifacts/network-windows-acceptance
           if-no-files-found: warn

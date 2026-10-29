@@ -28,7 +28,7 @@ def validate_snapshot(value):
             or not isinstance(value.get('adapters'),list) or len(value['adapters'])>256):
         raise ValueError('系统网络信息格式无效，没有生成修改方案。')
     owner=value.get('owner')
-    if not (type(owner) is int and owner>=0 or isinstance(owner,str) and re.fullmatch(r'S-1-5-(?:[0-9]+-)*[0-9]+',owner)):
+    if not (type(owner) is int and owner>=0 or isinstance(owner,str) and re.fullmatch(r'S-1-(?:[0-9]+-)*[0-9]+',owner)):
         raise ValueError('未核实当前用户的网络操作归属。')
     found=set()
     for row in value['adapters']:
