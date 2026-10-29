@@ -41,6 +41,18 @@ def main(output=None):
         assert not list((Path(directory)/'.envscope/archive-work').iterdir())
         import cryptography
         result.update(encrypted_archive_roundtrip=True,cryptography_version=cryptography.__version__)
+        result['native_dmg_roundtrip'] = 'not_applicable'
+        if platform.system() == 'Darwin':
+            # Exercise real hdiutil from the frozen application, only in this
+            # disposable home. No real Claude credentials or system keychain.
+            import shutil
+            image = directory/'native.dmg'
+            operations.dmg_archives.export('B',str(image),'frozen-dmg-fixture-123')
+            shutil.rmtree(archived)
+            operations.dmg_archives.import_archive(str(image),'B','frozen-dmg-fixture-123')
+            assert (archived/'fixture.txt').read_bytes() == b'NATIVE_ARCHIVE_FIXTURE'
+            assert not operations.dmg_archives.status()['pending']
+            result['native_dmg_roundtrip'] = True
         import psutil
         result['psutil_version']=psutil.__version__
         # The shipped account transaction/recovery code touches only this fixture.

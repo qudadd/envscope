@@ -1,13 +1,13 @@
 # Feature parity and integration audit
 
-## Active full-scope work: 0.13 development
+## Active full-scope work: 0.15 development
 
 [The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
 over historical status tables below. Native process protection is now implemented
 with a separate user task, ten-second checks, approved scope, PID/path/user
 validation, live-worker heartbeat and durable logs. See [its exact scope and
-verification](PROCESS_GUARD.md). Network repair, native routing writes, privileged
-Mac timezone service and DMG compatibility remain incomplete. The overall parity
+verification](PROCESS_GUARD.md). Native system network repair, privileged Mac
+timezone service and additional client adapters remain incomplete. The overall parity
 goal is not achieved. Upstream Windows `set-region` at `223a5cc` was inspected.
 
 Whole-profile account volumes now use normal client exit, APFS copy-on-write
@@ -17,7 +17,15 @@ identity fixtures and a real disposable child-process exit are tested; real
 Claude credentials and server device recognition remain unverified.
 See [account volume scope](ACCOUNT_VOLUMES.md).
 
-## Current scope: 0.14.0 (2026-10-29)
+## Current scope: 0.15.0 (2026-10-29)
+
+0.15 adds native macOS DMG compatibility with the original root marker and A–D
+slots. Encrypted-image checks, read-only mounts, bounded profile validation,
+readback, exclusive publication and explicit interrupted-workspace cleanup run
+without vendor scripts. New images add a file manifest inside the existing marker;
+old images retain their narrower checksum/copy verification scope. Unit and UI
+fixtures are separate from actual hdiutil and frozen Mac acceptance in release CI.
+See [DMG archive scope](DMG_ARCHIVES.md).
 
 0.14 adds native Clash Verge routing: reviewed 16-rule plans, preserved user
 scripts, bounded comment-preserving YAML edits, durable backups, actual runtime

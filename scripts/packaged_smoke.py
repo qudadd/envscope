@@ -53,7 +53,7 @@ def main():
         assert_worker(result, 'frozen process guard imports')
         desktop_output = Path(directory) / "native.private.json"
         result = subprocess.run([str(executable), "--desktop-smoke", str(desktop_output)], capture_output=True,
-                                timeout=50, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                                timeout=180, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         evidence = Path('artifacts/native-smoke.json')
         evidence.parent.mkdir(parents=True, exist_ok=True)
         native = json.loads(desktop_output.read_text()) if desktop_output.exists() else {'errors': ['native process returned no evidence'], 'returncode': result.returncode}

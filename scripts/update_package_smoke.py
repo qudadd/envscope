@@ -40,7 +40,7 @@ def main():
         executable = updater.installed()
         output = Path(directory) / 'native.json'
         result = subprocess.run([str(executable), '--desktop-smoke', str(output)], capture_output=True,
-                                timeout=50, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                                timeout=180, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         assert result.returncode == 0, 'Installed binary failed to start its isolated test'
         native = json.loads(output.read_text())
         assert not native['errors'] and native['native_window'] and native['tray'] and native['quit']

@@ -18,7 +18,7 @@ from .operations import Operations, launch_gate
 from .accounts import AccountError, PreflightError
 from .transport import CurlTransport, desktop_transport
 from .diagnosis import compare_diagnoses
-from . import __version__
+from . import __version__, __release__
 
 
 class DesktopHandler(SimpleHTTPRequestHandler):
@@ -62,7 +62,7 @@ class DesktopHandler(SimpleHTTPRequestHandler):
             return
         self.server.last_activity = time.monotonic()
         if self.path == "/api/session":
-            self.json_response(200, {"token": self.server.session_token, "mode": "desktop", "version": __version__,
+            self.json_response(200, {"token": self.server.session_token, "mode": "desktop", "version": __version__, "release": __release__,
                                      "shell": "native" if getattr(self.server.operations, "desktop_runtime", None) else "browser"})
         elif (self.path == "/api/catalog" and self.headers.get("X-EnvScope-Token", "").isascii()
               and secrets.compare_digest(self.headers.get("X-EnvScope-Token", ""), self.server.session_token)):

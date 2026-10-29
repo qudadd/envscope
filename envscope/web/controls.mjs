@@ -54,11 +54,11 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
-    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button')].map(node=>[node,node.disabled]);
+    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button')].map(node=>[node,node.disabled]);
     for(const [node] of disabledBefore)node.disabled=true;
     busy=true;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
     $(output).scrollIntoView({block:'nearest'});
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),240000);
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),/^(archive|snapshot)-/.test(id)?1200000:240000);
     try {
       const response=await fetch("/api/action",{method:"POST",signal:controller.signal,headers:{"Content-Type":"application/json","X-EnvScope-Token":session.token},
         body:JSON.stringify({action:id,params,confirmed:needsConfirmation})});
@@ -66,7 +66,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(!response.ok)throw new Error(({invalid_session:'本地会话已失效，请重新打开 EnvScope。',audit_running:'正在进行其他检测或操作，请等待完成。',operation_unavailable_or_deadline:'本次读取未能完成，请稍后重试；不影响其他功能。'})[result.error]||result.error||"操作无法完成");
       if(result.latest_report)onReport(result.latest_report);
       if(id==='archive-choose-file'){if(result.file)$('encrypted-path').value=result.file;$(output).textContent=result.reason||(result.file?'文件位置已选择。':'已取消选择。');}
-      else if(['archive-export','archive-import','browser-cleanup','open-safe'].includes(id))$(output).textContent=[result.reason,result.boundary].filter(Boolean).join('\n');
+      else if(['archive-export','archive-import','archive-cleanup','snapshot-export','snapshot-import','browser-cleanup','open-safe'].includes(id))$(output).textContent=[result.reason,result.boundary].filter(Boolean).join('\n');
       else if(['cli-info','fingerprint'].includes(id)&&result.rows)information(result);
       else if(id.startsWith('maintenance-')||id.startsWith('guard-')||id.startsWith('routing-'))$(output).textContent=result.reason||({planned:'方案已生成，请核对下方影响。',enabled:'持续维护已启用。',disabled:'持续维护已停用。',completed:'已刷新维护结果。',confirmation_required:'请先审核方案并确认。'})[result.state]||'本次操作尚未确认完成。';
       else if(result.state==="completed"&&["settings-save","settings-restore"].includes(id))$(output).textContent=id==="settings-save"?"已保存，后续检测使用新偏好。":"已恢复上次偏好。";
@@ -86,11 +86,17 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       if(!['cli-info','fingerprint','support-bundle','proxy-diagnose'].includes(id)){
         try{await refresh();}catch{$(output).append(el('p','操作已返回，但功能列表刷新失败。请重新打开程序核对状态。','note'));}
       }return result;
-    }catch(error){if(error instanceof TypeError){disconnected();$(output).textContent=DISCONNECTED;}else $(output).textContent=error.name==="AbortError"?"等待已超时。操作可能仍在后台执行；请查看实际状态，避免重复执行。":String(error.message);return null;}
-    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);}}
+    }catch(error){if(error instanceof TypeError){disconnected();$(output).textContent=DISCONNECTED;}else $(output).textContent=error.name==="AbortError"?"等待已超时。操作可能仍在后台执行；请查看实际状态，避免重复执行。":String(error.message);if(/^(archive|snapshot)-/.test(id)){ $(output).classList.add('manual-guidance'); try{await refresh();}catch{} }return null;}
+    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();setParameters();renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);}}
   }
   function renderAccounts(){
     const value=catalog.accounts;
+    const dmg=catalog.dmg_archives||{};
+    $('encrypted-format').querySelector('[value="dmg"]').disabled=!dmg.available;
+    if(!dmg.available&&$('encrypted-format').value==='dmg')$('encrypted-format').value='envsnap';
+    $('encrypted-recovery').hidden=!dmg.pending?.length;
+    $('encrypted-recovery-note').textContent=dmg.reason||'';
+    $('encrypted-cleanup').disabled=busy||!dmg.available;
     renderAccountRecovery(value,busy);
     const locked=!!value.pending?.length||!!value.error;
     $('account-note').classList.toggle('manual-guidance',locked);
@@ -138,7 +144,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     if(!catalog){$('maintenance-availability').textContent='功能列表尚未取得，请重新连接本地服务。';$('maintenance-run').disabled=true;return;}
     const id=$("maintenance-action").value,a=catalog.legacy.actions.find(a=>a.id===id);
     $("maintenance-effects").replaceChildren(...(a?.effects||[]).map(text=>el("p",text)));
-    $("maintenance-run").disabled=!a?.available;
+    $("maintenance-run").disabled=busy||!a?.available;
     $("maintenance-availability").textContent=id==='open-safe'?catalog.isolated_browser?.reason||'':!a?.supported?"此平台的原版未提供此功能":!a.available?"需要先安装支持该操作的维护核心":"";
     $("param-client").hidden=id!=="set-client";
     $("param-policy").hidden=id!=="fix"||catalog.legacy.platform!=="Darwin";
@@ -224,11 +230,22 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   document.addEventListener('envscope-audit-end',event=>{if(!event.detail.has_report)$('account-readiness').textContent='本轮检测未完成，请重新检测；未沿用旧结论。';});
   for(const id of ["account-export","account-import"])$(id).addEventListener("click",()=>action(id,{slot:$("archive-slot").value.trim(),file:$("archive-path").value.trim()},"account-output",
     id==="account-export"?"将创建未加密的账号目录备份。文件含登录资料，请保存在受保护的本机目录。":"将读取指定目录并导入空的非活动槽位。不会覆盖现有槽位。"));
+  $('encrypted-format').addEventListener('change',()=>{
+    const dmg=$('encrypted-format').value==='dmg';
+    $('encrypted-format-note').textContent=dmg?'兼容原版 macOS DMG，仅支持 A–D；导入必须选择存档原槽位。新密码至少 12 字符，旧备份使用原密码。DMG 校验和与 .envsnap 认证加密的验证范围不同。':'.envsnap 使用认证加密，可导入任意空槽位。';
+    $('encrypted-password').placeholder=dmg?'导出至少 12 字符；导入用原密码':'至少 12 个字符';
+    $('encrypted-path').value='';$('encrypted-password').value='';
+    $('encrypted-path').placeholder=dmg?'选择或填写 .dmg 文件的绝对路径':'选择或填写 .envsnap 文件的绝对路径';
+  });
+  $('encrypted-cleanup').addEventListener('click',()=>action('archive-cleanup',{},'account-output','将核实并卸载 EnvScope 的临时 DMG，随后清理暂存副本。账号槽位、原备份和已导出文件保留。'));
   for(const mode of ['export','import']){
-    $('encrypted-choose-'+mode).addEventListener('click',()=>action('archive-choose-file',{mode},'account-output'));
+    $('encrypted-choose-'+mode).addEventListener('click',()=>action('archive-choose-file',{mode,format:$('encrypted-format').value},'account-output'));
     $('encrypted-'+mode).addEventListener('click',async()=>{
-      const input=$('encrypted-password');if(input.value.length<12){$('account-output').textContent='请填写至少 12 个字符的存档密码。';input.focus();return;}
-      try{await action('archive-'+mode,{slot:$('encrypted-slot').value.trim(),file:$('encrypted-path').value.trim(),password:input.value},'account-output',mode==='export'?'将复制非活动槽位，在受限临时目录中打包，使用密码加密并校验后导出。密码不会保存；临时明文随后清理。':'将用密码验证存档完整性和全部文件，再导入空槽位。不覆盖现有资料，不启动 Claude。');}finally{input.value='';}
+      const input=$('encrypted-password'),format=$('encrypted-format').value,min=format==='dmg'&&mode==='import'?1:12;
+      if(input.value.length<min){$('account-output').textContent=`请填写${min===1?'原存档':'至少 12 个字符的存档'}密码。`;input.focus();return;}
+      $('account-output').classList.remove('manual-guidance');
+      const password=input.value;input.value='';
+      await action('archive-'+mode,{slot:$('encrypted-slot').value.trim(),file:$('encrypted-path').value.trim(),password,format},'account-output',mode==='export'?'将复制非活动槽位，在受限临时目录中打包，使用密码加密并回读校验后导出。密码不会保存；临时明文随后清理。':'将用密码打开存档，校验格式与复制结果，再导入空槽位。DMG 只读挂载且槽位须与原存档一致。不覆盖现有资料，不启动 Claude。');
     });
   }
   $('browser-cleanup').addEventListener('click',()=>action('browser-cleanup',{},'tool-output'));

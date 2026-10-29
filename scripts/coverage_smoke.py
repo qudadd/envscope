@@ -1,5 +1,6 @@
 """Offline task acceptance for coverage, encrypted archives and temporary browser."""
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import threading
@@ -7,6 +8,9 @@ from unittest.mock import Mock, patch
 from playwright.sync_api import sync_playwright, expect
 
 from envscope.accounts import AccountManager
+from envscope import __release__
+from envscope.dmg_archive import DmgArchive
+from tests.test_dmg_archive import FakeImages
 from envscope.browser import environment_finding
 from envscope.environment_info import device_finding
 from envscope.isolated_browser import IsolatedBrowser
@@ -45,6 +49,8 @@ def main():
                     operations.isolated_browser = IsolatedBrowser(home,'Windows',lambda:[('Fixture Browser',executable)],launcher,lambda p:False)
                     def audit(*args,**kwargs):
                         return fixture(home,store.settings(),browser=kwargs.get('browser'))
+                    fake_images = FakeImages(home)
+                    operations.dmg_archives = DmgArchive(manager,home/'dmg-work',system='Darwin',disk=fake_images)
                     server = make_server(store=store,operations=operations,auditor=audit)
                     thread = threading.Thread(target=server.serve_forever,daemon=True);thread.start()
                     context = browser.new_context(viewport={'width':width,'height':900},locale='zh-CN')
@@ -55,6 +61,7 @@ def main():
                     page.route('https://**/*',lambda r:r.abort())
                     try:
                         page.goto(f'http://127.0.0.1:{server.server_port}',wait_until='networkidle')
+                        expect(page.locator('#app-version')).to_have_text(__release__)
                         if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
                         page.locator('#start').click()
                         expect(page.locator('#start')).to_be_enabled(timeout=30000)
@@ -87,6 +94,33 @@ def main():
                         expect(page.locator('#encrypted-password')).to_have_value('')
                         assert 'PRIVATE_SESSION_FIXTURE' not in page.locator('body').inner_text()
                         page.screenshot(path=str(out/f'{width}-archives.png'))
+                        page.locator('#encrypted-format').select_option('dmg')
+                        expect(page.locator('#encrypted-path')).to_have_value('')
+                        page.locator('#encrypted-slot').fill('B')
+                        page.locator('#encrypted-path').fill(str(home/'fixture.dmg'))
+                        page.locator('#encrypted-password').fill('fixture-dmg-password-123')
+                        page.locator('#encrypted-export').click()
+                        expect(page.locator('#account-output')).to_contain_text('已校验并导出',timeout=20000)
+                        page.locator('#encrypted-slot').fill('D')
+                        page.locator('#encrypted-password').fill('fixture-dmg-password-123')
+                        page.locator('#encrypted-import').click()
+                        expect(page.locator('#account-output')).to_contain_text('槽位不匹配',timeout=20000)
+                        assert not (manager.accounts_dir/'D').exists()
+                        shutil.rmtree(source)
+                        page.locator('#encrypted-slot').fill('B')
+                        fake_images.fail_detach=True
+                        page.locator('#encrypted-password').fill('fixture-dmg-password-123')
+                        page.locator('#encrypted-import').click()
+                        expect(page.locator('#encrypted-recovery')).to_be_visible(timeout=20000)
+                        page.screenshot(path=str(out/f'{width}-dmg-recovery.png'))
+                        fake_images.fail_detach=False
+                        page.locator('#encrypted-cleanup').click()
+                        expect(page.locator('#encrypted-recovery')).to_be_hidden(timeout=20000)
+                        page.locator('#encrypted-password').fill('fixture-dmg-password-123')
+                        page.locator('#encrypted-import').click()
+                        expect(page.locator('#account-output')).to_contain_text('已校验并导入',timeout=20000)
+                        expect(page.locator('#encrypted-password')).to_have_value('')
+                        assert (source/'fixture.txt').read_bytes()==(manager.accounts_dir/'C/fixture.txt').read_bytes()
                         page.locator('[data-page="tools"]').click()
                         page.locator('#maintenance-action').select_option('open-safe')
                         expect(page.locator('#maintenance-run')).to_be_enabled()
@@ -98,7 +132,11 @@ def main():
                         expect(page.locator('#tool-output')).to_contain_text('已清理 1 个')
                         assert not errors,errors
                         no_legacy.assert_not_called()
-                        results[str(width)]={'portrait_dimensions':8,'features':23,'archive_roundtrip':True,'wrong_password_no_import':True,'password_cleared':True,'browser_launcher':'fixture-only','real_browser_or_account_launches':0,'page_errors':errors}
+                        results[str(width)]={'portrait_dimensions':8,'features':23,'archive_roundtrip':True,'dmg_fixture_roundtrip':True,'dmg_mismatch_rejected':True,'dmg_cleanup_recovery':True,'wrong_password_no_import':True,'password_cleared':True,'browser_launcher':'fixture-only','real_browser_or_account_launches':0,'page_errors':errors}
+                    except Exception:
+                        page.screenshot(path=str(out/f'{width}-failure.png'))
+                        print(json.dumps({'page_errors':errors,'format':page.locator('#encrypted-format').evaluate('(e)=>e.outerHTML'),'visible_text':page.locator('main').inner_text()[-5000:]},ensure_ascii=False))
+                        raise
                     finally:
                         context.close();server.shutdown();server.server_close();thread.join(timeout=3)
         finally:

@@ -2,7 +2,9 @@
 
 面向 Windows 和 macOS 的极简桌面环境工具。以 [claude-switcher](https://github.com/YOURSJEYO/claude-switcher) 为功能底座，保留原版维护能力，增加独立检测、事务式账号管理、代理诊断和历史对比。
 
-当前代码 **0.14.0 Alpha** 新增 Clash Verge 原生路由修复：预览 16 条规则、保留用户脚本、备份与重载、实际运行验证、失败回滚和重启后恢复；接入逐项修复与持续维护。参见 [原生路由配置](docs/ROUTING.md)。公开安装包以 Releases 为准。
+当前代码 **0.15.0 Alpha** 新增 macOS 原生加密 DMG 兼容：账号页直接选择原版 A–D 备份、只读挂载、文件回读校验与未完成暂存清理；无需安装旧维护核心。Windows / macOS 仍使用 .envsnap 进行跨平台认证加密备份。参见 [加密备份的格式与恢复范围](docs/DMG_ARCHIVES.md)。公开安装包以 Releases 为准。
+
+**0.14.0 已加入** Clash Verge 原生路由修复：预览 16 条规则、保留用户脚本、备份与重载、实际运行验证、失败回滚和重启后恢复；接入逐项修复与持续维护。参见 [原生路由配置](docs/ROUTING.md)。
 
 **0.13.0 已加入**原生 10 秒进程守护；先审核再启用，监测失败时停止已识别的当前用户 Claude 桌面并留痕。完整功能升级仍在进行，参见 [完整核对表](docs/FULL_PARITY_AUDIT.md) 和 [进程守护](docs/PROCESS_GUARD.md)。
 

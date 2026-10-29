@@ -18,6 +18,7 @@ from .environment_info import cli_information, device_information
 from .coverage import feature_catalog
 from .isolated_browser import IsolatedBrowser
 from .snapshot_archive import SnapshotArchive
+from .dmg_archive import DmgArchive
 from .target_environment import FIELDS as TARGET_FIELDS, summary as environment_summary, suggest as environment_suggest, fingerprint
 
 
@@ -141,6 +142,7 @@ class Operations:
                                                          launch_app=launch_claude, force_stop_app=force_quit_account_claude)
         self.isolated_browser = IsolatedBrowser(self.home)
         self.archives = SnapshotArchive(self.accounts, self.home/'.envscope/archive-work')
+        self.dmg_archives = DmgArchive(self.accounts, self.home/'.envscope/dmg-work')
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
@@ -202,7 +204,11 @@ class Operations:
                 entry.update(supported=True, available=True, requires_confirmation=False, reason="native_read_only")
         legacy["actions"].extend(detailed)
         browser = self.isolated_browser.capability()
+        dmg = self.dmg_archives.status()
         for entry in legacy['actions']:
+            if entry['id'] in ('snapshot-export', 'snapshot-import'):
+                entry.update(supported=dmg['available'], available=dmg['available'], requires_confirmation=True,
+                             reason=dmg['reason'], effects=['原生处理 A–D 加密 DMG；非活动槽位导出、原槽位为空时导入。只读挂载、校验复制，不运行维护核心。'])
             if entry['id'] == 'open-safe':
                 entry.update(supported=True, available=browser['available'], requires_confirmation=True,
                              reason=browser['reason'], effects=['使用独立临时浏览器资料；打开前复检。关闭全部临时窗口后清理，不更改日常浏览器。'])
@@ -210,7 +216,7 @@ class Operations:
         return {"desktop": desktop.status() if desktop else {"mode": "browser"}, "legacy": legacy, "accounts": accounts, "proxies": self.discoverer(),
                 "settings": self.store.settings(), "environment": environment_summary(self.store.settings()), "history": self.store.history(), "maintenance": self.maintenance.status(), "process_guard": self.process_guard.status(),
                 "config_backups": self.config_remedies.list_backups(), "learning": self.store.learning(), "checks": check_catalog(),
-                'features':feature_catalog(legacy,browser), 'isolated_browser':browser,
+                'features':feature_catalog(legacy,browser), 'isolated_browser':browser, 'dmg_archives':dmg,
                 'region_recovery': self.regions.public_recovery(), 'routing': self.routing.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
 
@@ -339,22 +345,39 @@ class Operations:
             return {'state': last['state'], 'results': results, 'needs_retest': last.get('needs_retest', True),
                     'backups': [b for r in results for b in r.get('backups', [])],
                     'reason': last.get('reason', '操作已返回，请复检实际结果')}
-        if action in ('archive-export','archive-import'):
-            if set(params) != {'slot','file','password'}:
+        if action == 'archive-cleanup':
+            if params:
+                raise ValueError('unexpected cleanup parameters')
+            if confirmed is not True:
+                return {'state': 'confirmation_required', 'reason': '将核实并卸载 EnvScope 的临时 DMG，随后删除其暂存副本。账号槽位、原备份和已导出文件保留。'}
+            return self.dmg_archives.cleanup()
+        if action in ('archive-export','archive-import','snapshot-export','snapshot-import'):
+            old = action.startswith('snapshot-')
+            if (set(params) != {'account','file','password'} if old else
+                    not {'slot','file','password'} <= set(params) or set(params) - {'slot','file','password','format'}):
                 raise ValueError('invalid archive parameters')
+            format_name = 'dmg' if old else params.get('format','envsnap')
+            if format_name not in ('envsnap','dmg'):
+                raise ValueError('invalid archive format')
             if confirmed is not True:
                 return {'state':'confirmation_required','reason':'将处理加密账号存档，密码不保存；只允许非活动槽位导出、空槽位导入。临时明文会限制读取权限并在完成后清理。'}
-            result = self.archives.export(params['slot'],params['file'],params['password']) if action=='archive-export' else self.archives.import_archive(params['file'],params['slot'],params['password'])
-            return {'state':'completed','result':result,'reason':'加密存档已校验并导出。请单独保管密码，丢失后无法恢复。' if action=='archive-export' else '已校验并导入空槽位，未启动 Claude；登录状态是否可迁移需在实际客户端确认。'}
+            archive = self.dmg_archives if format_name == 'dmg' else self.archives
+            slot, exporting = params['account' if old else 'slot'], action.endswith('-export')
+            result = archive.export(slot,params['file'],params['password']) if exporting else archive.import_archive(params['file'],slot,params['password'])
+            return {'state':'completed','result':result,'reason':'加密存档已校验并导出。请单独保管密码，丢失后无法恢复。' if exporting else '已校验并导入空槽位，未启动 Claude；登录状态是否可迁移需在实际客户端确认。',
+                    'boundary': 'DMG 已检查映像校验和与复制结果；旧版没有逐文件清单，DMG 校验和不等于 .envsnap 的认证加密。' if result.get('verification') == 'legacy_image_checksum_and_copy_readback' else ''}
         if action == 'archive-choose-file':
-            if set(params) != {'mode'} or params['mode'] not in ('export','import'):
+            if not {'mode'} <= set(params) or set(params)-{'mode','format'} or params['mode'] not in ('export','import') or params.get('format','envsnap') not in ('envsnap','dmg'):
                 raise ValueError('invalid file dialog mode')
+            format_name = params.get('format','envsnap')
+            if format_name == 'dmg' and not self.dmg_archives.status()['available']:
+                return {'state':'unavailable','reason':'DMG 兼容需要 macOS，请使用 .envsnap。'}
             desktop = getattr(self,'desktop_runtime',None)
             if not desktop:
                 return {'state':'unavailable','reason':'文件选择器需要独立桌面窗口；当前可填写绝对文件路径。'}
             import webview
             result = desktop.window.create_file_dialog(webview.SAVE_DIALOG if params['mode']=='export' else webview.OPEN_DIALOG,
-                        allow_multiple=False, save_filename='Claude-backup.envsnap', file_types=('EnvScope archive (*.envsnap)',))
+                        allow_multiple=False, save_filename='Claude-backup.'+format_name, file_types=(f'Account archive (*.{format_name})',))
             # Cocoa save returns a string; Windows and open dialogs return a sequence.
             filename = result if isinstance(result, str) else result[0] if result else None
             return {'state':'selected' if filename else 'cancelled','file':filename}

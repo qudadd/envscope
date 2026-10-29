@@ -10,7 +10,7 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span>0.13.0 alpha</span></header>
+  <header><a href="./">EnvScope</a><span id="app-version">正在读取版本</span></header>
   <nav id="desktop-nav" aria-label="主要功能" hidden>
     <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="coverage">环境全览</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
   </nav>
@@ -178,13 +178,15 @@
       <label class="checkbox"><input id="account-force-close" type="checkbox">正常退出失败时允许强制退出（未保存内容可能丢失，仅用于本次选择的切换）</label>
       <div class="inline-form"><label>新增资料代号<input id="new-slot" maxlength="32" placeholder="work" aria-describedby="slot-help"></label><label>显示名称<input id="new-label" maxlength="80" placeholder="例如：工作账号"></label><button id="account-add">添加</button></div><p id="slot-help" class="note">代号使用英文字母、数字、下划线或短横线，以字母或数字开头；最多 32 字符。可先使用现有的 A、B。</p>
       <section class="tool-section"><h2>加密备份与恢复</h2><p class="note">Windows / macOS 均可使用 .envsnap 加密存档。先切换到其他账号，再导出非活动槽位；导入只能选择空槽位。密码不保存，丢失无法恢复。存档不保证登录凭据能跨设备或系统迁移。</p>
+        <label>备份格式<select id="encrypted-format"><option value="envsnap">EnvScope 加密备份（Windows / macOS）</option><option value="dmg" disabled>原版加密 DMG（macOS，A–D 槽位）</option></select></label><p id="encrypted-format-note" class="note" role="status">.envsnap 使用认证加密，可导入任意空槽位。</p>
         <div class="form-grid"><label>槽位<input id="encrypted-slot" placeholder="B" maxlength="32"></label><label>密码<input id="encrypted-password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" placeholder="至少 12 个字符"></label></div>
         <label>加密文件路径<input id="encrypted-path" placeholder="选择或填写 .envsnap 文件的绝对路径"></label>
         <div class="actions"><button id="encrypted-choose-export" class="link">选择导出位置</button><button id="encrypted-choose-import" class="link">选择已有存档</button></div>
         <div class="actions"><button id="encrypted-export">加密导出</button><button id="encrypted-import">校验并导入</button></div>
+        <div id="encrypted-recovery" hidden><p id="encrypted-recovery-note" class="manual-guidance" role="alert"></p><button id="encrypted-cleanup">检查并清理暂存</button></div>
       </section>
       <details><summary>高级：未加密目录备份与导入</summary>
-        <p class="note">目录包含登录资料，未加密。仅支持非活动账号导出、空槽位导入；不能保证跨系统迁移登录状态。原版 macOS DMG 兼容入口位于工具页。</p>
+        <p class="note">目录包含登录资料，未加密。仅支持非活动账号导出、空槽位导入；不能保证跨系统迁移登录状态。原版 DMG 可在上方选择备份格式。</p>
         <div class="form-grid"><label>槽位<input id="archive-slot" placeholder="B" maxlength="32"></label><label>绝对目录路径<input id="archive-path" placeholder="选择一个新目录作为导出目标"></label></div>
         <div class="actions"><button id="account-export">导出目录</button><button id="account-import">导入目录</button></div>
       </details>

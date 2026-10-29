@@ -1,5 +1,13 @@
 # Third-party origins
 
+## Original DMG interoperability
+
+The native macOS DMG adapter preserves the encrypted root layout and A–D marker
+contract of claude-switcher at `870c4ca0754234965878ef58144d7a755d965037`, credited
+below. It calls the user's Apple-provided `/usr/bin/hdiutil`, which is not bundled,
+and never executes the vendor export/import scripts. The compatibility tests
+generate disposable fixture images. See [archive scope](docs/DMG_ARCHIVES.md).
+
 ## ruamel.yaml and routing interoperability
 
 Comment-preserving YAML edits use [ruamel.yaml](https://yaml.dev/doc/ruamel.yaml/),

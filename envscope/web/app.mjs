@@ -19,6 +19,7 @@ const sessionPromise=(async()=>{
     if(!response.ok)return null;
     const value=await response.json();
     if(value.mode!=="desktop"||typeof value.token!=="string")return null;
+    byId('app-version').textContent=value.release||value.version||'版本未读取';
     byId("mode-note").textContent="检测连接，合并配置与修复方案；确认后自动处理并复检。";
     nodes.quit.hidden=false;
     return value;
