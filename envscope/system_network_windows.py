@@ -195,7 +195,7 @@ try {
 }catch{
  try {
   $code=[string]$_.FullyQualifiedErrorId
-  if($code.Length -gt 160){$code='system_operation_failed'}
+  if($code.Length -gt 130){$code='system_operation_failed'}
   $code+=' [line '+[int]$_.InvocationInfo.ScriptLineNumber+']'
   Save (Join-Path $Root 'failure.json') @{format=1;data_sha='@DATA_SHA@';code=$code} $true
  }catch{}
@@ -260,6 +260,8 @@ class WindowsNetworkIO:
         with tempfile.TemporaryDirectory(prefix='envscope-network-plan-') as folder:
             path=Path(folder).resolve()/'plan.private.bin';path.write_bytes(data)
             body=self._body(action,data_file=path,data_sha=hashlib.sha256(data).hexdigest())
+            # Only reviewed, generated PowerShell is executable; input stays data.
+            body='\n'.join(line.lstrip() for line in body.splitlines() if line.strip())
             encoded=base64.b64encode(body.encode('utf-16-le')).decode()
             if len(encoded)>30000:raise ValueError('网络修改命令超出系统限制，未尝试执行。')
             launcher=("$ErrorActionPreference='Stop';$code=[Console]::In.ReadToEnd();"
