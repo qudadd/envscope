@@ -20,6 +20,8 @@
 
 当前 Windows 包未进行发布者签名；macOS 包使用 ad-hoc 签名，尚未进行 Developer ID 签名或 Apple 公证。首次打开可能被系统拦截。下载校验与签名是不同的验证，详见 [开源构建与更新](docs/OPEN_SOURCE_BUILDS.md)、[正式签名准备](docs/SIGNING.md)。
 
+[Code signing policy](CODE_SIGNING_POLICY.md)：正在准备 SignPath Foundation 开源签名申请，尚未获批或接入。另见 [隐私说明](PRIVACY.md)、[卸载与资料移除](docs/UNINSTALL.md)。
+
 ## 四步使用
 
 1. **确认目标**：填写实际使用地区，读取出口 IP 建议节点国家与城市，匹配时区和地区格式。实际所在地与代理出口分别记录。
@@ -62,7 +64,7 @@
 - 地区预设不等于 Claude 支持地区。修改时区、语言或节点不改变实际所在地，也不保证账号安全或服务端设备判断。
 - 诊断只读；修复、账号切换和守护分别审核。配置原文备份可能含凭据，请勿上传；分享诊断包前也应复核。
 
-权限、平台与真实设备的验证范围见 [验收记录](docs/DESKTOP_ACCEPTANCE.md)；数据处理边界见 [SECURITY.md](SECURITY.md)。
+权限、平台与真实设备的验证范围见 [验收记录](docs/DESKTOP_ACCEPTANCE.md)；数据处理见 [隐私说明](PRIVACY.md)，实现边界见 [SECURITY.md](SECURITY.md)。
 
 ## 与 claude-switcher 的关系
 

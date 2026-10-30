@@ -13,6 +13,7 @@
 | 选择项目、全选、批量修复 | [可选检查](SELECTIVE_CHECKS.md) · [检查偏好](CHECK_PREFERENCES.md) |
 | 查明问题、了解检测证据 | [检测与处理](DIAGNOSIS.md) · [环境覆盖](ENVIRONMENT_COVERAGE.md) · [逐项检查](CLAUDE_CHECKS.md) |
 | 确认权限问题和软件能力边界 | [权限验收与限制](PERMISSION_ACCEPTANCE.md) |
+| 了解联网与数据处理、停止后台组件及卸载 | [隐私说明](../PRIVACY.md) · [卸载与资料移除](UNINSTALL.md) |
 | 比较原项目、平台和实现范围 | [完整功能对照](FULL_PARITY_AUDIT.md) |
 
 ## 修复与长期保持
@@ -44,7 +45,7 @@
 | 命令行、策略、报告与证据解释 | [CLI](CLI.md) |
 | 模块与安全边界 | [架构](ARCHITECTURE.md) · [安全与隐私](../SECURITY.md) |
 | 桌面与权限测试的已验证 / 待验证范围 | [桌面验收](DESKTOP_ACCEPTANCE.md) · [权限验收](PERMISSION_ACCEPTANCE.md) |
-| Windows 签名、Apple 签名与公证所需条件 | [正式签名准备](SIGNING.md) |
+| Windows 签名、Apple 签名与公证所需条件 | [正式签名准备](SIGNING.md) · [Code signing policy](../CODE_SIGNING_POLICY.md) |
 | 界面与交互原则 | [桌面设计](UI_DESIGN.md) |
 | 参考项目、固定版本与许可 | [源码研究](RESEARCH.md) · [来源与许可](../THIRD_PARTY_NOTICES.md) |
 
