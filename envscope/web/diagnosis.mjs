@@ -1,6 +1,7 @@
 // Human-facing diagnosis and a reviewed plan -> execute -> recheck workflow.
 // Only fixed API actions and server-issued plan/backup IDs reach the backend.
 import {watchdogSelection} from './watchdog_ui.mjs';
+import {workflowIssues,workflowChecks} from './workflow.mjs';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const labels={"config-desktop":"备份并打开桌面配置","config-cli":"备份并打开 Code 配置","clock-settings":"打开日期与时间设置","storage-settings":"打开存储设置","proxy-settings":"打开系统代理设置","hosts-file":"打开 hosts 文件"};
@@ -10,6 +11,7 @@ const errorText={audit_running:"已有检测或操作正在进行，请等待完
 export function setFlowStage(stage,text){
   for(const row of document.querySelectorAll('[data-flow-step]'))row.dataset.active=String(row.dataset.flowStep===stage);
   $('flow-state').textContent=text;
+  $('flow-state').hidden=!['check','repair'].includes(stage);
 }
 
 export function describeProxy(item){
@@ -95,9 +97,10 @@ export function initDiagnosis({sessionPromise,retest}) {
     if(options!==null&&options!==optionsKey()){output.textContent='环境选项已经变化，请重新检测并审核新的方案。';$('solution-plan').replaceChildren();return;}
     setFlowStage('repair','正在执行已确认的改动；先备份配置，完成后自动复检。');
     $('solution-plan').replaceChildren();output.textContent='正在执行已确认的方案。配置写入完成后还需复检。';
-    const result=await run('solution-apply',{plan_id:value.plan_id},true);
+    const result=await run(value.engine==='inspection'?'inspection-apply':'solution-apply',{plan_id:value.plan_id},true);
     executionFailed=['partial','failed','blocked'].includes(result.state);
     backups(result.backups);output.textContent=result.reason||'操作已返回，正在检查实际结果。';
+    if(result.results?.some(r=>r.recovery)||result.recovery)$('solution-backups').append(button('查看地区修改与恢复记录',()=>document.dispatchEvent(new CustomEvent('envscope-region-configure'))));
     if(result.state==='waiting_install'){
       $('solution-plan').append(button('安装完成，继续复检',()=>action(async()=>{await retest();})));
     }else if(result.needs_retest){
@@ -114,21 +117,30 @@ export function initDiagnosis({sessionPromise,retest}) {
     setFlowStage('review','正在合并配置与修复方案，测试候选连接；尚未写入。');
     output.textContent='正在核对可自动处理的配置和代理，生成具体方案…';
     const params={report_id:report?.report_id};if(checkId)params.check_id=checkId;
-    if(workflow){params.enhance_cli=$('enhance-cli').checked;const selected=$('workflow-proxy').value;if(params.enhance_cli&&selected!=='auto')params.proxy=selected==='manual'?$('workflow-proxy-url').value.trim():selected;}
+    const integrated=workflow&&Array.isArray(report.selection?.selected);
+    const checks=integrated?workflowChecks(report,$('enhance-cli').checked):[];
+    if(integrated&&!checks.length){
+      $('solution-plan').replaceChildren();output.textContent='本轮没有需要自动修改的配置。可在下方预览持久化守护方案；未取得的必需证据仍需补充。';
+      $('session-state').textContent='检测完成';setFlowStage('keep','检测完成，按需设置持久化守护。');return;
+    }
+    if(integrated)params.check_ids=checks;
+    if(workflow){params.enhance_cli=$('enhance-cli').checked&&(!integrated||checks.includes('extra.cli_env'));const selected=$('workflow-proxy').value;if(params.enhance_cli&&selected!=='auto')params.proxy=selected==='manual'?$('workflow-proxy-url').value.trim():selected;}
     let value;
-    try{value=await run('solution-plan',params);}catch(error){if(workflow)$('session-state').textContent='方案未完成，请重新检测';setFlowStage('review','方案未完成，尚未写入配置。请重试或按具体问题处理。');throw error;}
+    try{value=await run(integrated?'inspection-plan':'solution-plan',params);if(integrated)value.engine='inspection';}catch(error){if(workflow)$('session-state').textContent='方案未完成，请重新检测';setFlowStage('review','方案未完成，尚未写入配置。请重试或按具体问题处理。');throw error;}
     $('solution-plan').replaceChildren();
     if(workflow)$('session-state').textContent=value.state==='planned'?'方案已就绪，等待你确认':'本轮方案核对已结束';
     output.textContent=[value.reason,...value.manual||[]].filter(Boolean).join('\n');
     for(const item of value.connections||[]){const detail=el('details',undefined,'connection-evidence');detail.append(el('summary',item.proxy+'：'+(item.verified?'API 连接已验证，未认证账号':'本次未验证可用')));for(const response of item.evidence||[])detail.append(el('p',describeProxy(response)));$('solution-plan').append(detail);}
-    if(value.manual_items?.length){const manual=el('details',undefined,'manual-items');manual.append(el('summary',`${value.manual_items.length} 项需要你配合处理`));for(const item of value.manual_items)manual.append(button(item.title,()=>{const row=[...document.querySelectorAll('[data-problem]')].find(n=>n.dataset.problem===item.id);if(row){const parent=row.closest('details');if(parent)parent.open=true;row.scrollIntoView({block:'start'});}}));$('solution-plan').append(manual);}
+    if(value.manual_items?.length){const manual=el('details',undefined,'manual-items');manual.append(el('summary',`${value.manual_items.length} 项需手动处理 · 查看步骤`));for(const item of value.manual_items){const row=el('section',undefined,'manual-guidance');row.append(el('strong',item.title));const list=el('ol');for(const step of item.steps||[])list.append(el('li',step));row.append(list);if(!item.steps?.length)row.append(button('查看对应问题',()=>{const issue=[...document.querySelectorAll('[data-problem]')].find(n=>n.dataset.problem===item.id);if(issue){issue.open=true;issue.scrollIntoView({block:'start'});}}));manual.append(row);}$('solution-plan').append(manual);}
     if(value.state==='planned'){
-      const h=el('h3',workflow?'确认后完成这些设置和修复':'本次处理方案'),list=el('ul');for(const effect of value.effects)list.append(el('li',effect));
+      const h=el('h3','将进行以下改动'),list=el('ul');for(const effect of value.effects)list.append(el('li',effect));
       const key=workflow?optionsKey():null;
-      const apply=button(workflow?'确认配置并修复':'确认执行此方案',()=>action(()=>applyPlan(value,key)));apply.id='apply-solution';
-      $('solution-plan').append(h,list,el('p','确认后才写入配置或调用维护核心，完成后自动复检。用户配置可被项目或组织设置覆盖，实际会话仍需重开并确认。','note'),apply);
+      const apply=button(workflow?'确认修复并复检':'确认执行此方案',()=>action(()=>applyPlan(value,key)));apply.id='apply-solution';
+      $('solution-plan').append(h,list,el('p','先保留恢复记录。确认后可能请求系统权限，完成后自动复检。','note'),apply);
+      if(value.reason){const notes=el('details',undefined,'plan-notes');notes.append(el('summary','执行条件与恢复说明'),el('p',value.reason));$('solution-plan').append(notes);}
+      output.textContent='';
       setFlowStage('review','方案已生成。核对下面的具体改动，确认一次后执行并复检。');
-      if(workflow&&!report.assessment){$('verdict').textContent='检测完成，请核对处理方案';$('verdict-note').textContent=`本次有 ${report.diagnosis.problems.length} 项需要处理或核对的问题，方案包含 ${value.steps.length} 个执行步骤。确认后处理，完成后重新检查。`;}
+      if(workflow&&!report.assessment){$('verdict').textContent='检测完成，请核对处理方案';$('verdict-note').textContent=`本次有 ${report.diagnosis.problems.length} 项需要处理或核对的问题。确认后处理，完成后重新检查。`;}
       if(!workflow)$('solution-plan').scrollIntoView({block:'center',behavior:'auto'});
     }else{
       setFlowStage('review',value.state==='retest_required'?'检测已过期，请重新一键检测。':'检测和方案核对已完成；本次没有执行配置写入。');
@@ -137,7 +149,7 @@ export function initDiagnosis({sessionPromise,retest}) {
   function renderInlineUpkeep(value){
     if(!value)return;
     const states={disabled:'尚未启用',waiting:'已启用，等待首次巡检',active:'最近一轮已完成',attention:'巡检完成，配置保持需核对',stale:'巡检已超期',failed:'最近一轮未完成',schedule_unverified:'系统任务状态未确认',invalid:'维护记录无法核实'};
-    $('flow-upkeep-status').textContent=[states[value.state]||'状态待核实',value.completed_at?'完成于 '+new Date(value.completed_at).toLocaleString():'',value.enabled?`每 ${value.interval} 分钟复检`:'',value.reason].filter(Boolean).join('。');
+    $('flow-upkeep-status').textContent=[states[value.state]||'状态待核实',value.completed_at?'完成于 '+new Date(value.completed_at).toLocaleString():'',value.enabled?`每 ${value.interval} 分钟复检`:'',['attention','failed','stale','invalid','schedule_unverified'].includes(value.state)?value.reason:''].filter(Boolean).join('。');
     $('flow-upkeep-stop').hidden=!value.enabled&&!value.scheduler?.present;
   }
   $('flow-upkeep-prepare').addEventListener('click',()=>action(async()=>{
@@ -167,8 +179,12 @@ export function initDiagnosis({sessionPromise,retest}) {
     if($('solution-plan').children.length){$('solution-plan').replaceChildren();output.textContent='环境选项已变化，请重新检测并生成方案。';}
   });
   function renderProblem(problem){
-    const row=el('section',undefined,'problem');row.dataset.problem=problem.id;
-    row.append(el('h3',problem.title),el('p','发生了什么','explain-label'),el('p',problem.observed,'observed'),el('p','为什么需要处理','explain-label'),el('p',problem.cause,'cause'),el('p','接下来这样做','explain-label'));
+    const row=el('details',undefined,'problem');row.dataset.problem=problem.id;row.dataset.manual=String(!problem.automatic);
+    const summary=el('summary'),title=el('span',undefined,'problem-title');
+    title.append(el('strong',problem.title),el('span',problem.observed,'observed'));
+    const label=problem.state==='permission'?'需要授权':problem.automatic?'可预览修复':['probe_incomplete','unavailable','review'].includes(problem.state)?'需补充确认':'需手动处理';
+    summary.append(title,el('span',label,'problem-badge'));row.append(summary);
+    row.append(el('p',problem.cause||'按本次观测处理，修复后重新检测。','cause'),el('h3','解决办法'));
     const steps=el('ol');for(const step of problem.steps)steps.append(el('li',step));row.append(steps);
     const controls=el('div',undefined,'problem-actions');
     if(labels[problem.action]){
@@ -177,10 +193,13 @@ export function initDiagnosis({sessionPromise,retest}) {
         const value=await run('solution-open',{problem_id:problem.id,report_id:report.report_id},problem.action.startsWith('config-'));output.textContent=value.reason;
       })));
     }else if(problem.action==='proxy-test')controls.append(button('测试已发现代理',()=>action(proxyTest)));
-    else if(problem.action==='maintenance')controls.append(button('生成修复方案',()=>action(prepare)));
+    else if(problem.action==='maintenance')controls.append(button('生成修复方案',()=>action(()=>prepare(null,true))));
+    else if(problem.action==='permission-help'){const help=button('处理读取权限',()=>document.dispatchEvent(new CustomEvent('envscope-permission',{detail:{id:problem.check,output:message,button:help}}))),message=el('p','');controls.append(help);row.append(message);}
     else if(['settings','accounts'].includes(problem.action))controls.append(button(problem.action==='settings'?'调整比较或启动设置':'打开账号管理',()=>document.querySelector(`.tab[data-page="${problem.action}"]`)?.click()));
     else if(links[problem.action])controls.append(link(...links[problem.action]));
     else if(problem.action==='region-support')controls.append(button('核对实际使用地区',()=>document.dispatchEvent(new CustomEvent('envscope-target-review'))),link('查看 Claude 官方地区名单','https://support.claude.com/en/articles/8461763-where-can-i-access-claude'),link('查看官方 API 地区名单','https://platform.claude.com/docs/en/api/supported-regions'));
+    if(problem.automatic)controls.append(button('查看修复方案',()=>{$('solution-tools').scrollIntoView({block:'start'});}));
+    if(['baseline.country','target.region'].includes(problem.check)&&problem.action!=='region-support')controls.append(button('核对地区与节点',()=>document.dispatchEvent(new CustomEvent('envscope-region-configure'))));
     controls.append(button('重新检测',()=>{if(!busy)void retest();}));row.append(controls);return row;
   }
   function renderChecklist(value){
@@ -209,9 +228,11 @@ export function initDiagnosis({sessionPromise,retest}) {
     if(!diagnosis){$('verdict').textContent='历史结果需要重新分析';$('verdict-note').textContent='这份旧报告没有问题归因，请重新检测以生成处理方案。';return;}
     $('workspace').dataset.state='complete';$('verdict').textContent=report.guide?.headline||diagnosis.headline;$('verdict-note').textContent=report.guide?.summary||diagnosis.summary;
     $('coverage-count').textContent=diagnosis.problems.length?`${diagnosis.problems.length} 个问题`:'本次诊断';
-    const problemNodes=diagnosis.problems.slice(0,1).map(renderProblem);
-    if(diagnosis.problems.length>1){const rest=el('details',undefined,'other-problems');rest.append(el('summary',`其他 ${diagnosis.problems.length-1} 项需要处理的问题`),...diagnosis.problems.slice(1).map(renderProblem));problemNodes.push(rest);}
-    $('problems').replaceChildren(...problemNodes);
+    const issues=workflowIssues(report);
+    $('issue-section').hidden=!issues.length;
+    $('issue-summary').textContent=`共 ${issues.length} 项需要处理或补充确认。每项下方列出本次结果，展开查看原因与解决办法。`;
+    $('problems').replaceChildren(...issues.map(renderProblem));
+    $('audit-results').hidden=false;
     const normal=el('details');normal.append(el('summary','已取得的连接回应'),...diagnosis.normal.map(text=>el('p',text)));
     $('normal-observations').replaceChildren(...(diagnosis.normal.length?[normal]:[]));
     $('coverage-note').textContent=diagnosis.coverage;

@@ -13,5 +13,6 @@ MANIFEST.in text eol=lf
 .gitignore text eol=lf
 *.command text eol=lf
 *.cmd text eol=crlf
+licenses/Unicode-3.0.txt text eol=lf
 envscope/vendor/claude_switcher/** -text
 envscope/vendor/claude_switcher/VENDOR_MANIFEST.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

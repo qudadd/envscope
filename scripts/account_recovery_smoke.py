@@ -5,6 +5,7 @@ import tempfile
 import threading
 from unittest.mock import patch
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.accounts import AccountManager, _manifest
 from envscope.operations import Operations
@@ -62,7 +63,7 @@ def main():
                 try:
                     page.goto('http://127.0.0.1:'+str(server.server_port), wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible(): page.locator('#learning-skip').click()
-                    page.locator('.tab[data-page=accounts]').click()
+                    open_page(page, 'accounts')
                     expect(page.locator('#account-recovery')).to_be_visible()
                     expect(page.locator('[data-account=B] button').first).to_be_disabled()
                     before = _manifest(state), _manifest(data)

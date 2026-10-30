@@ -6,6 +6,7 @@ import threading
 import time
 from unittest.mock import Mock
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import sync_playwright, expect
 from envscope.check_catalog import check_catalog
 from envscope.model import Finding, Status
@@ -85,7 +86,7 @@ def main():
                 page.goto('http://127.0.0.1:' + str(server.server_port), wait_until='networkidle')
                 if page.locator('#learning-panel').is_visible():
                     page.locator('#learning-skip').click()
-                page.locator('[data-page="settings"]').click()
+                open_page(page, 'settings')
                 expect(page.locator('#desktop-mode')).to_contain_text('独立软件正在运行')
                 ids = page.locator('[id]').evaluate_all('(nodes)=>nodes.map(n=>n.id)')
                 assert len(ids) == len(set(ids))
@@ -107,11 +108,12 @@ def main():
                 page.locator('#app-update-rollback').click()
                 expect(page.locator('#software-output')).to_contain_text('已完成')
                 page.screenshot(path=str(out / f'{width}-settings.png'), full_page=True)
-                page.locator('[data-page="audit"]').click()
+                open_page(page, 'audit')
                 page.locator('#start').click()
+                open_details(page, '#more-results')
                 expect(page.locator('#qualification')).to_be_visible()
                 expect(page.locator('#qualification-counts')).to_contain_text('需要读取权限 1 项')
-                page.locator('[data-page="checks"]').click()
+                open_page(page, 'checks')
                 page.locator('#check-status').select_option('unknown')
                 expect(page.locator('[data-inspection="dns.leak"]')).to_have_count(0)
                 expect(page.locator('[data-inspection="extra.cli_paths"]')).to_have_count(0)

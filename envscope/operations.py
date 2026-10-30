@@ -457,8 +457,11 @@ class Operations:
                 raise ValueError('unexpected action parameters')
             return self.regions.undo(confirmed)
         if action == 'inspection-plan':
-            if set(params) - {'report_id', 'check_ids', 'group', 'node'}:
+            if set(params) - {'report_id', 'check_ids', 'group', 'node', 'enhance_cli', 'proxy'}:
                 raise ValueError('invalid inspection parameters')
+            enhance_cli = params.get('enhance_cli', False)
+            if type(enhance_cli) is not bool:
+                raise ValueError('完善 Code 配置需要明确的布尔选项')
             from .inspection import validate_selection, repair_options
             import secrets
             checks = validate_selection(params.get('check_ids'))
@@ -475,6 +478,8 @@ class Operations:
             # Missing evidence never authorizes a write; it must not block unrelated reviewed fixes.
             missing = [key for key in checks if key not in found and key in report.get('environment', {}).get('required', [])]
             checks = [key for key in checks if key in found]
+            if (enhance_cli or params.get('proxy') is not None) and 'extra.cli_env' not in checks:
+                raise ValueError('完善 Code 配置必须包含已检测的 Code 连接配置项目')
             options = repair_options(report)
             manual = [{'id': k, 'title': found[k]['title'], 'steps': options[k]['steps']} for k in checks
                       if options[k]['manual']]
@@ -484,20 +489,21 @@ class Operations:
             if 'baseline.country' in checks and params.get('node'):
                 components.append('node')
             elif 'baseline.country' in checks and found['baseline.country']['status'] != 'pass':
-                manual.append({'id': 'baseline.country', 'title': '节点地区需要处理', 'steps': ['在下方读取代理组并选择目标地区的已有节点；无法读取时在代理客户端手动选择。节点名称不证明出口地区，完成后复检。']})
+                manual.append({'id': 'baseline.country', 'title': '节点地区需要处理', 'steps': ['展开上方的出口地区问题，点击“核对地区与节点”；也可从“更多功能 → 全部检查 → 节点地区与恢复记录”读取代理组，选择目标地区的已有节点。', '无法读取控制接口时，在代理客户端手动选择。节点名称不证明出口地区，完成后重新检测。']})
             region = self.regions.prepare(report, components, params.get('group', ''), params.get('node', '')) if components else {}
             if components and region.get('state') != 'planned':
                 manual.append({'id': 'region', 'title': '地区配置需要手动确认', 'steps': [region.get('reason', '请重新检测')]})
-            solution = self.solutions.prepare(report, check_ids=checks) if checks else {}
+            solution = self.solutions.prepare(report, check_ids=checks, enhance_cli=enhance_cli, proxy=params.get('proxy')) if checks else {}
             for reason in solution.get('manual', []):
                 manual.append({'id': 'configuration', 'title': '配置需要手动处理', 'steps': [reason]})
             effects = region.get('effects', []) + solution.get('effects', [])
             if not effects:
-                return {'state': 'guided', 'manual_items': manual, 'effects': [], 'reason': '没有可直接执行的改动；请按红色项目的步骤处理后复查。' if manual else '所选项目没有可执行的修改，请根据检测结果继续。'}
+                return {'state': 'guided', 'manual_items': manual, 'effects': [], 'connections': solution.get('connections', []), 'reason': '没有可直接执行的改动；请按红色项目的步骤处理后复查。' if manual else '所选项目没有可执行的修改，请根据检测结果继续。'}
             token = secrets.token_urlsafe(20)
             self.inspection_plans = {token: {'region': region.get('plan_id'), 'solution': solution.get('plan_id'),
                                             'deadline': time.monotonic() + 90, 'report_id': report['report_id'], 'fingerprint': fingerprint(settings)}}
             return {'state': 'planned', 'plan_id': token, 'effects': effects, 'manual_items': manual,
+                    'connections': solution.get('connections', []),
                     'reason': '确认一次后依次执行，失败则停止；保留恢复记录。配置写入后自动复检，不能自动解决的项目仍标红。' + (region.get('reason', '') if components else '')}
         if action == 'inspection-apply':
             if set(params) != {'plan_id'} or not isinstance(params['plan_id'], str):
@@ -510,14 +516,16 @@ class Operations:
                 return {'state': 'retest_required', 'reason': '方案已过期或检测已改变，请重新生成'}
             del self.inspection_plans[params['plan_id']]
             results = []
+            before = {'problems': [{'id': p['id'], 'title': p['title']} for p in report['diagnosis']['problems']]}
             if plan['region']:
                 results.append(self.regions.apply(plan['region'], report, True))
                 if results[-1]['state'] != 'completed':
-                    return {**results[-1], 'results': results, 'needs_retest': True}
+                    return {**results[-1], 'results': results, 'needs_retest': True, 'before': before}
             if plan['solution']:
                 results.append(self.solutions.apply(plan['solution'], report, True))
             last = results[-1]
             return {'state': last['state'], 'results': results, 'needs_retest': last.get('needs_retest', True),
+                    'before': last.get('before', before),
                     'next_review':last.get('next_review',False),
                     'backups': [b for r in results for b in r.get('backups', [])],
                     'reason': last.get('reason', '操作已返回，请复检实际结果')}

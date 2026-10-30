@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.operations import Operations
 from envscope.process_guard import ProcessGuard
@@ -40,7 +41,7 @@ def main():
                     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
                     page.locator('#start').click();expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     if mode=='tun':
                         page.locator('#process-guard-load').click()
                         expect(page.locator('#process-guard-interface')).to_contain_text('utun9')

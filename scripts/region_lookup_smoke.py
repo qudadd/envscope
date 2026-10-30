@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.operations import Operations
 from envscope.service import make_server
@@ -36,8 +37,8 @@ def main():
                     country=page.locator('#target-form [name=usage_country]')
                     city=page.locator('#target-region-profile');status=page.locator('#target-ip-status')
                     country.fill('US');expect(status).to_contain_text('仅显示 US')
-                    assert city.locator('option[value^="us-"]').count()==7
-                    assert city.locator('option').count()==8
+                    assert city.locator('option[value^="us-"]').count()>=29
+                    assert city.locator('option').count()==city.locator('option[value^="us-"]').count()+1
                     expect(city).to_have_value('us-new-york')
                     expect(page.locator('#target-form [name=timezone]')).to_have_value('Eastern Standard Time' if system=='Windows' else 'America/New_York')
                     expect(page.locator('#target-form [name=language]')).to_have_value('en-US')
@@ -58,7 +59,7 @@ def main():
                     # Stale route response is discarded; the queued route is queried after it.
                     delay[0]=0.4;page.locator('#target-read-ip').click();expect(status).to_contain_text('正在按所选')
                     fixture.update(country='JP',timezone='Asia/Tokyo')
-                    page.locator('#target-form [name=connection_mode]').select_option('tun')
+                    open_details(page, '#target-connection-options'); page.locator('#target-form [name=connection_mode]').select_option('tun')
                     expect(status).to_contain_text('仅显示 JP');expect(page.locator('#target-confirm')).to_be_enabled()
                     assert calls[-1]['connection_mode']=='tun'
                     fixture.clear();fixture.update(state='conflict',reason='模拟来源国家冲突');delay[0]=0

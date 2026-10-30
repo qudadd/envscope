@@ -1,4 +1,5 @@
 """Explicit city presets; these are preferences, never proof of location."""
+from .region_data import COUNTRIES, REGIONS
 
 PROFILES = (
     ('us-los-angeles', '美国 · 洛杉矶', 'US', 'America/Los_Angeles', 'Pacific Standard Time', 'en-US'),
@@ -21,10 +22,20 @@ PROFILES = (
     ('au-perth', '澳大利亚 · 珀斯', 'AU', 'Australia/Perth', 'W. Australia Standard Time', 'en-AU'),
 )
 
+# Retain previously saved preset IDs. Additional cities/timezones use CLDR mappings.
+_existing = {(row[2], row[3]) for row in PROFILES}
+PROFILES += tuple(row[:6] for row in REGIONS if (row[2], row[3]) not in _existing)
+_aliases = {(row[2], row[3]): row[6] for row in REGIONS}
+
+
+def countries():
+    return [dict(code=code, label=label) for code, label in COUNTRIES]
+
 
 def profiles(system):
     return [dict(id=key, label=label, country=country, timezone=windows if system == 'Windows' else iana,
-                 locale=locale if system == 'Windows' else locale.replace('-', '_'), language=locale, iana=iana)
+                 locale=locale if system == 'Windows' else locale.replace('-', '_'), language=locale, iana=iana,
+                 aliases=list(_aliases.get((country, iana), (iana,))))
             for key, label, country, iana, windows, locale in PROFILES]
 
 

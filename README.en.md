@@ -2,7 +2,7 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-Current source: **0.23.0 Alpha**, adding reviewed legacy-program quarantine and restore, detached temporary-browser cleanup with restart recovery, and distinct egress-set statistics. Selection/all, explicit effects, preserved account data and manual handling of unknown files are built in. See [program cleanup](docs/LEGACY_SOFTWARE.md), [browser cleanup](docs/BROWSER_SESSIONS.md) and the [complete requirement ledger](docs/FULL_PARITY_AUDIT.md). Native `.csnap`, `.envsnap`, DMG, optional checks, FlClash maintenance and diagnostic ZIPs remain available. Published installers are listed under Releases.
+Current source: **0.24.0 Alpha**. The home page now follows one workflow: confirm region/timezone, run checks, review problems and repairs, then enable persistent protection. Every issue and missing required observation stays visible. Reviewed timezone, locale and Code repairs share one confirmation and automatic recheck. Offline presets cover **247 countries/territories and 417 city/timezone entries**, with manual overrides. Accounts, selective checks, tools and history remain under **More functions**. See the [workflow](docs/SIMPLE_WORKFLOW.md) and [complete requirement ledger](docs/FULL_PARITY_AUDIT.md). Published installers are listed under Releases.
 
 Account slots preserve complete independent local profile trees, with normal exit, APFS copy-on-write, verified commits and reviewed recovery after interruption. Recovery preserves displaced copies and never logs in or launches the client. See [account volume scope and tests](docs/ACCOUNT_VOLUMES.md).
 
@@ -38,7 +38,7 @@ target, including extra gates when strict TUN protection is selected. The Models
 API probe now uses GET; native HTTP probes respect a discovered system HTTP
 proxy when HTTPS/ALL proxy environment settings are absent.
 
-This usability release adds a searchable, always-visible 32-check catalog,
+The searchable check catalog remains available before measurement,
 inline native information panels, desktop account guidance, visible-page
 keepalive and explicit disconnected-tab recovery. It preserves the original
 macOS detailed readers as separate maintenance actions. See the

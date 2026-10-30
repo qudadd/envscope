@@ -30,7 +30,12 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     for(const n of document.querySelectorAll(".page"))n.hidden=n.id!=="page-"+name;
     for(const n of document.querySelectorAll(".tab")){if(n.dataset.page===name)n.setAttribute("aria-current","page");else n.removeAttribute("aria-current");}
     window.scrollTo(0,0);
+    $('more-menu').open=false;
+    $('more-menu').querySelector('summary').textContent=name==='audit'?'更多功能':document.querySelector(`.tab[data-page="${name}"]`)?.textContent||'更多功能';
+    const heading=$('page-'+name)?.querySelector('h1');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
   }
+  document.addEventListener('click',event=>{if(!$('more-menu').contains(event.target))$('more-menu').open=false;});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('more-menu').open){$('more-menu').open=false;$('more-menu').querySelector('summary').focus();}});
   for(const n of document.querySelectorAll(".tab"))n.addEventListener("click",()=>page(n.dataset.page));
   async function refresh(){
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);

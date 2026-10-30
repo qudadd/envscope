@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 
 from envscope.operations import Operations
@@ -36,7 +37,7 @@ def main():
                     page.goto('http://127.0.0.1:' + str(server.server_port), wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible(): page.locator('#learning-skip').click()
                     page.locator('#start').click(); expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     page.locator('#routing-load').click()
                     expect(page.locator('#routing-group')).to_contain_text('Claude')
                     page.locator('#routing-group').select_option('Claude')
@@ -49,21 +50,21 @@ def main():
                     page.locator('#routing-plan button').click()
                     expect(page.locator('#routing-state')).to_have_text('上次加载已验证', timeout=15000)
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     page.locator('#routing-restore').click()
                     expect(page.locator('#routing-plan')).to_contain_text('恢复此次路由修改前')
                     assert len(core.calls) == 1
                     page.locator('#routing-plan button').click()
                     expect(page.locator('#routing-state')).to_have_text('已恢复原配置', timeout=15000)
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     page.locator('#routing-prepare').click()
                     expect(page.locator('#routing-plan button')).to_be_visible()
                     core.fail_load = True
                     page.locator('#routing-plan button').click()
                     expect(page.locator('#routing-state')).to_have_text('需要继续恢复', timeout=15000)
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#routing-status')).to_have_class('note manual-guidance')
                     expect(page.locator('#routing-prepare')).to_be_disabled()
                     expect(page.locator('#routing-restore')).to_be_enabled()

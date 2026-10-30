@@ -189,7 +189,7 @@ class DesktopHandler(SimpleHTTPRequestHandler):
                                                     report=self.server.last_raw_report, preflight=preflight)
                 if request['action'] == 'check-config-save' and result.get('requires_retest'):
                     self.server.last_raw_report = None
-                if request["action"] == "solution-apply" and result.get("before"):
+                if request["action"] in ("solution-apply", "inspection-apply") and result.get("before"):
                     self.server.solution_before = result.pop("before")
                 elif request["action"] in ("solution-open", "solution-undo") and result.get("state") in ("opened", "completed") and self.server.last_raw_report:
                     self.server.solution_before = {"problems": [{"id": p["id"], "title": p["title"]} for p in self.server.last_raw_report["diagnosis"]["problems"]]}

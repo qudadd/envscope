@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect,sync_playwright
 
 from envscope.operations import Operations
@@ -50,7 +51,7 @@ def main():
                 page.route('https://**/*',lambda request:request.abort())
                 def upkeep():
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                 try:
                     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()

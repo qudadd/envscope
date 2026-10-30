@@ -4,6 +4,7 @@ from pathlib import Path
 import threading
 import tempfile
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.service import make_server
 from envscope.model import Finding, Status
@@ -116,6 +117,8 @@ def main():
                 page.route("https://**/*", lambda route: route.abort())
                 page.goto(f"http://127.0.0.1:{server.server_port}", wait_until="networkidle")
                 expect(page.locator('#learning-panel')).to_be_visible()
+                expect(page.locator('#audit-content')).to_be_visible()
+                page.locator('#learning-replay').click()
                 expect(page.locator('#audit-content')).to_be_hidden()
                 expect(page.locator('#learning-title')).to_have_text('你准备怎样使用 Claude？')
                 before_learning_settings=store.settings()
@@ -149,7 +152,7 @@ def main():
                 assert '查看详情' not in page.locator('#audit-results').inner_text()
                 assert 'PRIVATE_FIXTURE' not in page.locator('body').inner_text()
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "horizontal overflow"
-                page.locator('#technical-details>summary').click()
+                open_details(page, '#more-results'); page.locator('#technical-details>summary').click()
                 with page.expect_download() as downloaded:
                     page.get_by_role("button", name="导出结果").click()
                 download = downloaded.value
@@ -160,17 +163,17 @@ def main():
                 assert value["mode"] == "one-click-desktop"
                 assert 'PRIVATE_FIXTURE' not in json.dumps(value)
                 page.evaluate('window.scrollTo(0,0)')
-                page.locator('#technical-details>summary').click()
+                open_details(page, '#more-results'); page.locator('#technical-details>summary').click()
                 page.evaluate('window.scrollTo(0,0)')
                 page.screenshot(path=str(ARTIFACTS/f'{label}-diagnosis.png'))
-                page.locator('#beginner-checks>summary').click()
+                open_details(page, '#more-results'); page.locator('#beginner-checks>summary').click()
                 page.locator('[data-claude-check="dns"]>summary').click()
                 expect(page.locator('[data-claude-check="dns"]')).to_contain_text('电脑能不能找到 Claude 的服务器')
                 expect(page.locator('[data-claude-check="dns"]')).to_contain_text('能力有限，不等于发现泄漏')
                 expect(page.locator('[data-claude-check="dns"]')).to_contain_text('怎样长期保持')
                 page.locator('#claude-checklist').screenshot(path=str(ARTIFACTS/f'{label}-checklist.png'))
-                page.locator('#beginner-checks>summary').click()
-                expect(page.locator('#solution-plan')).to_contain_text('确认后完成这些设置和修复')
+                open_details(page, '#more-results'); page.locator('#beginner-checks>summary').click()
+                expect(page.locator('#solution-plan')).to_contain_text('将进行以下改动')
                 assert config_file.read_bytes()==original, 'preview must not edit'
                 page.screenshot(path=str(ARTIFACTS/f'{label}-plan.png'))
                 page.locator('#apply-solution').click()
@@ -198,7 +201,7 @@ def main():
                 expect(page.locator('#share')).to_be_enabled()
                 expect(page.locator('#start')).to_be_enabled()
                 # Native handoff always rechecks, and uses fixture callbacks only.
-                expect(page.locator('#desktop-handoff')).to_be_visible()
+                open_details(page, '#more-results'); expect(page.locator('#desktop-handoff')).to_be_visible()
                 page.once('dialog',lambda dialog:dialog.dismiss())
                 page.locator('#desktop-launch').click()
                 assert handoff_events == [], 'cancelled handoff cannot launch'
@@ -231,14 +234,14 @@ def main():
                 page.locator('#start').click()
                 expect(page.locator('#share')).to_be_enabled()
                 expect(page.locator('#apply-solution')).to_have_count(0)
-                page.locator('#beginner-checks>summary').click()
+                open_details(page, '#more-results'); page.locator('#beginner-checks>summary').click()
                 page.locator('[data-claude-check="guard"]>summary').click()
                 expect(page.locator('[data-claude-check="guard"]')).to_contain_text('不要求 TUN')
                 expect(page.locator('[data-claude-check="guard"]').get_by_role('button',name='审核本项处理方案',exact=True)).to_have_count(0)
-                page.get_by_role('button',name='工具',exact=True).click()
+                open_page(page, 'tools')
                 expect(page.locator('#config-backups')).to_contain_text('Claude 桌面配置')
                 assert 'PRIVATE_FIXTURE' not in page.locator('#config-backups').inner_text()
-                page.get_by_role('button',name='持续维护',exact=True).click()
+                open_page(page, 'upkeep')
                 expect(page.locator('#upkeep-state')).to_contain_text('尚未启用')
                 page.locator('#upkeep-restore').check()
                 page.locator('#upkeep-prepare').click()
@@ -261,12 +264,12 @@ def main():
                 expect(page.locator('#session-state')).to_contain_text('后台原生巡检')
                 assert page.locator('#claude-check-rows [data-claude-check]').count()==14
                 expect(page.locator('#try-feedback')).to_have_text('尚未由你确认实际回复。')
-                page.get_by_role('button',name='持续维护',exact=True).click()
+                open_page(page, 'upkeep')
                 page.get_by_role('button',name='停用并撤销 Claude Code 用户配置',exact=True).first.click()
                 expect(page.locator('#upkeep-state')).to_contain_text('尚未启用')
                 expect(page.locator('#upkeep-output')).to_contain_text('已恢复原配置')
                 assert json.loads(cli_file.read_text(encoding='utf-8'))['env']['HTTPS_PROXY'].endswith(':9999')
-                page.get_by_role("button", name="账号", exact=True).click()
+                open_page(page, 'accounts')
                 expect(page.locator("#account-list")).to_contain_text("A")
                 assert page.locator("#account-list tr").count() >= 5
                 page.locator("#new-slot").fill("work")
@@ -275,7 +278,7 @@ def main():
                 expect(page.locator("#account-list")).to_contain_text("工作账号")
                 expect(page.locator("#account-output")).to_contain_text("账号名称已保存")
                 page.screenshot(path=str(ARTIFACTS / f"{label}-accounts.png"), full_page=True)
-                page.get_by_role("button", name="工具", exact=True).click()
+                open_page(page, 'tools')
                 expect(page.locator('#opensource-options')).to_contain_text('Mihomo')
                 expect(page.locator('#opensource-options')).to_contain_text('Clash Verge Rev')
                 page.locator("#proxy-url").fill("http://127.0.0.1:7897")
@@ -284,28 +287,28 @@ def main():
                 page.locator("#maintenance-action").select_option("snapshot-export")
                 expect(page.locator("#maintenance-run")).to_be_disabled()
                 page.screenshot(path=str(ARTIFACTS / f"{label}-tools.png"), full_page=True)
-                page.get_by_role("button", name="设置", exact=True).click()
+                open_page(page, 'settings')
                 page.locator("#settings-form input[name=country]").fill("US")
                 page.get_by_role("button", name="保存", exact=True).click()
                 expect(page.locator("#settings-output")).to_contain_text("已保存")
                 page.screenshot(path=str(ARTIFACTS / f"{label}-settings.png"), full_page=True)
-                page.get_by_role("button", name="检测", exact=True).click()
+                open_page(page, 'audit')
                 page.locator('#start').click()
                 expect(page.locator('#target-form')).to_be_visible()
-                page.locator('#target-form details>summary').click()
-                page.locator('#target-form [name=country]').fill('')
+                open_details(page, '#target-expert-options')
+                page.locator('#target-form [name=country]').select_option('')
                 page.locator('#target-confirm').click()
                 expect(page.locator("#share")).to_be_enabled()
                 expect(page.locator('html')).to_have_attribute('data-operation-busy','false')
                 expect(page.locator('#start')).to_be_enabled()
-                page.get_by_role("button", name="历史", exact=True).click()
+                open_page(page, 'history')
                 page.get_by_role("button", name="比较", exact=True).click()
                 expect(page.locator("#history-output")).to_contain_text("出口证据不足")
                 page.screenshot(path=str(ARTIFACTS / f"{label}-history.png"), full_page=True)
-                for name in ("检测", "持续维护", "账号", "工具", "历史", "设置"):
-                    page.get_by_role("button", name=name, exact=True).click()
+                for name in ('audit', 'upkeep', 'accounts', 'tools', 'history', 'settings'):
+                    open_page(page, name)
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), name + " overflow"
-                page.get_by_role('button',name='检测',exact=True).click()
+                open_page(page, 'audit')
                 page.route('**/api/audit',lambda route:route.fulfill(status=503,content_type='application/json',body='{"error":"offline fixture failure"}'))
                 page.locator('#start').click()
                 expect(page.locator('#start')).to_be_enabled()
@@ -321,7 +324,7 @@ def main():
                 cli_file.write_bytes(code_original)
                 page.locator('#target-edit').click()
                 expect(page.locator('#target-confirm')).to_be_enabled()
-                page.locator('#target-form [name=usage]').select_option('cli')
+                open_details(page, '#target-connection-options'); page.locator('#target-form [name=usage]').select_option('cli')
                 page.locator('#target-confirm').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
                 expect(page.locator('#solution-plan')).to_contain_text('恢复 Node TLS 证书校验')
@@ -331,7 +334,7 @@ def main():
                 page.locator('#target-edit').click()
                 expect(page.locator('#target-confirm')).to_be_enabled()
                 assert cli_file.read_bytes()==code_original, 'editing options invalidates pending confirmation'
-                page.locator('#target-form [name=usage]').select_option('cli')
+                open_details(page, '#target-connection-options'); page.locator('#target-form [name=usage]').select_option('cli')
                 page.locator('#target-confirm').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
                 page.locator('#beginner-checks').evaluate('(node)=>node.open=false')
@@ -347,7 +350,7 @@ def main():
                 assert configured['mcpServers']=={'fixture':{'command':'PRIVATE_MCP'}}
                 assert 'PRIVATE_SETTING' not in page.locator('body').inner_text()
                 assert page.locator('.tab[data-page="audit"]').get_attribute('aria-current')=='page'
-                page.locator('#flow-upkeep-restore').check()
+                open_details(page, '#flow-watchdog-options'); page.locator('#flow-upkeep-restore').check()
                 page.locator('#flow-upkeep-prepare').click()
                 expect(page.locator('#flow-upkeep-plan')).to_contain_text('确认启用长期保持')
                 assert not operations.maintenance._config().get('enabled')
@@ -358,7 +361,7 @@ def main():
                 page.locator('#flow-upkeep-stop').click()
                 expect(page.locator('#flow-upkeep-status')).to_contain_text('尚未启用')
                 assert not operations.maintenance._config().get('enabled')
-                page.locator('#technical-details>summary').click()
+                open_details(page, '#more-results'); page.locator('#technical-details>summary').click()
                 with page.expect_download() as configured_download:
                     page.locator('#share').click()
                 safe=Path(configured_download.value.path()).read_text(encoding='utf-8')

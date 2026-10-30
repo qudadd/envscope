@@ -6,6 +6,7 @@ import threading
 import time
 from unittest.mock import Mock
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.legacy import LegacyBridge
 from envscope.model import Status
@@ -84,8 +85,8 @@ def main():
                             page.goto('http://127.0.0.1:'+str(server.server_port), wait_until='networkidle')
                             page.locator('#learning-skip').click()
                             expect(page.locator('#target-confirm')).to_be_enabled()
-                            page.locator('#target-form [name=usage]').select_option('cli')
-                            page.locator('#target-form [name=connection_mode]').select_option('tun')
+                            open_details(page, '#target-connection-options'); page.locator('#target-form [name=usage]').select_option('cli')
+                            open_details(page, '#target-connection-options'); page.locator('#target-form [name=connection_mode]').select_option('tun')
                             page.locator('#target-form [name=usage_country]').fill('US')
                             page.locator('#target-region-profile').select_option('us-new-york')
                             desired = 'Eastern Standard Time' if system == 'Windows' else 'America/New_York'
@@ -95,7 +96,7 @@ def main():
                             expect(page.locator('#start')).to_be_disabled()
                             expect(page.locator('#start')).to_be_enabled(timeout=30000)
                             expect(page.locator('html')).not_to_have_attribute('data-operation-busy', 'true')
-                            page.locator('.tab[data-page=checks]').click()
+                            open_page(page, 'checks')
                             page.locator('#check-search').fill('时区')
                             page.locator('#checks-clear').click()
                             page.locator('#checks-select-all').click()
@@ -129,8 +130,8 @@ def main():
                             expect(row.locator('.inspection-state')).to_contain_text('通过', timeout=30000)
                             expect(page.locator('html')).not_to_have_attribute('data-operation-busy', 'true')
                             assert writes == [['timezone', desired]]
-                            page.locator('.tab[data-page=audit]').click()
-                            page.locator('#target-configure').click()
+                            open_page(page, 'audit')
+                            open_page(page, 'checks'); page.locator('#target-configure').click()
                             expect(page.locator('#checks-node-note')).to_contain_text('名称不证明')
                             expect(page.locator('#checks-region-undo')).to_be_visible()
                             expect(page.locator('html')).not_to_have_attribute('data-operation-busy', 'true')

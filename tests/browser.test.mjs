@@ -1,7 +1,54 @@
 import test from "node:test";
 import {describeProxy} from "../envscope/web/diagnosis.mjs";
 import assert from "node:assert/strict";
+import {workflowIssues,workflowChecks} from '../envscope/web/workflow.mjs';
+import {suggestedCity,cityChoices} from '../envscope/web/region_choices.mjs';
 import {normalizeIP,isPublicIP,parseCandidate,assessHTTP,assessICE,sharingSnapshot} from "../envscope/web/logic.mjs";
+
+test('required permission and missing evidence stay visible without a diagnosis problem',()=>{
+  const report={findings:[{id:'target.config',title:'配置读取',summary:'权限被拒绝'}],diagnosis:{problems:[]},
+    assessment:{items:[{id:'target.config',required:true,state:'permission',action:'permission-help',next_step:'授权后重试'},
+      {id:'target.dns',title:'域名解析',required:true,state:'unavailable',next_step:'重新检测'},
+      {id:'dns.leak',required:false,state:'unsupported'}]}};
+  const issues=workflowIssues(report);
+  assert.deepEqual(issues.map(i=>i.id),['target.config','target.dns']);
+  assert.equal(issues[0].action,'permission-help');assert.equal(issues[0].automatic,false);
+  assert.equal(issues[1].observed,'本轮未取得必需证据');
+});
+
+test('one problem mapped by several required checks is not repeated',()=>{
+  const report={diagnosis:{problems:[{id:'config.cli',repair:'json-cli',title:'配置格式错误'}]},
+    assessment:{items:[{id:'target.config',required:true,state:'problem'}]},
+    repair_options:{'target.config':{action:'solution',problem_ids:['config.cli']},'extra.config':{action:'solution',problem_ids:['config.cli']}}};
+  assert.equal(workflowIssues(report).length,1);assert.equal(workflowIssues(report)[0].automatic,true);
+});
+
+test('one-click repair excludes passed, unselected and informational checks',()=>{
+  const ids=['baseline.timezone','baseline.guard','target.dns','extra.config'];
+  const report={selection:{selected:ids},findings:[{id:ids[0],status:'warn'},
+    {id:ids[1],status:'unknown'},{id:ids[2],status:'fail',scope:'not-selected'},{id:ids[3],status:'pass'}],
+    assessment:{items:[{id:ids[0],required:true,state:'review'},{id:ids[1],required:false,state:'informational'}]},
+    repair_options:Object.fromEntries(ids.map(id=>[id,{needs_attention:id!==ids[3],action:'solution',problem_ids:[]}]))};
+  assert.deepEqual(workflowChecks(report),['baseline.timezone']);
+});
+
+test('IP timezone aliases are country-bound and partial lookup never auto-selects',()=>{
+  const india={id:'india',country:'IN',iana:'Asia/Calcutta',aliases:['Asia/Calcutta','Asia/Kolkata']};
+  const observation={state:'observed',country:'IN',timezone:'Asia/Kolkata'};
+  assert.equal(suggestedCity([india],observation),india);
+  assert.equal(suggestedCity([india],{...observation,state:'partial'}),null);
+  assert.equal(suggestedCity([india],{...observation,country:'US'}),null);
+  assert.deepEqual(cityChoices([india],'US'),[]);
+});
+
+test('reviewed Code setup keeps measured scope and excludes web-only usage',()=>{
+  const report={usage:'cli',selection:{selected:['extra.cli_env']},findings:[{id:'extra.cli_env',status:'pass'}]};
+  assert.deepEqual(workflowChecks(report),[]);
+  assert.deepEqual(workflowChecks(report,true),['extra.cli_env']);
+  assert.deepEqual(workflowChecks({...report,usage:'web'},true),[]);
+  assert.deepEqual(workflowChecks({...report,selection:{selected:[]}},true),[]);
+  assert.deepEqual(workflowChecks({...report,findings:[{id:'extra.cli_env',scope:'not-selected'}]},true),[]);
+});
 
 test("IPv6 equivalent spellings and mapped IPv4 canonicalize",()=>{
   assert.equal(normalizeIP("2001:4860::1"),normalizeIP("2001:4860:0:0:0:0:0:1"));

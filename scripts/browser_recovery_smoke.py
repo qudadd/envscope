@@ -5,6 +5,7 @@ import tempfile
 import threading
 from unittest.mock import Mock
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect,sync_playwright
 
 from envscope.browser_sessions import MARKER
@@ -50,7 +51,7 @@ def main():
                     try:
                         page.goto(f'http://127.0.0.1:{server.server_port}',wait_until='networkidle')
                         if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
-                        page.locator('[data-page=tools]').click()
+                        open_page(page, 'tools')
                         expect(page.locator('#browser-session-status')).to_contain_text('旧版资料 1 个')
                         expect(page.locator('#browser-session-status')).to_contain_text('无法核实 1 个')
                         page.once('dialog',lambda dialog:dialog.dismiss())

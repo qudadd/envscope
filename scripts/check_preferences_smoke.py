@@ -5,6 +5,7 @@ import tempfile
 import threading
 from zipfile import ZipFile
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.client_repair import ClientRepair
 from envscope.guide import LESSON_VERSION
@@ -52,7 +53,7 @@ def main():
                     page.route('https://**/*',external)
                     try:
                         page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
-                        page.locator('.tab[data-page=settings]').click()
+                        open_page(page, 'settings')
                         page.locator('[name=optional][value=webrtc]').uncheck()
                         page.locator('[name=optional][value=ecosystem]').uncheck()
                         page.locator('#optional-failures').check()
@@ -62,7 +63,7 @@ def main():
                         page.wait_for_function("document.querySelector('#workspace').dataset.state==='complete'")
                         assert calls and all('extra.ecosystem' not in selected and 'udp.stun' not in selected for selected in calls)
                         assert page.evaluate('window.fixtureICE')==0
-                        page.locator('.tab[data-page=checks]').click()
+                        open_page(page, 'checks')
                         expect(page.locator('#all-checks-context')).to_contain_text('本次检测')
                         rows={f['id']:f for f in server.last_raw_report['findings']}
                         assert rows['extra.ecosystem']['status']=='skipped' and rows['udp.stun']['status']=='skipped'
@@ -85,22 +86,22 @@ def main():
                         expect(page.locator('#diagnostic-log-state')).to_contain_text('已关闭')
                         before=len(calls)
                         page.reload(wait_until='networkidle')
-                        page.locator('.tab[data-page=settings]').click()
+                        open_page(page, 'settings')
                         expect(page.locator('[name=optional][value=webrtc]')).not_to_be_checked()
                         expect(page.locator('[name=optional][value=ecosystem]')).not_to_be_checked()
                         expect(page.locator('#optional-failures')).to_be_checked()
                         expect(page.locator('#diagnostic-logging')).not_to_be_checked()
                         assert len(calls)==before
                         # A fresh audit after reload; old evidence is not used for a client action.
-                        page.locator('.tab[data-page=audit]').click();page.locator('#start').click()
+                        open_page(page, 'audit');page.locator('#start').click()
                         expect(page.locator('#start')).to_be_enabled(timeout=45000)
-                        page.locator('.tab[data-page=upkeep]').click();page.locator('#client-load').click()
+                        open_page(page, 'upkeep');page.locator('#client-load').click()
                         expect(page.locator('#client-app')).to_contain_text('FlClash')
                         expect(page.locator('#client-tun')).to_be_disabled()
                         expect(page.locator('#client-policy')).to_have_class('note manual-guidance')
                         page.screenshot(path=str(output/f'{system}-{width}-client.png'),full_page=True)
                         assert io.preference.read_bytes()==original and not io.calls
-                        page.locator('.tab[data-page=settings]').click()
+                        open_page(page, 'settings')
                         page.screenshot(path=str(output/f'{system}-{width}-preferences.png'),full_page=True)
                         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                         assert not errors,errors
