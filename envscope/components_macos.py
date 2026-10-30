@@ -94,4 +94,5 @@ trap 'exit 130' INT TERM HUP
             code += f'/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin LC_ALL=C "$STAGE/helper" --{action} "$STAGE/plan.plist" {shlex.quote(hashlib.sha256(raw).hexdigest())} {shlex.quote(str(self.uid))}\n'
             apple = 'do shell script '+json.dumps(code, ensure_ascii=False)+' with administrator privileges without altering line endings'
             result = self.runner(['/usr/bin/osascript', '-e', apple], capture_output=True, timeout=150)
-            if result.returncode: raise ValueError('系统授权取消或旧组件操作未完全完成，请刷新并核对恢复记录')
+            from .consent import raise_for_consent
+            raise_for_consent(result, 'Darwin')

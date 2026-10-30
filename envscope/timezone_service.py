@@ -444,8 +444,8 @@ class NativeTimezoneIO:
         script=privileged_script(self.layout,script,self.worker())
         apple='do shell script '+json.dumps(script,ensure_ascii=False)+' with administrator privileges without altering line endings'
         result=self.runner(['/usr/bin/osascript','-e',apple],timeout=150)
-        if result.returncode:
-            raise ValueError('系统授权被取消，或时区服务操作未完成。请刷新状态；若有恢复记录，先恢复再重试。')
+        from .consent import raise_for_consent
+        raise_for_consent(result, 'Darwin')
 
 
 class TimezoneService:
@@ -550,8 +550,9 @@ class TimezoneService:
         try:
             self.io.execute(plan['script'])
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
+            from .consent import operation_outcome
             return {'state':'partial','status':self.status(),'transaction_nonce':plan['receipt']['nonce'],
-                    'needs_retest':True,'reason':str(exc)[:240]+' 现有备份和日志保留。'}
+                    **operation_outcome(exc),'reason':str(exc)[:240]+' 现有备份和日志保留。'}
         status=self.status()
         completed=(not status.get('installed') and not status.get('registered') and not status.get('pending')
                    if plan['remove'] else status.get('installed') and status.get('registered') and status.get('target')==plan['target'] and not status.get('pending'))
@@ -593,7 +594,8 @@ class TimezoneService:
         del self.plans[token]
         try:self.io.execute(plan['script'])
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
-            return {'state':'partial','reason':str(exc)[:240],'status':self.status(),'needs_retest':True}
+            from .consent import operation_outcome
+            return {'state':'partial','reason':str(exc)[:240],'status':self.status(),**operation_outcome(exc)}
         completed=self._restored(self.io.inspect(),plan['snapshot']['transaction'])
         return {'state':'completed' if completed else 'partial','status':self.status(),'needs_retest':True,
                 'reason':'已恢复原时区及此前的时区守护基线，请复检。' if completed else '撤销后的配置尚未完整读回，请保留恢复记录并复检。'}
@@ -649,7 +651,8 @@ class TimezoneService:
         del self.plans[token]
         try:self.io.execute(plan['script'])
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
-            return {'state':'partial','reason':str(exc)[:240],'status':self.status()}
+            from .consent import operation_outcome
+            return {'state':'partial','reason':str(exc)[:240],'status':self.status(),**operation_outcome(exc)}
         status=self.status()
         completed=self._restored(self.io.inspect(),plan['receipt'])
         return {'state':'completed' if completed else 'partial','needs_retest':True,

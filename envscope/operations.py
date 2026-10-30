@@ -604,6 +604,8 @@ class Operations:
             desktop = getattr(self, "desktop_runtime", None)
             return desktop.run(action, params, confirmed) if desktop else {"state": "unavailable", "reason": "此功能需要打开 EnvScope 独立软件。当前是浏览器兼容界面。"}
         if action == "permission-help":
+            if report and report.get('environment', {}).get('confirmed') and report['environment'].get('fingerprint') != fingerprint(self.store.settings()):
+                return {'state': 'retest_required', 'reason': '目标已改变，请先按当前目标重新检测。'}
             from .permissions import permission_help
             return permission_help(report, params, self.home, self.accounts.data_dir, confirmed)
         native_parameters = {"account-label": {"slot", "label"}, "account-switch": {"slot", "allow_force"},

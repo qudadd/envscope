@@ -242,7 +242,8 @@ class WindowsComponents:
                 "$o=@{FilePath="+quote(self.executable)+";ArgumentList=@('-NoProfile','-NonInteractive','-EncodedCommand',$code);WindowStyle='Hidden';Wait=$true;PassThru=$true};"
                 "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent());"
                 "if(-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){$o.Verb='RunAs'};"
-                "$v=Start-Process @o;exit $v.ExitCode")
+                "try{$v=Start-Process @o;exit $v.ExitCode}catch{$e=$_.Exception;while($e){if($e -is [ComponentModel.Win32Exception]){exit $e.NativeErrorCode};$e=$e.InnerException};exit 1}")
             result = self.runner([self.executable, '-NoProfile', '-NonInteractive', '-Command', launcher], input=encoded.encode(),
                                  capture_output=True, timeout=150, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-            if result.returncode: raise ValueError('系统授权取消或旧组件操作未完成，请核对受保护的恢复记录')
+            from .consent import raise_for_consent
+            raise_for_consent(result, 'Windows')

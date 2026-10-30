@@ -172,8 +172,9 @@ class SystemNetwork:
                       and (not plan['payload']['flush_dns'] or status.get('dns_flush')=='completed'))
         except (OSError,ValueError,subprocess.SubprocessError) as error:
             recovery=self.status()
+            from .consent import operation_outcome
             return {'state':'partial','reason':str(error)[:240]+' 请查看恢复状态；原备份没有自动丢弃。',
-                    'status':recovery,'needs_retest':True}
+                    'status':recovery,**operation_outcome(error)}
         return {'state':'completed' if verified else 'partial','status':public_status(status),'needs_retest':True,
                 'transaction_id':plan['payload']['nonce'],'scope':'selected-network-settings',
                 'reason':'所列网络设置已读回；现在复检解析、连接及出口。' if verified else '系统操作返回，但配置或缓存刷新尚未完整确认；请按恢复记录处理。'}
@@ -214,6 +215,7 @@ class SystemNetwork:
             restored=(status.get('state')=='restored' and all(r['id'] in rows and
                       all(rows[r['id']][k]==r[k] for k in ('ipv6_enabled','config')) for r in plan['record'].get('adapters',[])))
         except (OSError,ValueError,subprocess.SubprocessError) as error:
-            return {'state':'partial','reason':str(error)[:240]+' 恢复记录保留。','needs_retest':True}
+            from .consent import operation_outcome
+            return {'state':'partial','reason':str(error)[:240]+' 恢复记录保留。','status':self.status(),**operation_outcome(error)}
         return {'state':'completed' if restored else 'partial','status':public_status(status),'needs_retest':True,
                 'reason':'系统网络恢复已返回，请复检实际设置与连接。'}

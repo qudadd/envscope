@@ -7,6 +7,7 @@ const explained={passed:'通过',review:'需要复核',problem:'发现问题',pe
 export function initInspection({run,operate,isBusy,retest}){
   let catalog=[],report=null,phase='not_run',selection=new Set(),visible=[],groups=[],source='current',initialized=false,defaultsKey=null;
   const selected=()=>[...selection];
+  let selectionKey='';
   const output=$('checks-output');
   const button=(text,fn)=>{const b=el('button',text,'link');b.type='button';b.disabled=phase==='running'||isBusy()||$('start').disabled;b.addEventListener('click',fn);return b;};
   const operateHere=fn=>operate(fn,output);
@@ -17,7 +18,7 @@ export function initInspection({run,operate,isBusy,retest}){
     for(const id of ['checks-select-all','checks-clear','checks-select-problems','checks-select-visible','checks-load-nodes','checks-node-group','checks-node','checks-region-undo'])$(id).disabled=blocked;
     for(const node of document.querySelectorAll('#all-checks-list button, #all-checks-list input[type=checkbox], #checks-plan button'))node.disabled=blocked;
   }
-  function invalidate(){$('checks-plan').replaceChildren();$('checks-selected-count').textContent=`已勾选 ${selection.size} 项。所需依赖自动包含；未选项目不算通过。`;updateButtons();}
+  function invalidate(){$('checks-plan').replaceChildren();$('checks-selected-count').textContent=`已勾选 ${selection.size} 项。所需依赖自动包含；未选项目不算通过。`;updateButtons();const key=JSON.stringify([...selection].sort());if(key!==selectionKey){selectionKey=key;document.dispatchEvent(new CustomEvent('envscope-selection-changed'));}}
   const busyObserver=new MutationObserver(updateButtons);
   busyObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-operation-busy']});
   busyObserver.observe($('start'),{attributes:true,attributeFilter:['disabled']});

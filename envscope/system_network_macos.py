@@ -82,5 +82,5 @@ trap 'exit 130' INT TERM HUP
             script=self.script(action,path,hashlib.sha256(data).hexdigest(),self.worker())
             apple='do shell script '+json.dumps(script,ensure_ascii=False)+' with administrator privileges without altering line endings'
             result=self.runner(['/usr/bin/osascript','-e',apple],capture_output=True,timeout=150)
-            if result.returncode:
-                raise ValueError('系统授权取消或网络修改未完成。请刷新恢复记录；未将命令返回当作修复成功。')
+            from .consent import raise_for_consent
+            raise_for_consent(result, 'Darwin')

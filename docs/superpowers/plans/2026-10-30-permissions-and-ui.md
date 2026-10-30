@@ -44,10 +44,10 @@
 
 **Interfaces:** `permission_help` returns capability IDs, scope, affected checks and an OS action while retaining legacy response fields. Frontend `initPermissionFlow({run,operate,recheck,getContext})` owns pending authorization, focus/visibility continuation, cancellation and retry; no permission is granted from a frontend flag.
 
-- [ ] Write backend and browser regressions for every routed capability, cancellation, changed target/selection, missing settings entry and permission still denied after return.
-- [ ] Observe the failures, then implement per-capability OS actions and bounded continuation with fresh audit/repair preview.
-- [ ] Classify OS consent/operation outcomes in a shared helper and wire callers without discarding pending native transactions.
-- [ ] Run permission, native transaction and browser workflow tests plus the full Python/JS suites; commit and ledger results.
+- [x] Write backend and browser regressions for routed capabilities, cancellation, changed target/selection, missing settings entry and continued denial.
+- [x] Observe failures, implement scoped OS actions and bounded continuation with fresh audit/repair preview.
+- [x] Classify OS consent/operation outcomes without discarding pending native transactions.
+- [x] Verify 697 Python tests (5 platform skips), 19 JavaScript tests, desktop UI at 1024/1280/1440 and Windows/macOS permission workflow fixtures; commit and ledger results. Real OS consent remains separately unmeasured.
 
 ### Task 3: Persistent guard authority and actionable notifications
 

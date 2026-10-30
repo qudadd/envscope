@@ -20,6 +20,7 @@
     </nav>
   </div>
   <main id="workspace" data-state="ready">
+    <section id="permission-status" class="connection-banner" role="status" hidden><p id="permission-message"></p><button id="permission-resume" class="link" hidden>我已处理，继续检测</button><button id="permission-cancel" class="link" hidden>停止自动复检</button></section>
     <section id="connection-banner" class="connection-banner" role="status" hidden><strong id="connection-title">本地服务已断开</strong><p id="connection-message">请重新双击 EnvScope 启动器，并使用它新打开的页面；旧地址可能已经失效。</p><button id="connection-retry" class="link">重新连接本页</button></section>
     <p id="connection-status" class="connection-status" role="status">正在连接本地服务…</p><div id="catalog-error" class="connection-banner" role="status" hidden><p>功能列表暂时无法读取。环境信息仍可单独查看；账号和维护操作请先重新读取列表。</p><button id="catalog-retry" class="link">重新读取功能列表</button></div>
     <div id="page-audit" class="page">

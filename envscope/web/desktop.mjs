@@ -51,18 +51,4 @@ export function initDesktopApp({run,operate}){
     $('qualification-pending').replaceChildren(...(pending.length?pending.map(i=>{const p=el('p',''),f=report.findings.find(f=>f.id===i.id);p.append(el('strong',(f?.title||i.id)+'：'),document.createTextNode(i.reason+' '+i.next_step));return p;}):[el('p','本次列出的关键使用条件已完成核对。')]));
   });
   document.addEventListener('envscope-audit-start',()=>{report=null;$('qualification').hidden=true;});
-  document.addEventListener('envscope-permission',e=>{
-    if(!report)return;
-    void operate(async()=>{
-      e.detail.button.disabled=true;
-      try{
-        const params={report_id:report.report_id,finding_id:e.detail.id};let v=await run('permission-help',params);
-        if(v.state==='confirmation_required'){
-          if(!window.confirm(v.reason)){e.detail.output.textContent='已取消，未更改权限。';return;}
-          v=await run('permission-help',params,true);
-        }
-        e.detail.output.textContent=v.reason||'完成授权后请重新检测。';
-      }finally{e.detail.button.disabled=false;}
-    },e.detail.output);
-  });
 }

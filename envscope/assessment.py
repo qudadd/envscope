@@ -3,7 +3,7 @@
 
 def denied(value):
     if isinstance(value, dict):
-        return value.get("error") == "permission_denied" or any(denied(v) for v in value.values())
+        return value.get("error") in ('permission_denied', 'policy_denied') or any(denied(v) for v in value.values())
     return isinstance(value, list) and any(denied(v) for v in value)
 
 
