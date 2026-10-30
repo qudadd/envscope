@@ -1,6 +1,6 @@
 """Versioned official region lists; declarations and IP observations stay distinct.
 
-Checked 2026-10-28 against the current Help Center and API documentation. The
+Checked 2026-10-30 against the current Help Center and API documentation. The
 legal page dated 2026-11-12 is not yet effective and is deliberately not used.
 Country names are normalized to ISO 3166-1 alpha-2; the Help Center's duplicate
 Herzegovina entry is BA and its Mariana Islands entry is MP.
@@ -8,7 +8,7 @@ Herzegovina entry is BA and its Mariana Islands entry is MP.
 import re
 from .model import Finding, Status
 
-CHECKED_AT = '2026-10-28'
+CHECKED_AT = '2026-10-30'
 CLAUDE_SOURCE = 'https://support.claude.com/en/articles/8461763-where-can-i-access-claude'
 API_SOURCE = 'https://platform.claude.com/docs/en/api/supported-regions'
 API_REGIONS = frozenset('''AL DZ AD AO AG AR AM AU AT AZ BS BH BD BB BE BZ BJ BT BO BA BW BR BN BG BF BI

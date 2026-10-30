@@ -67,7 +67,7 @@ def main():
                         expect(page.locator('#start')).to_be_enabled(timeout=30000)
                         page.locator('[data-page="coverage"]').click()
                         expect(page.locator('[data-dimension]')).to_have_count(8)
-                        expect(page.locator('[data-feature]')).to_have_count(29)
+                        expect(page.locator('[data-feature]')).to_have_count(30)
                         expect(page.locator('[data-feature="components"]')).to_contain_text('原生实现')
                         expect(page.locator('[data-feature="system-network"]')).to_contain_text('原生实现')
                         expect(page.locator('[data-feature="client-repair"]')).to_contain_text('原生实现')
@@ -167,7 +167,7 @@ def main():
                         expect(page.locator('#tool-output')).to_contain_text('已清理 1 个')
                         assert not errors,errors
                         no_legacy.assert_not_called()
-                        results[str(width)]={'portrait_dimensions':8,'features':29,'archive_roundtrip':True,'csnap_roundtrip':True,'csnap_mismatch_rejected':True,'dmg_fixture_roundtrip':True,'dmg_mismatch_rejected':True,'dmg_cleanup_recovery':True,'wrong_password_no_import':True,'password_cleared':True,'browser_launcher':'fixture-only','real_browser_or_account_launches':0,'page_errors':errors}
+                        results[str(width)]={'portrait_dimensions':8,'features':30,'archive_roundtrip':True,'csnap_roundtrip':True,'csnap_mismatch_rejected':True,'dmg_fixture_roundtrip':True,'dmg_mismatch_rejected':True,'dmg_cleanup_recovery':True,'wrong_password_no_import':True,'password_cleared':True,'browser_launcher':'fixture-only','real_browser_or_account_launches':0,'page_errors':errors}
                     except Exception:
                         page.screenshot(path=str(out/f'{width}-failure.png'))
                         print(json.dumps({'page_errors':errors,'format':page.locator('#encrypted-format').evaluate('(e)=>e.outerHTML'),'visible_text':page.locator('main').inner_text()[-5000:]},ensure_ascii=False))

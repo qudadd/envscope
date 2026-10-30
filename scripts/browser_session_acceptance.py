@@ -32,7 +32,14 @@ def run_acceptance(executable=None, *, native_proof=None):
         try:
             out,err = parent.communicate(timeout=30)
             assert parent.returncode==0,err.decode('utf-8',errors='replace')[-2000:]
-            owned = json.loads((root/'fixture-result.private.json').read_text())
+            owned = json.loads((root/'fixture-result.private.json').read_text(encoding='utf-8'))
+            # Windows venv/console launchers can signal exit just before their
+            # actual Python child disappears from the process table. Observe
+            # the recorded code process, with a bounded wait, before testing
+            # that the separate cleanup worker still exists.
+            parent_deadline=time.monotonic()+5
+            while process_alive(owned['parent_pid'],owned['parent_birth']) is not False and time.monotonic()<parent_deadline:
+                time.sleep(.05)
             assert parent.poll()==0 and process_alive(owned['parent_pid'],owned['parent_birth']) is False
             status_path=root/'.envscope/browser-cleanup-worker.private.json'
             startup_deadline=time.monotonic()+5
@@ -42,6 +49,7 @@ def run_acceptance(executable=None, *, native_proof=None):
             status=_read(status_path)
             owned.update(worker_actual_pid=status['pid'],worker_actual_birth=status['birth'])
             assert process_alive(owned['worker_actual_pid'],owned['worker_actual_birth']) is True, 'Cleanup must outlive its parent'
+            assert process_alive(owned['sleeper_pid'],owned['sleeper_birth']) is True, 'Owned session must still exist after parent exit'
             directory = root/'.envscope/browser-sessions'/owned['token']
             deadline = time.monotonic()+25
             while time.monotonic()<deadline and (directory.exists() or process_alive(owned['worker_actual_pid'],owned['worker_actual_birth']) is not False):
@@ -66,7 +74,7 @@ def run_acceptance(executable=None, *, native_proof=None):
             if owned.get('token') and (store.root/owned['token']).exists():
                 diagnostic['session']=store.read(owned['token'])
                 diagnostic['profile_observed_running']=profile_running(store.root/owned['token']/'profile',platform.system())
-            diagnostic['events']=[json.loads(row) for p in (root/'.envscope/browser-cleanup-events').glob('*') for row in p.read_text().splitlines()]
+            diagnostic['events']=[json.loads(row) for p in (root/'.envscope/browser-cleanup-events').glob('*') for row in p.read_text(encoding='utf-8').splitlines()]
             output=Path('artifacts/browser-session-acceptance');output.mkdir(parents=True,exist_ok=True)
             (output/'failure.private.json').write_text(json.dumps(diagnostic,indent=2),encoding='utf-8')
             print(json.dumps({'failure_inventory':diagnostic['inventory'],'failure_worker':diagnostic['worker'],'last_states':[v['state'] for v in diagnostic['events'][-5:]]}))

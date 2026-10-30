@@ -8,7 +8,7 @@
 `target.region` 不合格。匹配预期出口不能覆盖官方限制。香港 / 澳门未列入当前名单，
 台湾在官方名单单列。IP 定位与声明均可能有误，不等于独立所在地或账号资格验证。
 
-名单于 2026-10-28 核对：[Claude 帮助中心](https://support.claude.com/en/articles/8461763-where-can-i-access-claude)
+名单于 2026-10-30 核对：[Claude 帮助中心](https://support.claude.com/en/articles/8461763-where-can-i-access-claude)
 176 个标准化代码，[API 文档](https://platform.claude.com/docs/en/api/supported-regions) 175 个；
 帮助中心 Mariana Islands 单列 MP，API 未列。未提前使用生效日 2026-11-12 的法律
 页面。乌克兰 API 子区域限制、云提供方及自定义接口要求仍需分别核对。名单随审核

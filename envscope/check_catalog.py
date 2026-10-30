@@ -31,7 +31,7 @@ def check_catalog():
     rows = [{'id':'target.region','group':'target','title':'Claude 官方地区支持','label':'实际地区与出口是否在官方支持名单内',
              'why':'分别核对用户申报的实际所在地和检测到的出口。中国大陆、俄罗斯不在名单中；时区和语言不证明所在地。',
              'next_step':'核对真实所在地及官方说明。地区条件不能通过自动配置、改时区或换账号修复。',
-             'upkeep':'实际所在地、网络或官方支持名单变化后重新检查；名单核对日期为 2026-10-28。'}]
+             'upkeep':'实际所在地、网络或官方支持名单变化后重新检查；名单核对日期为 2026-10-30。'}]
     for key, title, ids, measurement, remedy, upkeep, action in ITEMS:
         label, _, why, next_step = EXPLANATIONS[key]
         rows.append({"id": "baseline." + key, "group": "baseline", "title": title,

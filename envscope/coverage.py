@@ -1,13 +1,13 @@
 """Traceable capability parity and environment coverage, never a risk score."""
 UPSTREAM = 'https://github.com/YOURSJEYO/claude-switcher'
-REVIEWED_COMMIT = '223a5cc44edf36dfa568903ab02e73f0f015ec9e'
+REVIEWED_COMMIT = '92cd62f95f98599215995406deaa7edd89c97c40'
 
 FEATURES = (
     ('audit','14 项基础与逐项报告','native','checks','原始证据、问题说明、复检；另有 19 项扩展与目标验收。'),
     ('status','账号状态与命名','native','accounts','本机槽位与存档状态，不是服务端账号验证。'),
     ('switch','账号切换与启动检查','native','accounts','新检查、独占事务、校验复制、恢复记录；不使用旧 Windows 覆盖路径。'),
     ('keep','跨账号保留技能文件','native','accounts','keep-in-workspace.txt 仅允许 skills/；身份、Cookie、凭据和设置禁止跨账号混合。'),
-    ('fix','原版兼容核心修复','fix','tools','客户端 / TUN、网络、地区、应用语言、Code 和路由已另有原生入口；旧统一核心仍保留，调用前审核全部影响。'),
+    ('fix','一键配置与修复','native','audit','按当前检测依次生成客户端 / TUN、网络、地区、应用语言、Code、路由与守护方案，确认后处理并复检；无法自动修复的项目给出手动步骤。'),
     ('client-repair','客户端启动与 TUN 修复','native','upkeep','所选程序正常启动 / 重开、Clash Verge TUN 偏好备份和验证；失败及中断可恢复，先复检再生成后续守护方案。'),
     ('wireguard','WireGuard 服务与隧道基线','native-win','audit','Windows 具体隧道服务、所属进程、程序摘要、对应网卡与目标选路分别核对；进程守护固定同一基线。不会读取私钥或自动更换 VPN。'),
     ('application-language','Claude 应用语言与恢复','native-mac','upkeep','Mac 只处理已确认目标的 Claude 专用语言，保留多语言、缺省与 ByHost 原值；Windows 提供手动步骤。实际界面另行确认。'),
@@ -24,13 +24,14 @@ FEATURES = (
     ('proxy','明确代理连接诊断','native','tools','HTTP / HTTPS / SOCKS5 传输验证；匿名 401 不等于登录成功。'),
     ('guard','代理故障进程守护','native','upkeep','独立用户任务每 10 秒监测指定端口或网卡 / 内核，按批准范围停止桌面进程；心跳、创建时间核对和日志，不是防火墙。'),
     ('components','旧后台任务迁移与恢复','native','upkeep','核对固定任务的命令、用户与原脚本，审核后保存定义和权限再移除登记；可整笔恢复，账号、脚本与旧界面保留。'),
+    ('software-cleanup','旧软件清理与恢复','native','upkeep','单项 / 全选、预览确认、先停用旧任务，再可逆移走已识别的程序和启动入口；账号、凭据、配置保留，未知文件转手动。'),
     ('watchdog','时区与地区格式守护','native','upkeep','按批准基线恢复并读回；macOS 可前台授权原生 60 秒系统服务，支持更新、移除与恢复旧基线。Windows 权限不足时转手动。'),
     ('routing','域名与 UDP 路由维护','native','upkeep','Clash Verge 原生预览、保留脚本、16 条置顶规则、加载读回与恢复；其他客户端提供手动步骤，运行规则不等于流量证明。'),
     ('upkeep','持续检查与配置保持','native','upkeep','用户任务 / LaunchAgent；批准字段与系统基线恢复，代理离线重开所选客户端，冷却、复检及按日事件日志。'),
     ('tray','托盘 / 菜单栏常驻','native','settings','独立桌面包可驻留、隐藏、唤回；浏览器模式不具备系统托盘。'),
     ('update','完整软件与上游更新','native','settings','EnvScope 完整包校验、重启、回滚；原版核心更新在工具页另列。'),
     ('install','原版安装 / 卸载入口','install','tools','固定校验的安装器，授权窗口由用户完成；Windows 原版卸载仍按说明执行。'),
-    ('history','历史、出口变化与诊断导出','native','history','本机脱敏历史；48 小时出口变化不是服务端风险评分。'),
+    ('history','历史、出口变化与诊断导出','native','history','本机脱敏历史；48 小时观测、不同出口集合与变化次数分别计数，只保留 HMAC 对照值，不等于不同 IP 总数或服务端风险评分。'),
     ('check-preferences','持久可选检查与诊断日志','native','settings','一键与后台共用可选检查偏好；必需依赖保留，跳过不算通过。512 KiB 双份命令日志，可关闭与清除；固定白名单 ZIP 导出。'),
 )
 

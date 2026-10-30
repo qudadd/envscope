@@ -20,7 +20,7 @@ class RegionTests(unittest.TestCase):
     def test_official_snapshots_keep_restricted_regions_out(self):
         self.assertEqual((len(API_REGIONS),len(CLAUDE_REGIONS)), (175,176))
         self.assertEqual(CLAUDE_REGIONS-API_REGIONS, {'MP'})
-        self.assertEqual(CHECKED_AT, '2026-10-28')
+        self.assertEqual(CHECKED_AT, '2026-10-30')
         for country in ('CN','RU','HK','MO','BY','IR','KP'):
             self.assertNotIn(country, CLAUDE_REGIONS)
             self.assertNotIn(country, API_REGIONS)

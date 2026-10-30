@@ -4,6 +4,12 @@
   "sources": [
     {
       "repository": "YOURSJEYO/claude-switcher",
+      "revision": "92cd62f95f98599215995406deaa7edd89c97c40",
+      "reviewed_on": "2026-10-30",
+      "role": "Complete Windows/macOS command, UI, installer and maintenance requirement review through this revision; independent native upgrades, immutable 57-file vendor bundle remains 870c4ca"
+    },
+    {
+      "repository": "YOURSJEYO/claude-switcher",
       "revision": "a45cede34042922f881ef9672148cc7c8ddccff1",
       "path": "windows/claude-switch.ps1",
       "reviewed_on": "2026-10-30",
@@ -88,6 +94,11 @@
       ],
       "reviewed_on": "2026-10-30",
       "role": "public app/core names and distinct preference storage; no source, binary or artwork copied"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-ishelllinkw",
+      "reviewed_on": "2026-10-30",
+      "role": "Unicode COM metadata interface identity; original ctypes bindings, no Microsoft implementation copied"
     }
   ],
   "solution_review": [

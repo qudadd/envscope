@@ -1,55 +1,51 @@
 # 完整功能升级核对表
 
-目标仍是将 claude-switcher 的全部 Windows / macOS 功能升级后纳入 EnvScope。
-保留源码、增加检测行数或发布一个版本，都不是完成这个目标的证据。
-Linux 与手机端按产品既定范围延后。核对日期：2026-10-30。
+核对范围是 claude-switcher 的 Windows / macOS 功能、交互与维护流程，参考版本固定为
+[`92cd62f95f98599215995406deaa7edd89c97c40`](https://github.com/YOURSJEYO/claude-switcher/tree/92cd62f95f98599215995406deaa7edd89c97c40)，核对日期 2026-10-30。
+Linux 和手机端按产品范围延后。随包 57 个上游文件仍固定在 `870c4ca`，未改写其字节。
 
-已完成逐项审阅的上游参考为 `223a5cc44edf36dfa568903ab02e73f0f015ec9e`；相比上次 `495b995`，
-新提交增加 Windows `set-region`、国家自适应地区格式和多来源地区读取。
-EnvScope 已有原生城市目标、双来源一致性、写入预览 / 读回 / 恢复；缺失映射时不
-自动猜为美国时区。随附的 57 文件仍固定为 `870c4ca`，没有修改其字节或假称已更新。
+当前 0.23 源码已将所列功能映射到原生实现或明确的兼容 / 手动入口。发布前仍须通过
+对应提交的三平台 Python、20 组浏览器流程、三架构桌面包及实际 OS 夹具验收。
+本文列的是实现与证据范围，不把候选版本、模拟账号或静态表格当作已发布或真实登录成功。
 
-最新发现 `a45cede34042922f881ef9672148cc7c8ddccff1`（2026-10-30 核对），相较上述完整审阅点还有
-16 个提交。0.21 已实现 `3dfc927` 所列的 FlClash 识别 / 原生启动与维护、持久可选检查、
-脱敏命令日志与白名单 ZIP 导出，并接入一键、所选项目、后台及冻结包验证。跳过保持未测，
-必需依赖和证书 / 地址策略失败不能借可选开关放行。FlClash TUN 与规则仍在原客户端手动处理。
+## 功能映射
 
-随后 7 个 Windows 提交增加四账号工具流、隔离浏览器与 `.csnap` 加密快照等内容。
-现有整目录事务、原生工具、隔离浏览器仍需逐条与新来源核对；`.csnap` 已独立实现，
-包含源格式协议、.NET 双向样本与原生入口，验证范围见 [CSNAP_ARCHIVES](CSNAP_ARCHIVES.md)。
-它是独立的上游格式，原有 `.envsnap` / DMG 仍可选择。并发客户端切换和暂存保留也需
-完成新提交的专项对比。0.20 已完成旧任务可逆迁移，完整旧软件清理尚未完成。
-
-## 功能与证明要求
-
-| 上游任务 | 当前实现 / 证据入口 | 尚需完成或加强的验证 |
+| 上游功能 | EnvScope 实现与入口 | 验证和边界 |
 |---|---|---|
-| check / checkdetail，14 项审计与历史 | baseline、probes、check_catalog、逐项 UI；baseline / regions / inspection 测试 | 保留项目范围；DNS 配置不替代真实 DNS 出口，TUN 网卡不替代进程流量证据 |
-| status、账号卡片与命名 | accounts / operations、账号 UI、accounts 测试 | 真实桌面不同安装形态的资料路径验收 |
-| switch、首次收编、空槽位登录、受控启动 | 整目录隔离、APFS COW、正常退出、提交读回；v2 中断恢复预览 / 确认 / 留存；账号和 UI 测试 | 真实账号往返、不同安装方式资料路径及设备掉电验收仍未完成；见 ACCOUNT_VOLUMES |
-| 跨账号保留文件 | skills 白名单、暂存合并、拒绝身份 / 会话混合 | 当前有意不跨账号共享身份数据，不能以复现旧行为破坏隔离 |
-| fix：代理启动、TUN、DNS、IPv6、语言、系统地区 | 0.18 原生客户端启动 / 正常重开、Clash Verge TUN 持久化、Mac Claude 专用语言；备份、读回、失败恢复和中断入口。先修复客户端再复检，后续守护使用实际目标接口。0.17 网络事务、Code、系统地区、路由及 Watchdog 继续保留 | 0.20 已提供旧任务可逆迁移，完整旧软件清理仍缺；其他客户端 TUN 为手动指引；实际代理 GUI、VPN 驱动、授权及瞬断仍需设备验收；见 CLIENT_REPAIR / SYSTEM_NETWORK |
-| set-region，Windows / macOS | region_profiles、region_lookup、region_setup，选择 / IP 联动测试 | 更广国家 / 城市预设覆盖；真实权限与写入设备验收 |
-| set-client，多代理客户端 | 原生目标偏好、固定安装位置 / 注册表 / Mac bundle 识别与审核后启动；新增 Windows WireGuard 具体服务身份、程序摘要、对应网卡与目标选路，独立模式与原生守护共用基线；旧核心设置另用适配器 | 0.20 旧任务迁移的真实用户授权，以及 Shadowrocket / Surge 等实际 VPN 状态验证；WireGuard 的实际驱动 / 握手 / 睡眠仍需设备验收，不以程序存在证明 VPN 已接管；见 WIREGUARD |
-| fingerprint，设备 / 字体 / GPU / 虚拟化 | environment_info、coverage、按需浏览器数据 | 信息项有范围，不提供未知服务端风险评分 |
-| cli-info，多入口、版本、来源、配置体积 | cli_inventory、local_facts，被动读取测试 | 无可信包元数据的版本需明确未知；可增加审核后的版本读取 |
-| open-safe，临时浏览器及清理 | isolated_browser，Windows / Mac UI 及参数测试 | 真实浏览器策略生效、异常退出恢复和 UDP 抓包验收 |
-| snapshot-export / import | 原生 .envsnap、macOS DMG；新增 Windows CSNAP001 原格式兼容，跨平台 A–D 原槽位导入 / 导出、先认证后解密、ZIP 路径与资源限制、独立 .NET 交叉验证及导出回读 | .csnap 不执行上游代码；实际登录 / 钥匙串迁移不由存档验证覆盖。DMG 实际 hdiutil 与两种 Mac 冻结包证据范围仍单列；见 CSNAP_ARCHIVES / DMG_ARCHIVES |
-| update、检查更新、后台自动检查 | updates、完整包替换与回滚、三平台冻结包更新验收 | 商业签名 / Apple 公证、上游新功能持续差异提示；不能把校验和等同签名 |
-| diagnose-proxy，多协议与 TLS | 明确代理传输测试、禁止失败后直连、transport 测试 | 实际第三方服务认证不属于匿名连接成功 |
-| 10 秒进程守护、安装 / 卸载 | 0.13 新增 process_guard、独立任务、路径 / PID / 用户核对、日志和 UI；三架构真实 OS 用户任务均已执行至少两次并移除 | 真实断线 / 升级 / 睡眠场景与抓包仍需核实 |
-| 时区 Watchdog、配置漂移自愈 | 0.16 原生 Mac root 时区服务、60 秒调度、冷却、日志、安装 / 更新 / 移除、失败回滚与中断恢复；联动地区修改和一键维护，可撤销旧基线 | 原生双 Mac 架构隔离 root 任务验收；真实授权弹窗、睡眠 / 自动时区竞争仍需设备验收，0.20 已提供旧任务迁移入口与冲突暂停；见 TIMEZONE_SERVICE / legacy-components |
-| 13 域名置顶、3 组 UDP STUN 规则 | 0.14 原生 Clash Verge 预览、保留脚本与已标记旧块迁移、备份、加载 / 读回、回滚和中断恢复；Windows 实际临时 Mihomo 内核验证通过 | 三架构实核结果看本次 CI；真实 GUI 重生成和其他客户端适配、无标记旧配置迁移仍需核对；见 ROUTING |
-| UI、托盘、关闭隐藏、教程与故障指引 | 原生窗口 / 托盘 / 首次教学；三平台冻结包和 UI 回归 | 新功能需继续纳入入口、教学和场景测试，不能只提供内部 API |
-| 安装器、更新维护组件、卸载与资料保留 | 独立 EnvScope 包、旧核心固定适配入口 | 原生可逆组件安装 / 卸载；账户保留与系统修改清单需统一管理 |
+| check / checkdetail，基础审计 | 一键检测、全部检查、57 项可检索目录；逐项证据、问题、修复和保持方案 | baseline / probes / check_catalog / inspection；未测、失败、权限不足、不适用分开显示 |
+| set-check-config，可选检查 | 持久偏好，一键、所选项目与后台共用；必要依赖不能关闭 | CHECK_PREFERENCES；跳过不算通过，不绕过 TLS 或地区条件 |
+| status，A–D 卡片和命名 | 原生 AccountManager，另支持自定义槽位；体积、日期、当前与待恢复状态 | accounts 与账号 UI；本机状态不等于服务端订阅或认证验证 |
+| switch，首次收编、空槽登录、启动 | 正常退出、完整目录独立复制 / APFS COW、摘要、重命名、指针读回、事务恢复 | ACCOUNT_VOLUMES；失败与实际测试子进程中断均保留副本；不调用登出或伪造设备标识 |
+| 暂存冲突、指针与清理 | 独占锁、v2 日志、提交后清理；清理失败保持已提交指针并阻止启动，恢复入口可继续处理 | 覆盖上游 92cd 的目录冲突 / 指针不一致故障；EnvScope 使用自己的 `.new` / `.previous` 与恢复协议，不执行其 cleanup.json 删除路径 |
+| keep-in-workspace | 显式 skills 白名单、暂存合并、目标存档保持独立 | settings、OAuth、Cookie、身份文件不跨账号共享；旧越界清单停止并指导修正 |
+| fix，一键设置与复检 | 先修客户端，再读取实际连接，预览 Code、地区、路由、网络与守护；确认后执行并复检 | workflow / SolutionPlans / region_setup；按新结果分阶段，不提前批准尚未出现的网卡 |
+| 代理客户端选择 / 识别 | Clash Verge、FlClash、Shadowrocket、sing-box、ClashX、Surge、WireGuard 等分型；批准所选程序后启动 / 正常重开 | CLIENT_REPAIR / WIREGUARD；无统一管理 API 的开关在原客户端处理，不把进程存在当作 VPN 生效 |
+| Clash TUN 偏好保持 | 原生持久化、原配置备份、重开与内核 / 目标选路读回、失败和中断恢复 | 实际本机内核及惰性客户端夹具；第三方真实 GUI / 驱动另行核对 |
+| set-region，时区、地区格式、语言 | 实际地区单列；出口 IP 双来源建议、国家城市联动、预览 / 系统授权 / 写入 / 读回 / 撤销 | TARGET_ENVIRONMENT；名单按当前官方帮助和 API 页面核对，不提前启用 2026-11-12 的新法律页面 |
+| 13 域名和 3 组 STUN UDP 规则 | 原生 Clash Verge 脚本保留、置顶规则、加载读回、回滚与恢复 | ROUTING；用独立临时 Mihomo 实核验证；其他客户端给出逐条手动规则 |
+| IPv6 / DNS 设置 | 选择 / 全选接口、备份、系统授权、独立读回、失败回滚、中断恢复 | SYSTEM_NETWORK；缓存刷新单独说明不可撤销；DNS 配置不冒充权威 DNS 出口 |
+| Claude 应用语言 | Mac 原生 typed preference、默认 / 多语言 / ByHost 恢复；Windows 手动入口 | CLIENT_REPAIR；偏好值读回与实际应用界面分开 |
+| diagnose-proxy | 原生 HTTP / HTTPS / SOCKS5 / SOCKS5h、TLS、各目标响应与错误归因 | 失败不回退直连；匿名 401 只证明服务端响应，不证明登录可用 |
+| fingerprint | 原生字体目录计数、GPU / 显示、系统 / 虚拟化线索和按需浏览器资料；原版 Mac 详细入口保留 | environment_info / coverage；不复制中文字体等同风险、STUN 等同浏览器 WebRTC 等未经证实的结论 |
+| cli-info | PATH / 实际路径、多入口、可信包元数据、来源和配置体积；原版 Mac 详细入口保留 | cli_inventory；无可信版本元数据时给出终端命令，不自动执行 PATH 中任意程序 |
+| open-safe | 两平台独立临时资料、允许网址与代理参数检查、UDP 选项、独立隐藏清理进程、重启恢复 | BROWSER_SESSIONS；真实无害父子进程退出与冻结包夹具；不等于浏览器内部状态或防火墙验证 |
+| snapshot-export / import | 原生跨平台 ENVSNAP1、原版 Windows CSNAP001、Mac 原版加密 DMG | CSNAP_ARCHIVES / DMG_ARCHIVES；密码经内存 / stdin、先认证、边界限制、空槽、独立 .NET 交叉验证与逐文件回读 |
+| 10 秒进程守护 | 独立用户任务、固定 PID / 用户 / 路径和批准基线、心跳、冷却与日志 | PROCESS_GUARD；只停止已识别 Claude；是轮询，不是零数据包泄漏保证 |
+| 时区 Watchdog / 漂移恢复 | Mac root 60 秒服务与用户巡检；Windows 批准基线恢复；安装 / 更新 / 撤销 / 中断恢复 | TIMEZONE_SERVICE / WATCHDOG_AND_IDENTITIES；权限不足转手动，旧守护冲突时暂停自动写入 |
+| 后台维护 / 代理离线 | 审核过的配置保持、所选客户端重开、节点恢复、冷却、复检、按日日志 | maintenance / watchdog；新目标需要新批准，不在后台随意切换账号或国家 |
+| 48 小时出口历史 | 观测次数、不同出口集合数、变化次数分别展示；HMAC、过期清理、缺样本说明 | maintenance / watchdog；集合不等于单个 IP，密钥轮换后不延续不可比计数 |
+| 安装、更新、卸载维护组件 | 原生组件各自安装 / 更新 / 可逆移除；固定旧安装器兼容入口保留 | 系统权限由本次 OS 授权，第三方驱动仍用原客户端；不把 CI 提升权限等同实际授权弹窗验收 |
+| 完整旧软件清理 | 一次预览确认先停用旧任务，再存档所选核心、界面、快捷方式、App、模板和固定系统脚本；可恢复 | LEGACY_SOFTWARE；未知文件保留，账号 / 凭据 / 配置保留；恢复文件不隐含启动旧任务 |
+| update，自动更新检查 | EnvScope 完整包检查、下载校验、替换、重启与失败回滚；可后台检查；旧核心更新单列 | updates / update-package-smoke；校验和不等于发行者签名或 Apple 公证 |
+| UI、常驻、教学 | 极简桌面 UI、首次教程、用途与城市目标、单项 / 全选、合并修复、托盘隐藏 / 唤回、自动复检 | desktop / usability / target / selection / software 等离线场景与三架构窗口 / 托盘验收 |
+| 日志、导出和历史对比 | 按范围留痕、历史比较、受限命令日志轮替、可关闭 / 清除、固定白名单诊断 ZIP | diagnostics / history；默认脱敏，不导出账号卷、凭据、浏览器资料或任意目录 |
 
-## 接下来的实现顺序
+## 证据解释
 
-1. 原生进程守护已取得三架构冻结包与系统任务证据；继续做真实故障和睡眠设备验收。
-2. 原生客户端 TUN 持久化及 Mac 应用语言已接入一键与勾选流程；继续真实 GUI 重生成、驱动与实际界面验收。
-3. Mac 特权时区服务已实现原生安装、更新、移除、撤销和中断恢复，继续真实设备权限 / 睡眠验收及旧任务的可逆迁移。
-4. 原版 DMG 兼容已接入原生账号入口与隔离验收脚本；继续账号真实设备验收、其余客户端适配。账号快速复制与中断恢复已进入原生测试。
-5. 对全部功能做设备场景验收和最终逐条完成审计，再决定整体目标是否完成。
+`tests/` 验证失败边界与数据一致性；浏览器脚本验证实际按钮、确认前不写入、手动说明和自动复检；
+CI 的惰性任务 / 临时文件证明真实 Windows 调度器、Unicode Shell Link、DACL、macOS launchd、
+root 文件事务等操作范围；冻结包验证依赖、原生窗口、托盘、导出和恢复入口。
 
-所有阶段的测试都应标明：模拟、临时子进程、实际 OS 任务、真实用户设备或真实账号。
-没有对应范围的证据就保持未完成。原始固定版本逐命令来源见 [功能源码对照](FEATURE_PARITY.md)。
+真实 Claude 登录、钥匙串 / DPAPI 跨设备迁移、所有第三方 VPN 驱动、服务器设备识别和物理断电
+不在这些夹具的证明范围内。它们作为明确限制保留，不伪造通过，也不要求使用真实凭据才能完成
+本次用户已同意的模拟环境实现与软件发布。后续上游新提交按新的固定参考版本另行审阅。

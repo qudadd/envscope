@@ -1,30 +1,19 @@
 # Feature parity and integration audit
 
-## Active full-scope work: 0.22.1 development
+## Current requirement review: 0.23.0 candidate
 
-[The current complete requirement ledger](FULL_PARITY_AUDIT.md) takes precedence
-over historical status tables below. Windows CSNAP001 interoperability is now
-implemented separately from ENVSNAP1, with original A–D slot constraints,
-authentication before decryption, bounded ZIP inspection, exclusive publication
-and independent .NET crypto/ZIP exchange. See [its scope](CSNAP_ARCHIVES.md).
-Native process protection is now implemented
-with a separate user task, ten-second checks, approved scope, PID/path/user
-validation, live-worker heartbeat and durable logs. See [its exact scope and
-verification](PROCESS_GUARD.md). The native privileged Mac timezone service now has
-reviewed install/update/remove, rollback and recovery paths. Native system network
-repair is implemented in 0.17. Version 0.18 adds reviewed client lifecycle,
-persistent Clash Verge TUN repair and typed Mac Claude-language transactions.
-Legacy component migration and real-device acceptance remain incomplete; the
-overall parity goal is not achieved. Version 0.21 adds persistent optional probes,
-FlClash lifecycle integration and diagnostic ZIP export. Latest discovered upstream
-is `a45cede`; the full ledger tracks its remaining Windows changes separately.
+The [complete requirement ledger](FULL_PARITY_AUDIT.md) describes the current
+implementation and acceptance scope. The historical tables below retain their
+original reference dates and line numbers; their old gap labels are not current
+product status. The latest reviewed requirements are pinned to `92cd62f` on
+2026-10-30. The immutable 57-file bundled source remains `870c4ca`.
 
-Whole-profile account volumes now use normal client exit, APFS copy-on-write
-where supported, commit readback and a v2 journal with reviewed recovery UI.
-Interrupted recovery is resumable and displaced copies are retained. Synthetic
-identity fixtures and a real disposable child-process exit are tested; real
-Claude credentials and server device recognition remain unverified.
-See [account volume scope](ACCOUNT_VOLUMES.md).
+Current native paths include transactional whole-profile accounts and recovery,
+CSNAP001/ENVSNAP1/DMG archives, reviewed client/network/region/language/routing
+repair, independent process/timezone maintenance, check preferences, diagnostic
+export, temporary-browser restart cleanup, and legacy job/program retirement.
+Tests distinguish simulation, owned OS fixtures, packaged applications and real
+account behavior; no server device-identity guarantee is inferred.
 
 ## Current scope: 0.18.0 (2026-10-29)
 

@@ -2,9 +2,9 @@
 
 面向 Windows 和 macOS 的极简桌面环境工具。以 [claude-switcher](https://github.com/YOURSJEYO/claude-switcher) 为功能底座，保留原版维护能力，增加独立检测、事务式账号管理、代理诊断和历史对比。
 
-当前代码 **0.22.1 Alpha** 新增原版 Windows `.csnap` 加密备份兼容：Windows / macOS 均可导入、导出，保留原 A–D 槽位，先验签再解密，导出逐文件回读比对。账号页直接选格式，密码不保存；旧短密码可以导入。参见 [使用与验证范围](docs/CSNAP_ARCHIVES.md)。0.21 的持久可选检查、FlClash 启动维护、日志与脱敏 ZIP 均保留；[检测偏好说明](docs/CHECK_PREFERENCES.md)。公开安装包以 Releases 为准。
+当前源码 **0.23.0 Alpha** 增加可恢复的旧软件清理、临时浏览器独立清理进程与重启恢复，以及 48 小时不同出口集合统计。清理支持单项 / 全选，先预览、再确认，保留账号与凭据；未知文件和进程占用转为红色手动指引。参见 [旧软件清理](docs/LEGACY_SOFTWARE.md)、[临时浏览器](docs/BROWSER_SESSIONS.md) 和 [完整功能对照](docs/FULL_PARITY_AUDIT.md)。原有 `.csnap` / `.envsnap` / DMG、持久可选检查、FlClash、日志与脱敏 ZIP 均保留。公开安装包以 Releases 为准。
 
-**0.20.0 已加入** 加入旧后台任务的可逆迁移：单项选择或全选、预览访问与配置影响、保存原定义后停用、自动复检，以及恢复原任务。新守护会监测旧任务重新出现，发现冲突时暂停自身操作并留痕。一键流程按新检测结果分阶段生成方案。参见 [旧后台任务迁移](docs/legacy-components.md)。公开安装包以 Releases 为准。
+**0.20.0 已加入**旧后台任务的可逆迁移：单项选择或全选、预览访问与配置影响、保存原定义后停用、自动复检，以及恢复原任务。新守护会监测旧任务重新出现，发现冲突时暂停自身操作并留痕。一键流程按新检测结果分阶段生成方案。参见 [旧后台任务迁移](docs/legacy-components.md)。公开安装包以 Releases 为准。
 
 **0.19.0 已加入** Windows WireGuard 专项模式：选择具体隧道，分别核对服务、所属进程、程序摘要、对应网卡与实际目标选路；原生守护固定同一服务基线。服务停止、读取权限拒绝及其他 VPN 选路分别显示原因和处理步骤。参见 [WireGuard 检测与守护](docs/WIREGUARD.md)。
 

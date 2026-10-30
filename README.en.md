@@ -2,7 +2,7 @@
 
 ![EnvScope desktop interface, offline demonstration](docs/images/desktop.png)
 
-Current source: **0.22.1 Alpha**, with native Windows `.csnap` interoperability on both desktop platforms: original A–D slots, authentication before decryption, bounded ZIP validation and full export readback. See [archive scope and independent .NET verification](docs/CSNAP_ARCHIVES.md). Persistent check preferences, FlClash maintenance and privacy-filtered diagnostic ZIPs remain available. Full upstream parity is tracked in the [requirement ledger](docs/FULL_PARITY_AUDIT.md). Published installers are listed under Releases.
+Current source: **0.23.0 Alpha**, adding reviewed legacy-program quarantine and restore, detached temporary-browser cleanup with restart recovery, and distinct egress-set statistics. Selection/all, explicit effects, preserved account data and manual handling of unknown files are built in. See [program cleanup](docs/LEGACY_SOFTWARE.md), [browser cleanup](docs/BROWSER_SESSIONS.md) and the [complete requirement ledger](docs/FULL_PARITY_AUDIT.md). Native `.csnap`, `.envsnap`, DMG, optional checks, FlClash maintenance and diagnostic ZIPs remain available. Published installers are listed under Releases.
 
 Account slots preserve complete independent local profile trees, with normal exit, APFS copy-on-write, verified commits and reviewed recovery after interruption. Recovery preserves displaced copies and never logs in or launches the client. See [account volume scope and tests](docs/ACCOUNT_VOLUMES.md).
 

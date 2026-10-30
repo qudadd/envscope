@@ -53,13 +53,32 @@ def main(output=None):
         old_program=software.paths['core'];old_program.parent.mkdir(parents=True,exist_ok=True)
         body=b'# claude-switch checkdetail FROZEN SELF AUTHORED FIXTURE\n'
         old_program.write_bytes(body)
-        plan=software.prepare(['core']);assert plan['state']=='planned',plan
+        program_roles=['core'];created_shortcut=None;created_ui=None
+        result['native_unicode_shortcut']='not_applicable'
+        if platform.system()=='Windows':
+            import ctypes,os
+            from .windows_shortcut import _Shortcut,read_shortcut
+            created_shortcut=software.paths['shortcut'];created_shortcut.parent.mkdir(parents=True)
+            created_ui=software.paths['ui'];created_ui.write_bytes(b'# claude-switcher Window FROZEN INERT FIXTURE\n')
+            target=str(Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe')
+            arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(created_ui)+'"'
+            with _Shortcut() as link:
+                link.check(link.call(link.link,20,[ctypes.c_wchar_p],target))
+                link.check(link.call(link.link,11,[ctypes.c_wchar_p],arguments))
+                link.check(link.call(link.file,6,[ctypes.c_wchar_p,ctypes.c_int],str(created_shortcut),1))
+            assert read_shortcut(created_shortcut)['args']==arguments
+            program_roles+=['ui','shortcut']
+        plan=software.prepare(program_roles);assert plan['state']=='planned',plan
         value=software.apply(plan['plan_id'],True);assert value['state']=='completed',value
         assert not old_program.exists()
         software=SoftwareCleanup(directory,software.components,processes=lambda paths:False)
         plan=software.prepare(restore=True);assert plan['state']=='planned',plan
         value=software.apply(plan['plan_id'],True);assert value['state']=='restored',value
         assert old_program.read_bytes()==body
+        if created_shortcut:
+            assert read_shortcut(created_shortcut)['args']==arguments
+            created_shortcut.unlink();created_ui.unlink()
+            result['native_unicode_shortcut']=True
         old_program.unlink()  # Only the file created immediately above.
         result['native_software_file_roundtrip']=True
         # Frozen imports, persisted consent and ZIP privacy on disposable data.

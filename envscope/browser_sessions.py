@@ -494,12 +494,17 @@ def fixture_parent(root):
     profile = store.create(token)
     (profile/'Cookies').write_bytes(b'OWNED_BROWSER_SESSION_FIXTURE_ONLY')
     command = ([str(Path(os.environ.get('SystemRoot','C:/Windows'))/'System32/WindowsPowerShell/v1.0/powershell.exe'),
-                '-NoLogo','-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 6']
-               if platform.system()=='Windows' else ['/bin/sleep','6'])
+                '-NoLogo','-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 15']
+               if platform.system()=='Windows' else ['/bin/sleep','15'])
     sleeper = subprocess.Popen(command,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
                                creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     store.launched(token,sleeper)
     worker = start_worker(store.root,poll_interval=1)
+    deadline=time.monotonic()+10
+    while time.monotonic()<deadline and store.worker_status().get('state')!='running':
+        time.sleep(.05)
+    if store.worker_status().get('state')!='running':
+        raise AccountError('隔离验收清理进程没有在期限内读回。')
     _write(root/'fixture-result.private.json',{'format':1,'token':token,'parent_pid':os.getpid(),
            'parent_birth':process_birth(os.getpid()),
            'sleeper_pid':sleeper.pid,'sleeper_birth':process_birth(sleeper.pid),
