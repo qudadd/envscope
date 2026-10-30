@@ -250,7 +250,9 @@ def build_findings(findings, settings):
         '在系统代理设置中按目标连接方式调整后复检。TUN 另查隧道状态；PAC、浏览器扩展及进程流量需在实际应用确认。',
         ['探测路径和配置一致不证明 Claude 进程全流量经过同一路径。'])
     if mode == 'tun':
+        from .observation_errors import inventory_errors
         network = first('system.inventory').get('network', {})
+        collection_errors = inventory_errors(first('system.inventory'), 'adapters', 'routes')
         adapters = network.get('adapters', [])
         wg_state, wg_row = None, None
         if settings.get('client') == 'wireguard':
@@ -284,8 +286,9 @@ def build_findings(findings, settings):
                           or re.search(r'REJECT|BLACKHOLE', r.get('flags', ''), re.I)] if wg_state == 'healthy' else []
         route_ok = dns_ok and bool(addresses) and addresses <= {r.get('destination') for r in measured} and not mismatched
         route_ok = route_ok and (wg_state == 'healthy' if settings.get('client') == 'wireguard' else True)
-        add('tun_route', '目标地址的 TUN 选路', 'fail' if mismatched else 'pass' if route_ok else 'unknown',
-            '所检查的目标地址经系统选择隧道接口' if route_ok else '目标地址存在非隧道选路' if mismatched else '目标选路证据不完整', routes,
+        route_ok = route_ok and not collection_errors
+        add('tun_route', '目标地址的 TUN 选路', 'unknown' if collection_errors else 'fail' if mismatched else 'pass' if route_ok else 'unknown',
+            '目标选路证据不完整' if collection_errors else '所检查的目标地址经系统选择隧道接口' if route_ok else '目标地址存在非隧道选路' if mismatched else '目标选路证据不完整', routes + ([{'collection_errors': collection_errors}] if collection_errors else []),
             '在所选 WireGuard 隧道核对 AllowedIPs、隧道激活状态与 IPv6 路由，再复检；不会在这里改动私钥。' if settings.get('client') == 'wireguard' else '在代理客户端核对 TUN、自动路由和 IPv6 规则，再重新检测。', ['每个目标及地址族抽样一个解析地址；不等于进程全流量证明。'])
     clock = raw.get('extra.clock', {})
     add('clock', '系统时钟准确性', 'fail' if clock.get('status') == 'warn' else clock.get('status', 'unknown'), clock.get('summary', '尚未取得多个可信连接的日期样本'),

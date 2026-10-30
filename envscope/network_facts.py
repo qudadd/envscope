@@ -12,6 +12,8 @@ import sys
 import tempfile
 import time
 
+from .observation_errors import check_command, error_evidence
+
 HOSTS = ("claude.ai", "api.anthropic.com")
 
 
@@ -29,7 +31,7 @@ def resolve_host(host, resolver=socket.getaddrinfo):
 def parse_mac_route(text, destination):
     values = dict(re.findall(r"^\s*(interface|gateway|destination|mask|flags):\s*([^\n]+)", text, re.M))
     if not values.get("interface") or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", values["interface"].strip()):
-        return {"destination": destination, "error": "route_unavailable"}
+        return {'destination': destination, **error_evidence(ValueError(), 'routes')}
     return {"destination": destination, "interface": values["interface"].strip(),
             "next_hop": values.get("gateway", "").strip(), "flags": values.get("flags", "").strip()}
 
@@ -50,7 +52,11 @@ $items=@(foreach($ip in $ips){
   $source=$best|Where-Object {$_.PSObject.Properties['IPAddress']}|Select-Object -First 1
   if(-not $route){throw 'no route'}
   @{destination=$ip;interface_index=$route.InterfaceIndex;interface=$route.InterfaceAlias;prefix=$route.DestinationPrefix;next_hop=$route.NextHop;source_ip=$source.IPAddress}
- } catch { @{destination=$ip;error='route_unavailable'} }
+ } catch {
+  $denied=($_.Exception -is [System.UnauthorizedAccessException]) -or ([string]$_.CategoryInfo.Category -eq 'PermissionDenied')
+  $missing=($_.Exception -is [System.Management.Automation.CommandNotFoundException])
+  @{destination=$ip;error=$(if($denied){'permission_denied'}elseif($missing){'tool_missing'}else{'unavailable'})}
+ }
 })
 ConvertTo-Json -InputObject $items -Depth 4 -Compress
 """.replace("IP_LIST", json.dumps(addresses))
@@ -59,24 +65,26 @@ ConvertTo-Json -InputObject $items -Depth 4 -Compress
             result = runner(["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=7,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-            value = json.loads(result.stdout) if result.returncode == 0 and len(result.stdout) <= 16384 else None
+            check_command(result, 16384)
+            value = json.loads(result.stdout)
             if not isinstance(value, list):
                 raise ValueError("invalid routes")
             # Never accept a script response for a destination we did not ask for.
-            return [{k: r[k] for k in ("destination", "interface_index", "interface", "prefix", "next_hop", "source_ip", "error") if k in r}
-                    for r in value if isinstance(r, dict) and r.get("destination") in addresses]
-        except (OSError, ValueError, subprocess.TimeoutExpired):
-            return [{"destination": ip, "error": "route_unavailable"} for ip in addresses]
+            rows = [r for r in value if isinstance(r, dict) and r.get('destination') in addresses]
+            if len(rows) != len(addresses) or len({r['destination'] for r in rows}) != len(addresses):
+                raise ValueError('incomplete routes')
+            return [{k: r[k] for k in ('destination', 'interface_index', 'interface', 'prefix', 'next_hop', 'source_ip', 'error') if k in r} for r in rows]
+        except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+            return [{'destination': ip, **error_evidence(exc, 'routes')} for ip in addresses]
     if system == "Darwin":
         def one(ip):
             command = ["/sbin/route", "-n", "get", "-inet6" if ":" in ip else "-inet", ip]
             try:
                 result = runner(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=3)
-                if result.returncode == 0 and len(result.stdout) <= 16384:
-                    return parse_mac_route(result.stdout, ip)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-            return {"destination": ip, "error": "route_unavailable"}
+                check_command(result, 16384)
+                return parse_mac_route(result.stdout, ip)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                return {'destination': ip, **error_evidence(exc, 'routes')}
         with ThreadPoolExecutor(max_workers=4) as pool:
             return list(pool.map(one, addresses))
     return [{"destination": ip, "error": "unsupported_platform"} for ip in addresses]

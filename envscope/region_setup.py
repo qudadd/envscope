@@ -48,7 +48,7 @@ def set_system_value(system, key, value, runner=_run):
             if result.returncode == 0:
                 return
             # Only tzutil is elevated; user culture must remain in the original user's session.
-            script = "$ErrorActionPreference='Stop'; $p=Start-Process -FilePath '" + executable.replace("'", "''") + "' -ArgumentList '/s \"" + value + "\"' -Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode"
+            script = "$ErrorActionPreference='Stop'; try{$p=Start-Process -FilePath '" + executable.replace("'", "''") + "' -ArgumentList '/s \"" + value + "\"' -Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode}catch{$e=$_.Exception;while($e){if($e -is [ComponentModel.Win32Exception]){exit $e.NativeErrorCode};$e=$e.InnerException};exit 1}"
         else:
             script = "$ErrorActionPreference='Stop'; Set-Culture -CultureInfo '" + value.replace('_', '-') + "'"
         encoded = base64.b64encode(script.encode('utf-16-le')).decode('ascii')
@@ -62,7 +62,8 @@ def set_system_value(system, key, value, runner=_run):
     else:
         raise ValueError('此系统不支持自动配置')
     if result.returncode != 0:
-        raise ValueError('系统未允许或未完成修改；请在日期与时间 / 语言与地区设置中手动处理后复检')
+        from .consent import raise_for_consent
+        raise_for_consent(result, system)
 
 
 class NodeController:
@@ -193,7 +194,7 @@ class RegionSetup:
                 changes[key] = selected[key]
                 effects.append(label + '：' + before[key] + ' → ' + selected[key])
         timezone_plan=None
-        if 'timezone' in components and self.system=='Darwin' and self.timezone_service:
+        if 'timezone' in components and self.timezone_service:
             status=self.timezone_service.status()
             if status.get('pending') or status.get('state')=='conflict' or status.get('state')=='attention' and 'installed' not in status:
                 return {'state':'blocked','reason':status.get('reason','先处理系统时区守护状态。')}
@@ -265,8 +266,10 @@ class RegionSetup:
                 receipt['applied'].append(key)
                 self._save_recovery(receipt)
                 steps.append({'item': key, 'state': 'verified', 'reason': '配置已读回；网络出口另行复检'})
-            except (ValueError, OSError, subprocess.TimeoutExpired):
-                steps.append({'item': key, 'state': 'manual', 'reason': '未确认修改完成，后续步骤已停止。按恢复记录核对实际值；权限取消、超时或自动时区覆盖时请在系统 / 代理客户端中处理。'})
+            except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+                from .consent import operation_outcome, MESSAGES
+                outcome = operation_outcome(exc)
+                steps.append({'item': key, 'state': 'manual', **outcome, 'reason': MESSAGES[outcome['error']] + '后续步骤已停止，请按恢复记录核对实际值。'})
                 break
         receipt['state'] = 'completed' if len(receipt['applied']) == len(plan['changes']) else 'partial'
         self._save_recovery(receipt)

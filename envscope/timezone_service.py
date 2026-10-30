@@ -28,6 +28,7 @@ from .region_profiles import profile
 from .region_setup import current_region
 from .remedies import SolutionPlans
 from .target_environment import fingerprint
+from .timezone_heartbeat import heartbeat_current
 
 
 @dataclass(frozen=True)
@@ -64,22 +65,22 @@ def daemon_bytes(layout):
                           'StandardOutPath':'/dev/null','StandardErrorPath':'/dev/null'},sort_keys=True)
 
 
-def bundle_worker(root=None,cache=None,*,component='timezone'):
+def bundle_worker(root=None,cache=None,*,component='timezone',system='Darwin'):
     if component not in ('timezone','network','components'):raise ValueError('不支持的系统辅助程序')
-    binary=component+'-helper';label={'timezone':'时区','network':'网络','components':'组件迁移'}[component]
+    name=component+'-helper';binary=name+('.exe' if system=='Windows' else '');label={'timezone':'时区','network':'网络','components':'组件迁移'}[component]
     root=Path(root) if root is not None else Path(__file__).resolve().parent/'native-runtime'
     try:
-        metadata=root/(binary+'.json')
+        metadata=root/(name+'.json')
         if metadata.stat().st_size>65536:raise ValueError('oversized helper metadata')
         manifest=json.loads(metadata.read_text(encoding='utf-8'))
-        payload=root/(binary+'.payload.zip')
+        payload=root/(name+'.payload.zip')
         if payload.stat().st_size>2*1024**2:raise ValueError('oversized helper payload')
         with zipfile.ZipFile(payload) as archive:
             if archive.namelist()!=[binary] or not 0<archive.getinfo(binary).file_size<=2*1024**2:
                 raise ValueError('invalid helper payload')
             data=archive.read(binary)
     except (OSError,ValueError,zipfile.BadZipFile,RuntimeError):
-        raise ValueError('请使用完整 macOS 独立桌面包，本入口需要随附的原生'+label+'辅助程序。') from None
+        raise ValueError('请使用完整 '+('Windows' if system=='Windows' else 'macOS')+' 独立桌面包，本入口需要随附的原生'+label+'辅助程序。') from None
     if (not isinstance(manifest,dict) or type(manifest.get('format')) is not int or manifest.get('format')!=1
             or manifest.get('fixture') is not False or manifest.get('release')!=__release__
             or not isinstance(manifest.get('sha256'),str) or not SHA.fullmatch(manifest['sha256'])
@@ -444,8 +445,16 @@ class NativeTimezoneIO:
         script=privileged_script(self.layout,script,self.worker())
         apple='do shell script '+json.dumps(script,ensure_ascii=False)+' with administrator privileges without altering line endings'
         result=self.runner(['/usr/bin/osascript','-e',apple],timeout=150)
-        if result.returncode:
-            raise ValueError('系统授权被取消，或时区服务操作未完成。请刷新状态；若有恢复记录，先恢复再重试。')
+        from .consent import raise_for_consent
+        raise_for_consent(result, 'Darwin')
+
+
+def system_timezone_service(store,reader,*,system=None,**kwargs):
+    system=system or platform.system()
+    if system=='Windows':
+        from .timezone_windows import WindowsTimezoneService
+        return WindowsTimezoneService(store,reader,**kwargs)
+    return TimezoneService(store,reader,system=system,**kwargs)
 
 
 class TimezoneService:
@@ -471,11 +480,7 @@ class TimezoneService:
                 state,reason='unregistered','服务文件存在，但系统未确认注册。可预览重新安装。'
             elif heartbeat and (type(heartbeat.get('guard_policy')) is not int or heartbeat.get('guard_policy')!=2):
                 state,reason='outdated','系统时区守护仍使用旧策略，不能确认已监测旧任务冲突；请预览更新并等待新心跳。'
-            elif (type(heartbeat.get('format')) is not int or heartbeat.get('format')!=1
-                  or heartbeat.get('release')!=base.get('release')
-                  or type(heartbeat.get('at_epoch')) not in (int,float) or not 0<=self.io.clock()-heartbeat['at_epoch']<180
-                  or heartbeat.get('target')!=base['target'] or heartbeat.get('fixture') is not self.io.fixture
-                  or heartbeat.get('initial') is not False):
+            elif not heartbeat_current(base,heartbeat,self.io.clock(),fixture=self.io.fixture):
                 state,reason='waiting','尚未收到当前基线的新心跳，请刷新；没有心跳不计为守护正常。'
             elif heartbeat.get('state')=='legacy_conflict':
                 state,reason='conflict','后台检测到旧时区任务重新出现或登记读取失败，已暂停写入。请处理旧任务并复检。'
@@ -486,6 +491,7 @@ class TimezoneService:
             return {'supported':True,'state':state,'reason':reason,'target':base.get('target'),
                     'observed':heartbeat.get('observed'),'heartbeat_at':heartbeat.get('at_epoch'),
                     'installed':bool(base),'registered':value['registered'],'pending':value['pending'],
+                    'intentionally_removed':not base and value.get('transaction',{}).get('owner_uid')==self.uid and (value.get('outcome',{}).get('state')=='rolled_back' or value.get('outcome',{}).get('state')=='committed' and value.get('transaction',{}).get('operation')=='remove'),
                     'original':base.get('original'),'release':base.get('release'),
                     'journal_path':str(self.io.layout.root),'owner':base.get('owner_uid')==self.uid,
                     'can_undo':not value['pending'] and value.get('transaction',{}).get('owner_uid')==self.uid
@@ -550,8 +556,9 @@ class TimezoneService:
         try:
             self.io.execute(plan['script'])
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
+            from .consent import operation_outcome
             return {'state':'partial','status':self.status(),'transaction_nonce':plan['receipt']['nonce'],
-                    'needs_retest':True,'reason':str(exc)[:240]+' 现有备份和日志保留。'}
+                    **operation_outcome(exc),'reason':str(exc)[:240]+' 现有备份和日志保留。'}
         status=self.status()
         completed=(not status.get('installed') and not status.get('registered') and not status.get('pending')
                    if plan['remove'] else status.get('installed') and status.get('registered') and status.get('target')==plan['target'] and not status.get('pending'))
@@ -593,7 +600,8 @@ class TimezoneService:
         del self.plans[token]
         try:self.io.execute(plan['script'])
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
-            return {'state':'partial','reason':str(exc)[:240],'status':self.status(),'needs_retest':True}
+            from .consent import operation_outcome
+            return {'state':'partial','reason':str(exc)[:240],'status':self.status(),**operation_outcome(exc)}
         completed=self._restored(self.io.inspect(),plan['snapshot']['transaction'])
         return {'state':'completed' if completed else 'partial','status':self.status(),'needs_retest':True,
                 'reason':'已恢复原时区及此前的时区守护基线，请复检。' if completed else '撤销后的配置尚未完整读回，请保留恢复记录并复检。'}
@@ -649,7 +657,8 @@ class TimezoneService:
         del self.plans[token]
         try:self.io.execute(plan['script'])
         except (OSError,ValueError,subprocess.SubprocessError) as exc:
-            return {'state':'partial','reason':str(exc)[:240],'status':self.status()}
+            from .consent import operation_outcome
+            return {'state':'partial','reason':str(exc)[:240],'status':self.status(),**operation_outcome(exc)}
         status=self.status()
         completed=self._restored(self.io.inspect(),plan['receipt'])
         return {'state':'completed' if completed else 'partial','needs_retest':True,

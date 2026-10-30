@@ -40,7 +40,11 @@ export function initDesktopApp({run,operate}){
   $('app-update-install').addEventListener('click',()=>action('app-update-install',{version:desktop?.updates?.version}));
   $('app-update-restart').addEventListener('click',()=>action('app-update-restart'));
   $('app-update-rollback').addEventListener('click',()=>action('app-update-rollback'));
-  document.querySelector('[data-page="settings"]').addEventListener('click',()=>{if(desktop?.mode==='native')void run('desktop-status').then(v=>v.desktop&&render(v.desktop)).catch(()=>{});});
+  document.querySelector('[data-page="settings"]').addEventListener('click',()=>{
+    if(desktop?.mode==='native')void operate(async()=>{
+      const value=await run('desktop-status');if(value.desktop)render(value.desktop);
+    },output);
+  });
   document.addEventListener('envscope-catalog',e=>render(e.detail.desktop));
   document.addEventListener('envscope-report',e=>{
     report=e.detail.report;const a=report.assessment;$('qualification').hidden=!a;if(!a)return;
@@ -51,18 +55,4 @@ export function initDesktopApp({run,operate}){
     $('qualification-pending').replaceChildren(...(pending.length?pending.map(i=>{const p=el('p',''),f=report.findings.find(f=>f.id===i.id);p.append(el('strong',(f?.title||i.id)+'：'),document.createTextNode(i.reason+' '+i.next_step));return p;}):[el('p','本次列出的关键使用条件已完成核对。')]));
   });
   document.addEventListener('envscope-audit-start',()=>{report=null;$('qualification').hidden=true;});
-  document.addEventListener('envscope-permission',e=>{
-    if(!report)return;
-    void operate(async()=>{
-      e.detail.button.disabled=true;
-      try{
-        const params={report_id:report.report_id,finding_id:e.detail.id};let v=await run('permission-help',params);
-        if(v.state==='confirmation_required'){
-          if(!window.confirm(v.reason)){e.detail.output.textContent='已取消，未更改权限。';return;}
-          v=await run('permission-help',params,true);
-        }
-        e.detail.output.textContent=v.reason||'完成授权后请重新检测。';
-      }finally{e.detail.button.disabled=false;}
-    },e.detail.output);
-  });
 }

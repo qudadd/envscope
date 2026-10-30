@@ -8,10 +8,16 @@ import {initConnection, disconnected} from "./connection.mjs";
 import {initTargetEnvironment} from './target.mjs';
 import {initWatchdogForms} from './watchdog_ui.mjs';
 import {initCoverage, browserEnvironment} from './coverage.mjs';
+import {initPermissionFlow} from './permission_flow.mjs';
+import {mountIcons} from './icons.mjs';
+import {initWorkspace} from './workspace_ui.mjs';
+
+mountIcons();
+initWorkspace();
 
 const byId=id=>document.getElementById(id);
 const nodes={start:byId("start"),share:byId("share"),checks:byId("checks"),quit:byId("quit")};
-let lastSnapshot=null,lastReport=null;
+let lastSnapshot=null,lastReport=null,lastSource='current',selectionRevision=0;
 const sessionPromise=(async()=>{
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),1500);
   try {
@@ -27,6 +33,10 @@ const sessionPromise=(async()=>{
 })();
 initConnection(sessionPromise);
 initCoverage();
+document.addEventListener('envscope-open-guard',()=>{document.querySelector('[data-page="upkeep"]').click();byId('guard-alert').hidden=true;});
+document.addEventListener('envscope-guard-attention',event=>{byId('guard-alert').hidden=false;byId('guard-alert-message').textContent=event.detail.message;});
+document.addEventListener('envscope-guard-clear',()=>{byId('guard-alert').hidden=true;});
+byId('guard-alert-open').addEventListener('click',()=>document.dispatchEvent(new CustomEvent('envscope-open-guard')));
 const environment={timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"unknown",languages:[...navigator.languages],
   platform:navigator.userAgentData?.platform||navigator.platform||"unknown",automated:navigator.webdriver===true};
 const envRows=[["时区",environment.timezone],["语言",environment.languages.join(" · ")],["运行环境",environment.platform+(environment.automated?" / 自动化会话":"")]];
@@ -83,6 +93,7 @@ function render(snapshot) {
 }
 
 function renderDesktop(report,source='current') {
+  lastSource=source;
   byId("checks-title").hidden=false;
   diagnosisUI.render(report);
   guideUI.render(report);
@@ -95,6 +106,10 @@ initWatchdogForms(diagnosisUI.run);
 initInspection({run:diagnosisUI.run,operate:diagnosisUI.operate,isBusy:diagnosisUI.isBusy,retest:checks=>runAudit({checks})});
 document.addEventListener('envscope-target-changed',()=>{lastReport=null;lastSnapshot=null;nodes.share.disabled=true;byId('qualification').hidden=true;byId('verdict').textContent='目标已更新，等待本轮检测';});
 initDesktopApp({run:diagnosisUI.run,operate:diagnosisUI.operate});
+document.addEventListener('envscope-selection-changed',()=>{selectionRevision++;});
+initPermissionFlow({run:diagnosisUI.run,operate:diagnosisUI.operate,isBusy:()=>diagnosisUI.isBusy()||nodes.start.disabled,
+  recheck:checks=>runAudit({phase:'recheck',checks}),
+  getContext:()=>({report:lastSource==='current'?lastReport:null,revision:selectionRevision})});
 const guideUI=initGuide({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy,operate:diagnosisUI.operate,
   onReport:report=>{lastReport=report;renderDesktop(report);nodes.share.disabled=false;}});
 
@@ -157,10 +172,16 @@ async function runAudit({oneStop=true,phase='check',checks=null}={}){
     }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
     nodes.share.disabled=false;
   } catch {byId("verdict").textContent="检测没有完成";byId("verdict-note").textContent="本地服务或浏览器探测没有返回有效结果。请重新检测；仍失败时重新打开本地程序。缺失观测不会判定为通过。";byId("session-state").textContent="需要重新检测";}
-  finally {nodes.start.disabled=false;for(const id of ['usage','enhance-cli','workflow-proxy','workflow-proxy-url'])byId(id).disabled=diagnosisUI.isBusy();nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");document.dispatchEvent(new CustomEvent('envscope-audit-end',{detail:{has_report:!!lastReport}}));if(!lastReport)setFlowStage(phase==='recheck'?'repair':'check','本次检测未完成，没有据此写入配置。请重新检测。');}
+  finally {nodes.start.disabled=diagnosisUI.isBusy();for(const id of ['usage','enhance-cli','workflow-proxy','workflow-proxy-url'])byId(id).disabled=diagnosisUI.isBusy();nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");document.dispatchEvent(new CustomEvent('envscope-audit-end',{detail:{has_report:!!lastReport}}));if(!lastReport)setFlowStage(phase==='recheck'?'repair':'check','本次检测未完成，没有据此写入配置。请重新检测。');}
   if(oneStop&&lastReport)await diagnosisUI.prepareWorkflow();
+  return lastReport;
 }
-nodes.start.addEventListener("click",()=>{if(!diagnosisUI.isBusy())void runAudit({oneStop:true});});
+let startingAudit=false;
+nodes.start.addEventListener("click",()=>{
+  if(startingAudit||nodes.start.disabled||diagnosisUI.isBusy())return;
+  startingAudit=true;
+  void runAudit({oneStop:true}).finally(()=>{startingAudit=false;});
+});
 
 function download(value,suffix) {
   if(value?.format==='zip'&&typeof value.data==='string'){

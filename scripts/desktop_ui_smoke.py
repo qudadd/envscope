@@ -29,7 +29,9 @@ class DesktopFixture:
 
     def run(self, action, params, confirmed):
         self.calls.append((action, params, confirmed))
-        if action == 'desktop-save':
+        if action == 'desktop-status':
+            time.sleep(0.3)  # A real native read may overlap a quick Save click.
+        elif action == 'desktop-save':
             self.preferences.update(params)
         elif action == 'app-update-check':
             time.sleep(0.2)

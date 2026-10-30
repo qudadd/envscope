@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest.mock import patch
 
 from envscope.state import StateStore
 from envscope import __release__
@@ -15,7 +16,7 @@ from envscope.updates import AppUpdates, API, asset_name
 def main():
     archive = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('dist') / asset_name()
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    tag = 'v99.0.0-alpha.1'  # Synthetic discovery version; not a published release.
+    tag = __release__  # Actual artifact identity; discovery stays entirely offline.
     prefix = 'https://github.com/qudadd/envscope/releases/download/' + tag + '/'
     metadata = [{'tag_name': tag, 'draft': False, 'prerelease': True, 'assets': [
         {'name': archive.name, 'state': 'uploaded', 'size': archive.stat().st_size, 'digest': 'sha256:' + digest, 'browser_download_url': prefix + archive.name},
@@ -34,7 +35,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix='envscope-update-fixture-') as directory:
         store = StateStore(Path(directory) / 'state')
         updater = AppUpdates(store, fixture)
-        assert updater.check()['state'] == 'available'
+        with patch('envscope.updates.RELEASE','v0.0.0-alpha.1'):
+            assert updater.check()['state'] == 'available'
         assert updater.install(tag)['state'] == 'confirmation_required'
         assert updater.install(tag, True)['state'] == 'ready'
         executable = updater.installed()

@@ -7,19 +7,25 @@
   <meta name="referrer" content="no-referrer">
   <title>EnvScope — Claude 使用助手</title>
   <link rel="stylesheet" href="minimal.css">
+  <link rel="stylesheet" href="workspace.css">
+  <link rel="icon" type="image/svg+xml" href="mark.svg">
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
+  <a class="skip-link" href="#workspace">跳到当前页面</a>
   <div class="app-header">
-    <header><a href="./">EnvScope</a><span id="app-version">正在读取版本</span></header>
+    <header><a href="./"><img src="mark.svg" width="32" height="32" alt="">EnvScope</a><span id="app-version">正在读取版本</span></header>
     <nav id="desktop-nav" aria-label="主要功能" hidden>
       <button class="tab" data-page="audit" aria-current="page">检测与修复</button>
-      <details id="more-menu"><summary>更多功能</summary><div class="more-menu-items">
-        <button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="upkeep">守护与高级修复</button><button class="tab" data-page="accounts">账号资料</button><button class="tab" data-page="tools">工具与备份</button><button class="tab" data-page="history">检测历史</button><button class="tab" data-page="settings">设置与更新</button><button class="tab" data-page="coverage">环境全览</button>
+      <button class="tab" data-page="upkeep">持续守护</button><button class="tab" data-page="accounts">账号资料</button>
+      <details id="more-menu"><summary><span id="more-menu-label">更多功能</span></summary><div class="more-menu-items">
+        <button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="tools">工具与备份</button><button class="tab" data-page="history">检测历史</button><button class="tab" data-page="settings">设置与更新</button><button class="tab" data-page="coverage">环境全览</button>
       </div></details>
     </nav>
   </div>
-  <main id="workspace" data-state="ready">
+  <main id="workspace" data-state="ready" tabindex="-1">
+    <section id="guard-alert" class="connection-banner" role="status" hidden><p id="guard-alert-message"></p><button id="guard-alert-open" class="link">打开守护方案</button></section>
+    <section id="permission-status" class="connection-banner" role="status" hidden><p id="permission-message"></p><button id="permission-resume" class="link" hidden>我已处理，继续检测</button><button id="permission-cancel" class="link" hidden>停止自动复检</button></section>
     <section id="connection-banner" class="connection-banner" role="status" hidden><strong id="connection-title">本地服务已断开</strong><p id="connection-message">请重新双击 EnvScope 启动器，并使用它新打开的页面；旧地址可能已经失效。</p><button id="connection-retry" class="link">重新连接本页</button></section>
     <p id="connection-status" class="connection-status" role="status">正在连接本地服务…</p><div id="catalog-error" class="connection-banner" role="status" hidden><p>功能列表暂时无法读取。环境信息仍可单独查看；账号和维护操作请先重新读取列表。</p><button id="catalog-retry" class="link">重新读取功能列表</button></div>
     <div id="page-audit" class="page">
@@ -203,15 +209,15 @@
         <div id="process-guard-plan"></div><div id="process-guard-output" class="solution-output" aria-live="polite"></div>
         <details><summary>进程守护记录</summary><p id="process-guard-journal" class="note"></p><button id="process-guard-logs" class="link">打开守护日志</button><div id="process-guard-events" class="note"></div></details>
       </section>
-      <section class="tool-section" id="timezone-service-panel" hidden><h2>macOS 系统时区守护</h2>
-        <p class="note">首次配置申请系统授权，之后每 60 秒检查批准时区。影响整台 Mac 的所有用户；修复后读回验证，连续失败暂停并保留记录。</p>
+      <section class="tool-section" id="timezone-service-panel" hidden><h2>系统时区守护</h2>
+        <p class="note">首次配置申请系统授权，之后每 60 秒检查批准时区。影响整台电脑的所有用户；修复后读回验证，连续失败暂停并保留记录。</p>
         <h3 id="timezone-service-state">尚未读取</h3><p id="timezone-service-status" class="note" role="status"></p><a class="note" href="https://github.com/qudadd/envscope/blob/main/docs/TIMEZONE_SERVICE.md" target="_blank" rel="noreferrer">权限、旧任务冲突与手动处理说明</a>
         <div class="actions"><button id="timezone-service-prepare">预览安装或更新</button><button id="timezone-service-refresh" class="link">刷新状态</button></div>
         <label class="checkbox"><input id="timezone-service-restore" type="checkbox">移除时恢复安装前的系统时区</label>
         <div class="actions"><button id="timezone-service-stop" class="link" disabled>预览停用并移除</button><button id="timezone-service-recover" hidden>预览恢复未完成操作</button><button id="timezone-service-undo" class="link" hidden>预览撤销上次操作</button></div>
         <div id="timezone-service-plan"></div><div id="timezone-service-output" class="solution-output" aria-live="polite"></div><p id="timezone-service-journal" class="note"></p>
       </section>
-      <section class="tool-section"><h2>维护方案</h2><p class="note">先完成一键检测，再以当前设置生成方案。Windows 使用当前用户计划任务，macOS 使用用户 LaunchAgent。macOS 系统时区守护在上方单独授权；移动应用目录后需重新启用用户巡检。</p>
+      <section class="tool-section"><h2>维护方案</h2><p class="note">先完成一键检测，再以当前设置生成方案。Windows 使用当前用户计划任务，macOS 使用用户 LaunchAgent。系统时区守护需单独授权，可在下方“系统守护与高级修复”中配置；移动应用目录后需重新启用用户巡检。</p>
         <label>复检间隔<select id="upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label>
         <label class="checkbox"><input id="upkeep-restore" type="checkbox">保持已批准的 Code 代理和 TLS 配置</label>
         <label class="checkbox"><input id="upkeep-guard-timezone" type="checkbox">时区漂移时恢复批准值</label>
@@ -222,7 +228,7 @@
         <button id="upkeep-prepare">生成维护方案</button><div id="upkeep-plan"></div><div id="upkeep-output" class="solution-output" aria-live="polite"></div>
       </section>
       <section class="tool-section"><h2>最近事件</h2><p class="note">此处展示最近 20 条；完整事件按日追加到本机日志，不随界面记录轮替删除。先记录漂移与计划动作，再执行、读回和复检。备份仅存本机。</p><p id="upkeep-journal" class="note"></p><button id="upkeep-open-logs" class="link">打开完整日志目录</button><div id="upkeep-events"><p class="note">尚无维护事件。</p></div></section>
-      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、账号登录和系统授权需本人确认。只有单独批准进程守护才会自动停止 Claude。后台不弹出提权对话框、不安装代理、不切换账号；macOS 系统时区守护需先在上方授权，其他维护任务没有写入权限时保留失败记录和手动指引。</p></section>
+      <section class="limits"><h2>仍需你确认的项目</h2><p>浏览器 WebRTC、账号登录和系统授权需本人确认。只有单独批准进程守护才会自动停止 Claude。系统时区守护需先授权，其他维护任务没有写入权限时保留失败记录和手动指引。</p></section>
     </div>
 
     <div id="page-coverage" class="page" hidden>
@@ -266,7 +272,7 @@
         <p class="note">仅经指定代理检测 Claude 网页与 API，区分连接失败、需认证、拒绝访问、限流及服务错误。代理失败不回退直连。</p>
       </section>
       <section class="tool-section" id="environment-tools"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">点击后在下方显示，不会打开额外窗口。设备和浏览器信息用于排障，不推断账号风险。</p><div id="environment-output" class="information-output" role="status" tabindex="-1"><p class="note">选择一项查看；无需先安装维护核心。</p></div></section>
-      <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生提供逐项检查、配置预览与恢复、独立账号资料、加密存档、临时浏览器、托盘和完整软件更新。持续维护提供基线恢复、单独批准的 10 秒进程守护，以及可授权的 Mac 60 秒系统时区守护。</p><p class="note">Clash Verge 置顶路由、Mac 系统时区服务和原版加密 DMG 兼容已原生实现。系统网络修复、客户端适配和旧组件迁移提供原生方案；不支持的操作会保留具体手动指引。</p><p class="note">上游功能核对至 92cd62f；随附源码固定在 870c4ca。各平台实现方式、需手动处理的项目和验收范围见完整核对表。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FULL_PARITY_AUDIT.md" target="_blank" rel="noopener noreferrer">完整功能升级核对表</a></details>
+      <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生提供逐项检查、配置预览与恢复、独立账号资料、加密存档、临时浏览器、托盘和完整软件更新。持续维护提供基线恢复、单独批准的 10 秒进程守护，以及可授权的 Windows / macOS 60 秒系统时区守护。</p><p class="note">Clash Verge 置顶路由、系统时区服务和原版加密 DMG 兼容已原生实现。系统网络修复、客户端适配和旧组件迁移提供原生方案；不支持的操作会保留具体手动指引。</p><p class="note">上游功能核对至 92cd62f；随附源码固定在 870c4ca。各平台实现方式、需手动处理的项目和验收范围见完整核对表。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FULL_PARITY_AUDIT.md" target="_blank" rel="noopener noreferrer">完整功能升级核对表</a></details>
       <section class="tool-section"><h2>配置备份</h2><p class="note">最近 20 份可识别恢复记录，关闭后仍保留。撤销会先停用持续维护，并校验备份和当前文件；后续已有修改时拒绝覆盖。原文位于 ~/.envscope/config-backups，可能含密钥，不可分享。</p><div id="config-backups"></div></section>
       <section class="tool-section"><h2>临时浏览器</h2><p class="note">独立资料，不带入日常 Cookie 或扩展。关闭后清理，应用退出后由独立进程继续检查。</p>
         <div id="param-url" class="parameter"><label>网页地址<input id="safe-url" type="url" value="https://claude.ai/"></label></div>

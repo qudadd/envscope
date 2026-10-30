@@ -73,6 +73,41 @@ class DesktopRuntime:
         self.preferences = {k: saved.get(k, v) if type(saved.get(k, v)) is bool else v for k, v in DEFAULTS.items()}
         self.icon, self.quitting, self.next_executable = None, False, None
         self.ready, self.stopped = threading.Event(), threading.Event()
+        self.guard_attention=None
+        from .guard_notifications import GuardNotifications
+        self.guard_notifications=GuardNotifications(server.store,self.notify_guard)
+
+    def notify_guard(self,value):
+        self.guard_attention=value
+        if self.icon:
+            try:
+                if getattr(self.icon,'HAS_NOTIFICATION',False):self.icon.notify(value['message'],'EnvScope 守护提醒')
+                self.icon.update_menu()
+            except (OSError,RuntimeError,NotImplementedError):pass
+        # Details remain in local records. The fixed event only carries known IDs.
+        try:self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-guard-attention",{detail:'+json.dumps(value,ensure_ascii=True)+'}))')
+        except (OSError,RuntimeError):pass
+
+    def show_guard(self):
+        self.show()
+        self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-open-guard"))')
+
+    def poll_guard(self):
+        operations=getattr(self.server,'operations',None)
+        if operations is None or not self.ready.is_set():return
+        lock=getattr(self.server,'audit_lock',None)
+        if lock is not None and lock.locked():return
+        maintenance=operations.maintenance.status();timezone=operations.timezone_service.status()
+        self.guard_notifications.update(maintenance,timezone)
+        if self.guard_notifications.current and self.guard_attention!=self.guard_notifications.current:
+            # Restore the in-app state after restart without a duplicate toast.
+            self.guard_attention=self.guard_notifications.current
+            self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-guard-attention",{detail:'+json.dumps(self.guard_attention,ensure_ascii=True)+'}))')
+            if self.icon:self.icon.update_menu()
+        if self.guard_attention and not self.guard_notifications.active:
+            self.guard_attention=None
+            self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-guard-clear"))')
+            if self.icon:self.icon.update_menu()
 
     def status(self):
         installed = self.server.store._read("desktop-install.private.json", {})
@@ -156,22 +191,23 @@ class DesktopRuntime:
 
     def background(self):
         # This is update discovery, not implicit diagnostic/maintenance consent.
-        last = None
+        last = None;guard_checked=0
         while not self.stopped.wait(10):
             if self.preferences["check_updates"] and (last is None or time.monotonic() - last > 24 * 3600):
                 self.updates.check(self.preferences["preview_updates"])
                 last = time.monotonic()
                 if self.icon:
                     self.icon.update_menu()
+            if time.monotonic()-guard_checked>=30:
+                try:self.poll_guard()
+                except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):pass
+                guard_checked=time.monotonic()
 
     def start_tray(self):
         import pystray
-        from PIL import Image, ImageDraw
-        image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(image)
-        draw.rounded_rectangle((4, 4, 60, 60), radius=12, fill="white", outline="black", width=3)
-        for rect in ((19, 17, 25, 47), (25, 17, 45, 23), (25, 29, 40, 35), (25, 41, 45, 47)):
-            draw.rectangle(rect, fill="black")
+        from PIL import Image
+        with Image.open(Path(__file__).parent/'web/tray.png') as source:
+            image=source.convert('RGBA')
         def open_settings(icon, item):
             self.show()
             self.window.run_js("document.querySelector('[data-page=\"settings\"]').click()")
@@ -180,6 +216,7 @@ class DesktopRuntime:
             self.ready.set()
         self.icon = pystray.Icon("EnvScope", image, "EnvScope", pystray.Menu(
             pystray.MenuItem("打开 EnvScope", lambda icon, item: self.show(), default=True),
+            pystray.MenuItem(lambda item:'守护需要处理' if self.guard_attention else '查看守护状态',lambda icon,item:self.show_guard()),
             pystray.MenuItem(lambda item: "有新版可用" if self.updates.status()["state"] == "available" else "软件更新与后台设置", open_settings),
             pystray.MenuItem("退出 EnvScope", lambda icon, item: self.quit())))
         self.icon.run_detached(setup=ready)
@@ -227,6 +264,10 @@ def native_main(server):
         except (AccountError,OSError,ValueError):
             pass  # The read-only catalog exposes unreadable records for review.
         url = "http://127.0.0.1:" + str(server.server_port)
+        if platform.system()=='Windows':
+            import ctypes
+            from .app_identity import APP_ID
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
         webview.settings.update(ALLOW_DOWNLOADS=True, ALLOW_FILE_URLS=False, OPEN_EXTERNAL_LINKS_IN_BROWSER=True)
         window = webview.create_window("EnvScope", url, width=1180, height=800, min_size=(960, 640))
         runtime = DesktopRuntime(server, window)

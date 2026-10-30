@@ -7,6 +7,8 @@ const explained={passed:'通过',review:'需要复核',problem:'发现问题',pe
 export function initInspection({run,operate,isBusy,retest}){
   let catalog=[],report=null,phase='not_run',selection=new Set(),visible=[],groups=[],source='current',initialized=false,defaultsKey=null;
   const selected=()=>[...selection];
+  let selectionKey='';
+  const openRows=new Set();
   const output=$('checks-output');
   const button=(text,fn)=>{const b=el('button',text,'link');b.type='button';b.disabled=phase==='running'||isBusy()||$('start').disabled;b.addEventListener('click',fn);return b;};
   const operateHere=fn=>operate(fn,output);
@@ -17,7 +19,7 @@ export function initInspection({run,operate,isBusy,retest}){
     for(const id of ['checks-select-all','checks-clear','checks-select-problems','checks-select-visible','checks-load-nodes','checks-node-group','checks-node','checks-region-undo'])$(id).disabled=blocked;
     for(const node of document.querySelectorAll('#all-checks-list button, #all-checks-list input[type=checkbox], #checks-plan button'))node.disabled=blocked;
   }
-  function invalidate(){$('checks-plan').replaceChildren();$('checks-selected-count').textContent=`已勾选 ${selection.size} 项。所需依赖自动包含；未选项目不算通过。`;updateButtons();}
+  function invalidate(){$('checks-plan').replaceChildren();$('checks-selected-count').textContent=`已勾选 ${selection.size} 项。所需依赖自动包含；未选项目不算通过。`;updateButtons();const key=JSON.stringify([...selection].sort());if(key!==selectionKey){selectionKey=key;document.dispatchEvent(new CustomEvent('envscope-selection-changed'));}}
   const busyObserver=new MutationObserver(updateButtons);
   busyObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-operation-busy']});
   busyObserver.observe($('start'),{attributes:true,attributeFilter:['disabled']});
@@ -85,6 +87,13 @@ export function initInspection({run,operate,isBusy,retest}){
   $('checks-return').addEventListener('click',()=>document.querySelector('.tab[data-page="audit"]')?.click());
   for(const id of ['check-search','check-group','check-status'])$(id).addEventListener(id==='check-search'?'input':'change',render);
   function render(){
+    // A native details toggle event may still be queued when a filter renders.
+    // Capture the live state before replacing rows so the user's click survives.
+    for(const row of $('all-checks-list').querySelectorAll(':scope > details[data-inspection]')){
+      if(row.open)openRows.add(row.dataset.inspection);else openRows.delete(row.dataset.inspection);
+    }
+    const active=document.activeElement,activeRow=active?.closest('[data-inspection]');
+    const focused=activeRow?{id:activeRow.dataset.inspection,index:[...activeRow.querySelectorAll('summary,input,button')].indexOf(active)}:null;
     const found=new Map((report?.findings||[]).map(f=>[f.id,f]));
     const known=new Set(catalog.map(c=>c.id));
     const items=[...catalog,...(report?.findings||[]).filter(f=>!known.has(f.id)).map(f=>({id:f.id,title:f.title,label:f.title,group:f.id.startsWith('target.')?'target':'measurement',why:f.id.startsWith('target.')?'按已确认的用途和连接方式，核对本次证据是否达到目标。':'独立记录测量来源和范围；检测目录与补充测量分别列出。'}))];
@@ -98,8 +107,9 @@ export function initInspection({run,operate,isBusy,retest}){
     $('check-count').textContent=`显示 ${selected.length} / ${rows.length} 项。基础 ${basics} 项，扩展 ${extras} 项，其余为目标验收及补充测量。`;
     const nodes=selected.map(c=>{
       const row=el('details',undefined,'inspection-row');row.dataset.inspection=c.id;
+      row.open=openRows.has(c.id);row.addEventListener('toggle',()=>{if(row.isConnected){if(row.open)openRows.add(c.id);else openRows.delete(c.id);}});
       row.dataset.manual=String(!!c.remedy?.manual);
-      const summary=el('summary'),name=el('span',undefined,'inspection-name'),state=el('span',undefined,'inspection-state'),disclosure=el('small','查看说明');
+      const summary=el('summary'),name=el('span',undefined,'inspection-name'),state=el('span',undefined,'inspection-state'),disclosure=el('small',row.open?'收起说明':'查看说明');
       const label=el('label',undefined,'inspection-select'),checkbox=el('input');checkbox.type='checkbox';checkbox.checked=selection.has(c.id);checkbox.setAttribute('aria-label','选择 '+c.label);checkbox.disabled=phase==='running';
       label.append(checkbox);label.addEventListener('click',event=>event.stopPropagation());checkbox.addEventListener('change',()=>{if(checkbox.checked)selection.add(c.id);else selection.delete(c.id);invalidate();});summary.append(label);
       const statusText=c.finding?.scope==='not-selected'?'未勾选 · 未检测':c.remedy?.manual?(c.annotation?.state==='permission'?'需要读取权限 · 需手动处理':'需手动处理'):explained[c.annotation?.state]||states[c.status]||'未取得结果';
@@ -122,6 +132,7 @@ export function initInspection({run,operate,isBusy,retest}){
     });
     $('all-checks-list').replaceChildren(...(nodes.length?nodes:[el('p',catalog.length?'没有符合条件的项目，试试清除搜索或切换筛选。':'检查目录尚未取得，请检查本地服务连接。','note')]));
     updateButtons();
+    if(focused){const row=nodes.find(n=>n.dataset.inspection===focused.id);row?.querySelectorAll('summary,input,button')[focused.index]?.focus({preventScroll:true});}
   }
   const applyDefaults=config=>{
     if(!config)return false;

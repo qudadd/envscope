@@ -151,9 +151,9 @@ class Operations:
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
-        from .timezone_service import TimezoneService
+        from .timezone_service import system_timezone_service
         from .inventory import collect
-        self.timezone_service = TimezoneService(store,lambda:(self.environment_reader or collect)())
+        self.timezone_service = system_timezone_service(store,lambda:(self.environment_reader or collect)())
         self.maintenance.timezone_service=self.timezone_service
         from .process_guard import ProcessGuard
         self.process_guard = process_guard or ProcessGuard(store, self.home)
@@ -604,6 +604,8 @@ class Operations:
             desktop = getattr(self, "desktop_runtime", None)
             return desktop.run(action, params, confirmed) if desktop else {"state": "unavailable", "reason": "此功能需要打开 EnvScope 独立软件。当前是浏览器兼容界面。"}
         if action == "permission-help":
+            if report and report.get('environment', {}).get('confirmed') and report['environment'].get('fingerprint') != fingerprint(self.store.settings()):
+                return {'state': 'retest_required', 'reason': '目标已改变，请先按当前目标重新检测。'}
             from .permissions import permission_help
             return permission_help(report, params, self.home, self.accounts.data_dir, confirmed)
         native_parameters = {"account-label": {"slot", "label"}, "account-switch": {"slot", "allow_force"},

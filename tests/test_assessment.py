@@ -35,7 +35,8 @@ class AssessmentTests(unittest.TestCase):
         self.assertNotEqual(rows['extra.config']['state'], 'permission')
         runner = Mock()
         params = {'report_id': 'fixture', 'finding_id': 'extra.hosts'}
-        self.assertEqual(permission_help(report, params, Path('/home'), Path('/profile'), runner=runner)['state'], 'confirmation_required')
+        self.assertEqual(permission_help(report, params, Path('/home'), Path('/profile'), runner=runner, system='Windows')['state'], 'confirmation_required')
+        self.assertEqual(permission_help(report, params, Path('/home'), Path('/profile'), runner=runner, system='Darwin')['state'], 'manual')
         runner.assert_not_called()
         result = permission_help(report, params, Path('/home'), Path('/profile'), True, runner, 'Windows')
         self.assertEqual(result['state'], 'opened')

@@ -273,14 +273,10 @@ class WindowsNetworkIO:
                       "$options=@{FilePath="+quote(self.executable)+";ArgumentList=@('-NoProfile','-NonInteractive','-EncodedCommand',$code);WindowStyle='Hidden';Wait=$true;PassThru=$true};"
                       "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent());"
                       "if(-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){$options.Verb='RunAs'};"
-                      "$process=Start-Process @options;exit $process.ExitCode")
+                      "try{$process=Start-Process @options;exit $process.ExitCode}catch{"
+                      "$e=$_.Exception;while($e){if($e -is [ComponentModel.Win32Exception]){exit $e.NativeErrorCode};$e=$e.InnerException};exit 1}")
             result=self.runner([self.executable,'-NoProfile','-NonInteractive','-Command',launcher],input=encoded.encode(),
                                capture_output=True,timeout=150,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
             if result.returncode:
-                detail=''
-                try:
-                    failure=self._read('failure');code=failure.get('code','')
-                    if failure.get('data_sha')==hashlib.sha256(data).hexdigest() and isinstance(code,str) and len(code)<=160:
-                        detail=' 记录代码：'+code
-                except (OSError,ValueError):pass
-                raise ValueError('系统授权取消或网络修改未确认完成，请刷新恢复记录；没有按命令返回判定修复成功。'+detail)
+                from .consent import raise_for_consent
+                raise_for_consent(result, 'Windows')

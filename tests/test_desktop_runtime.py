@@ -15,6 +15,7 @@ from envscope.desktop_runtime import DesktopRuntime, SingleInstance
 from envscope import __version__
 from envscope.updates import AppUpdates, API, RELEASE, allowed_url, asset_name, safe_extract, version
 from envscope.state import StateStore
+from envscope.app_identity import build_identity
 
 
 class UpdateTests(unittest.TestCase):
@@ -25,13 +26,18 @@ class UpdateTests(unittest.TestCase):
         major, minor, _ = version(RELEASE)[:3]
         self.future_base = f'v{major}.{minor+1}.0'
         self.tag = self.future_base + '-alpha.1'
-        self.data = self.archive({'EnvScope/EnvScope.exe': b'MZ-TEST-NOT-EXECUTABLE', 'EnvScope/data.txt': b'test'})
-        self.size = len(self.data)
-        self.digest = hashlib.sha256(self.data).hexdigest()
-        self.checksum = self.digest
+        self.refresh_package()
         self.release = self.metadata()
         self.calls = []
         self.updates = AppUpdates(self.store, self.fetch, 'Windows', 'AMD64')
+
+    def refresh_package(self,change=None):
+        identity={**build_identity('Windows'),'release':self.tag,'version':self.tag[1:].split('-')[0],'build_version':self.tag[1:].split('-')[0],**(change or {})}
+        self.data = self.archive({'EnvScope/EnvScope.exe': b'MZ-TEST-NOT-EXECUTABLE', 'EnvScope/data.txt': b'test',
+                                 'EnvScope/build-identity.json':json.dumps(identity).encode()})
+        self.size = len(self.data)
+        self.digest = hashlib.sha256(self.data).hexdigest()
+        self.checksum = self.digest
 
     def archive(self, values):
         out = io.BytesIO()
@@ -71,6 +77,7 @@ class UpdateTests(unittest.TestCase):
         first = self.updates.installed()
         self.assertEqual(first.read_bytes(), b'MZ-TEST-NOT-EXECUTABLE')
         self.tag = self.future_base + '-alpha.2'
+        self.refresh_package()
         self.release = self.metadata()
         self.updates.check()
         self.updates.install(self.tag, True)
@@ -86,6 +93,13 @@ class UpdateTests(unittest.TestCase):
             self.updates.install(self.tag, True)
         self.assertIsNone(self.updates.installed())
         self.assertFalse(list((self.store.root / 'updates/versions').iterdir()))
+
+    def test_archive_hash_cannot_substitute_for_package_identity(self):
+        self.refresh_package({'app_id':'another.application'})
+        self.release=self.metadata();self.updates.check()
+        with self.assertRaises(ValueError):self.updates.install(self.tag,True)
+        self.assertIsNone(self.updates.installed())
+        self.assertFalse(list((self.store.root/'updates/versions').iterdir()))
 
     def test_corrupt_archive_and_traversal_are_rejected(self):
         self.updates.check()
@@ -168,6 +182,17 @@ class LifecycleTests(unittest.TestCase):
         self.window = Mock()
         self.server = SimpleNamespace(store=self.store, audit_lock=threading.Lock())
         self.runtime = DesktopRuntime(self.server, self.window)
+
+    def test_guard_failure_survives_restart_without_repeating_os_notification(self):
+        self.server.operations=SimpleNamespace(maintenance=Mock(),timezone_service=Mock())
+        self.server.operations.maintenance.status.return_value={'enabled':True,'watchdog':{'proxy':{'state':'attention'}}}
+        self.server.operations.timezone_service.status.return_value={'state':'not_installed'}
+        self.runtime.icon=Mock();self.runtime.ready.set();self.runtime.poll_guard()
+        self.runtime.icon.notify.assert_called_once()
+        again=DesktopRuntime(self.server,self.window);again.icon=Mock();again.ready.set();again.poll_guard()
+        again.icon.notify.assert_not_called()
+        self.assertEqual(again.guard_attention['components'],['proxy'])
+        self.assertIn('envscope-guard-attention',self.window.run_js.call_args.args[0])
 
     def test_close_hides_only_with_a_working_tray(self):
         self.assertTrue(self.runtime.closing())

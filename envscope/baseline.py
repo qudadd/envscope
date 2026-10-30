@@ -11,6 +11,7 @@ from pathlib import Path
 from .model import Finding, Status
 from .policy import normalize_ip
 from .transport import response_evidence
+from .observation_errors import inventory_errors
 
 DOMAINS = ("claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com", "challenges.cloudflare.com",
            "datadoghq.com", "segment.io", "stripe.com", "stripe.network", "stripecdn.com",
@@ -34,8 +35,9 @@ def proxy_runtime(inventory, preferences):
     names = {"clash-verge": ("mihomo", "verge-mihomo"), "flclash": ("flclashcore",), "sing-box": ("sing-box",), "shadowrocket": ("shadowrocket",),
              "clashx": ("clashx",), "surge": ("surge",)}
     matches = clients if expected == "auto" else [c for c in clients if str(c).lower() in names.get(expected, ())]
-    return baseline_finding("proxy", "代理客户端", Status.PASS if matches else Status.UNKNOWN,
-                            "已发现所选代理客户端进程" if matches else "未确认所选代理客户端进程", [{"clients": clients}],
+    errors = inventory_errors(inventory, 'known_clients')
+    return baseline_finding("proxy", "代理客户端", Status.PASS if matches and not errors else Status.UNKNOWN,
+                            '进程信息读取不完整' if errors else "已发现所选代理客户端进程" if matches else "未确认所选代理客户端进程", [{"clients": clients, 'collection_errors': errors}],
                             ["进程存在不等于流量已接管。"])
 
 
@@ -47,8 +49,9 @@ def tunnel(inventory):
         up = adapter.get("Status") == "Up" or "UP" in adapter.get("flags", [])
         if up and re.search(r"TUN|TAP|Wintun|WireGuard|VPN|Tailscale|utun", description, re.I):
             candidates.append({"name": adapter.get("Name", adapter.get("name")), "active": True})
-    return baseline_finding("tun", "TUN 网卡", Status.PASS if candidates else Status.UNKNOWN,
-                            "发现启用的隧道网卡" if candidates else "未确认启用的隧道网卡", candidates,
+    errors = inventory_errors(inventory, 'adapters')
+    return baseline_finding("tun", "TUN 网卡", Status.PASS if candidates and not errors else Status.UNKNOWN,
+                            '网卡信息读取不完整' if errors else "发现启用的隧道网卡" if candidates else "未确认启用的隧道网卡", candidates + ([{'collection_errors': errors}] if errors else []),
                             ["这是网卡状态，目标流量关联另行显示。"])
 
 
@@ -236,23 +239,28 @@ def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences,
     timezone = inventory.get("network", {}).get("timezone_id") or inventory.get("timezone_iana")
     locale = inventory.get("locale")
     def setting(name, title, actual, expected):
+        errors = inventory_errors(inventory, name) if name in ('timezone', 'locale', 'language') else {}
         equal = str(actual).replace("_", "-").lower() == str(expected).replace("_", "-").lower()
-        state = Status.PASS if expected and equal else Status.WARN if not expected else Status.UNKNOWN if not actual else Status.FAIL
-        return baseline_finding(name, title, state, "符合设置的目标" if state == Status.PASS else "未设置比较目标，仅展示当前信息" if not expected else "当前信息与目标不同" if actual else "未取得当前信息",
-                                [{"actual": actual, "expected": expected}], ["地区和语言差异不代表账号风险。"])
+        state = Status.UNKNOWN if errors else Status.PASS if expected and equal else Status.WARN if not expected else Status.UNKNOWN if not actual else Status.FAIL
+        return baseline_finding(name, title, state, '当前信息读取不完整' if errors else "符合设置的目标" if state == Status.PASS else "未设置比较目标，仅展示当前信息" if not expected else "当前信息与目标不同" if actual else "未取得当前信息",
+                                [{"actual": actual, "expected": expected, 'collection_errors': errors}], ["地区和语言差异不代表账号风险。"])
     network = inventory.get("network", {})
     bindings = network.get("ipv6_bindings", [])
     services = network.get("ipv6_services", [])
+    ipv6_errors = inventory_errors(inventory, 'ipv6_bindings', 'ipv6_services', 'adapters')
     disabled = (bool(bindings) and all(b.get("Enabled") is False for b in bindings)
                 or bool(services) and all(s.get("ipv6_off") is True for s in services))
     valid_v6 = [o for o in v6 if o.get("ip") and ":" in o["ip"]]
     allowed = [ipaddress.ip_network(n) for n in preferences.get("allowed_ipv6", [])]
     policy_matches = bool(valid_v6 and allowed) and all(any(normalize_ip(o["ip"]) in n for n in allowed) for o in valid_v6)
-    ipv6_status = Status.PASS if disabled or policy_matches else Status.UNKNOWN if not valid_v6 else Status.WARN
+    disabled = disabled and not ipv6_errors
+    ipv6_status = Status.PASS if disabled or policy_matches else Status.UNKNOWN if ipv6_errors or not valid_v6 else Status.WARN
+    dns_errors = inventory_errors(inventory, 'dns')
+    dns_ok = bool(network.get('dns')) and not dns_errors
     language = inventory.get("client_language", {})
     language_result = (setting("language", "客户端语言", language.get("value"), preferences.get("language") if preferences.get('environment_confirmed') else preferences.get("locale"))
                        if language.get("source") == "application-preference" else baseline_finding("language", "客户端语言", Status.UNKNOWN,
-                       "未取得客户端专用语言设置", [{"system_ui_language": language.get("value")}], ["系统语言不能代替 Claude 的实际语言偏好。分享时可不包含此项。 "]))
+                       "未取得客户端专用语言设置", [{"system_ui_language": language.get("value"), 'collection_errors': inventory_errors(inventory, 'language'), **({'error': language['error']} if language.get('error') else {})}], ["系统语言不能代替 Claude 的实际语言偏好。分享时可不包含此项。 "]))
     rtc_states = {udp_result.status, browser_result.status}
     rtc_status = (Status.FAIL if Status.FAIL in rtc_states else Status.UNKNOWN if rtc_states & {Status.UNKNOWN, Status.SKIPPED}
                   else Status.WARN if Status.WARN in rtc_states else Status.PASS)
@@ -260,9 +268,9 @@ def collect_baseline(inventory, v4, v6, udp_result, browser_result, preferences,
                 baseline_finding("ip_stability", "出口变化", Status.UNKNOWN, "在历史记录中比较检测前后的出口集合", limitations=["历史使用私有 HMAC，不公开原始地址。"]),
                 setting("timezone", "时区", timezone, preferences.get("timezone")),
                 setting("locale", "地区格式", locale, preferences.get("locale")),
-                baseline_finding("ipv6", "IPv6 配置", ipv6_status, "系统报告已关闭已检查接口的 IPv6" if disabled else "有效观测符合指定 IPv6 范围" if policy_matches else "IPv6 是否符合预期需结合实际出口复核", [{"checked_interfaces_disabled": disabled}], ["IPv6 启用本身不构成泄漏；无响应也不是已关闭证明。"]),
-                baseline_finding("dns", "DNS 配置", Status.PASS if network.get("dns") else Status.UNKNOWN,
-                                 "已读取系统 DNS 配置" if network.get("dns") else "未取得 DNS 配置", [{"configured": bool(network.get("dns"))}], ["实际 DNS 出口由独立检查判断，配置存在不证明无泄漏。"]),
+                baseline_finding("ipv6", "IPv6 配置", ipv6_status, "系统报告已关闭已检查接口的 IPv6" if disabled else "有效观测符合指定 IPv6 范围" if policy_matches else "IPv6 是否符合预期需结合实际出口复核", [{"checked_interfaces_disabled": disabled, 'collection_errors': ipv6_errors}], ["IPv6 启用本身不构成泄漏；无响应也不是已关闭证明。"]),
+                baseline_finding("dns", "DNS 配置", Status.PASS if dns_ok else Status.UNKNOWN,
+                                 "已读取系统 DNS 配置" if dns_ok else "未取得完整 DNS 配置", [{"configured": bool(network.get("dns")), 'collection_errors': dns_errors}], ["实际 DNS 出口由独立检查判断，配置存在不证明无泄漏。"]),
                 baseline_finding("webrtc", "UDP / WebRTC", rtc_status, "系统 UDP 与浏览器 ICE 分别比较完成" if rtc_status == Status.PASS else "系统 UDP 与浏览器 ICE 需分别查看测量细项",
                                  [{"native_udp": udp_result.status.value, "browser_ice": browser_result.status.value}],
                                  ["两种探测不互相替代；无响应不能证明没有旁路。"]),

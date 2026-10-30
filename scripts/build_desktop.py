@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from envscope.app_identity import APP_ID
+from .package_identity import windows_version_file, write_identity
 
 
 def main():
@@ -29,6 +31,16 @@ def main():
                "--distpath", str(root / "dist" / "desktop"), "--workpath", str(root / "build" / "desktop"),
                "--specpath", str(root / "build"), str(root / "scripts" / "desktop_entry.py")]
     environment = dict(os.environ)
+    command.extend(['--icon',str(root/'envscope/web'/('app.icns' if platform.system()=='Darwin' else 'app.ico'))])
+    if platform.system()=='Darwin':command.extend(['--osx-bundle-identifier',APP_ID])
+    if platform.system() == 'Windows':
+        command.extend(['--version-file',str(windows_version_file(root/'build/windows-version.txt'))])
+        from .build_windows_timezone import build as build_windows_timezone
+        native=build_windows_timezone();name='timezone-helper'
+        with zipfile.ZipFile(native/(name+'.payload.zip'),'w',zipfile.ZIP_DEFLATED) as archive:
+            archive.write(native/(name+'.exe'),name+'.exe')
+        for file in (name+'.payload.zip',name+'.json'):
+            command.extend(['--add-data',str(native/file)+os.pathsep+'envscope/native-runtime'])
     if platform.system() == 'Darwin':
         from .build_timezone_worker import build
         for component in ('timezone','network','components'):
@@ -42,15 +54,16 @@ def main():
     environment["PYINSTALLER_CONFIG_DIR"] = str(root / "build" / "pyinstaller-cache")
     subprocess.run(command, cwd=root, check=True, env=environment)
     app = root / "dist" / "desktop" / ("EnvScope.app" if platform.system() == "Darwin" else "EnvScope")
-    if platform.system() == 'Darwin':
-        for component in ('timezone','network','components'):
+    if platform.system() in ('Darwin','Windows'):
+        for component in (('timezone','network','components') if platform.system()=='Darwin' else ('timezone',)):
             name=component+'-helper';manifests=list(app.rglob(name+'.json'))
+            binary=name+('.exe' if platform.system()=='Windows' else '')
             assert manifests, 'Native '+component+' helper missing'
             for metadata in manifests:
                 expected = json.loads(metadata.read_text())
                 with zipfile.ZipFile(metadata.with_name(name+'.payload.zip')) as archive:
-                    assert archive.namelist()==[name]
-                    payload=archive.read(name)
+                    assert archive.namelist()==[binary]
+                    payload=archive.read(binary)
                 assert hashlib.sha256(payload).hexdigest()==expected['sha256'], 'Frozen '+component+' helper bytes changed'
                 assert expected['fixture'] is False, 'Acceptance helper must never ship'
     manifests = list(app.rglob("VENDOR_MANIFEST.json"))
@@ -91,6 +104,7 @@ def main():
                 shutil.copy2(dependency.locate_file(file), dest)
     architecture = {"amd64": "x64", "x86_64": "x64", "arm64": "arm64"}.get(platform.machine().lower(), platform.machine().lower())
     archive = root / "dist" / ("EnvScope-" + ("macOS-" if platform.system() == "Darwin" else "Windows-") + architecture + ".zip")
+    write_identity(app,platform.system())
     if platform.system() == "Darwin":
         subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
         subprocess.run(["/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(archive)], check=True)

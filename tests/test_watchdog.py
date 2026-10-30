@@ -11,21 +11,63 @@ from envscope.state import StateStore
 from envscope.accounts import AccountManager, AccountError
 from tests.test_maintenance import FakeScheduler
 from scripts.environment_fixtures import report, target
+from envscope import __release__
 
 
 class WatchdogTests(unittest.TestCase):
+    def test_windows_missing_write_privilege_cannot_approve_automatic_guard(self):
+        guard=Watchdog(system='Windows',reader=lambda:self.inventory,writer=Mock(),
+                       capability_reader=lambda:{'timezone':{'state':'authorization_required'}})
+        from envscope.region_profiles import profiles
+        selected=next(p for p in profiles('Windows') if p['timezone']=='Eastern Standard Time' and p['locale']=='en-US')
+        settings=target('Windows',region_profile=selected['id'],timezone=selected['timezone'],locale=selected['locale'],country=selected['country'])
+        with self.assertRaisesRegex(ValueError,'授权'):
+            guard.prepare(settings,{'timezone':True})
+        self.assertEqual(guard.options()['capabilities']['timezone']['state'],'authorization_required')
+
+    def test_revoked_windows_privilege_is_detected_even_before_drift(self):
+        writer=Mock()
+        guard=Watchdog(system='Windows',reader=lambda:self.inventory,writer=writer,
+                       capability_reader=lambda:{'timezone':{'state':'authorization_required'}})
+        stats={}
+        guard.run({'timezone':'Eastern Standard Time'},stats,lambda *a,**k:None,lambda:None)
+        self.assertEqual(stats['watchdog']['timezone']['state'],'attention')
+        writer.assert_not_called()
+
     def test_authorized_mac_service_owns_timezone_repairs_without_duplicate_writes(self):
         from datetime import datetime,timezone
         now=datetime.now(timezone.utc).timestamp()
         writer=Mock()
-        authority=lambda:{'registered':True,'pending':False,'baseline':{'target':'America/New_York'},
-                          'status':{'at_epoch':now,'state':'healthy','initial':False}}
+        authority=lambda:{'registered':True,'pending':False,'baseline':{'target':'America/New_York','release':__release__},
+                          'status':{'format':1,'guard_policy':2,'target':'America/New_York','release':__release__,
+                                    'fixture':False,'at_epoch':now,'state':'healthy','initial':False}}
         guard=Watchdog(system='Darwin',reader=lambda:{'timezone_iana':'Asia/Shanghai'},writer=writer,authority=authority)
         stats={};events=[]
         self.assertFalse(guard.run({'timezone':'America/New_York'},stats,lambda *a,**k:events.append(a),lambda:None))
         self.assertEqual(stats['watchdog']['timezone']['state'],'delegated')
         self.assertEqual(stats['watchdog']['timezone']['attempts'],[])
         writer.assert_not_called()
+    def test_mismatched_native_heartbeat_never_claims_healthy_or_delegated(self):
+        now=datetime.now(timezone.utc).timestamp()
+        valid={'format':1,'guard_policy':2,'target':'America/New_York','release':__release__,
+               'fixture':False,'at_epoch':now,'state':'healthy','initial':False}
+        for mismatch in ({'target':'UTC'},{'release':'v0.1.0'},{'guard_policy':1},{'format':True},{'fixture':True}):
+            for observed in ('America/New_York','Asia/Shanghai'):
+                with self.subTest(mismatch=mismatch,observed=observed):
+                    writer=Mock();value={'registered':True,'pending':False,'baseline':{'target':'America/New_York','release':__release__},'status':valid|mismatch}
+                    guard=Watchdog(system='Darwin',reader=lambda:{'timezone_iana':observed},writer=writer,authority=lambda:value)
+                    stats={};guard.run({'timezone':'America/New_York'},stats,lambda *a,**k:None,lambda:None)
+                    self.assertEqual(stats['watchdog']['timezone']['state'],'attention');writer.assert_not_called()
+
+    def test_valid_cooldown_remains_delegated_but_old_release_is_attention(self):
+        now=datetime.now(timezone.utc).timestamp()
+        for release,expected in ((__release__,'delegated'),('v0.1.0','attention')):
+            value={'registered':True,'pending':False,'baseline':{'target':'America/New_York','release':release},
+                   'status':{'format':1,'guard_policy':2,'target':'America/New_York','release':release,
+                             'fixture':False,'at_epoch':now,'state':'cooldown','initial':False}}
+            writer=Mock();guard=Watchdog(system='Darwin',reader=lambda:{'timezone_iana':'Asia/Shanghai'},writer=writer,authority=lambda:value)
+            stats={};guard.run({'timezone':'America/New_York'},stats,lambda *a,**k:None,lambda:None)
+            self.assertEqual(stats['watchdog']['timezone']['state'],expected);writer.assert_not_called()
     def test_mac_guard_never_competes_with_changed_pending_or_unknown_root_baseline(self):
         states=[{'registered':True,'baseline':{'target':'Europe/London'}},
                 {'registered':False,'pending':True},{'registered':False,'legacy_registered':True},ValueError('unreadable')]

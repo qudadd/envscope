@@ -81,13 +81,17 @@ def main():
                         expect(page.locator('#audit-content')).to_be_visible()
                         expect(page.locator('#learning-panel')).to_be_visible()
                         expect(page.locator('#audit-results')).to_be_hidden()
-                        assert page.locator('#desktop-nav .tab:visible').count() == 1
+                        assert page.locator('#desktop-nav .tab:visible').count() == 3
                         expect(page.locator('#target-confirm')).to_be_enabled()
                         assert page.locator('#target-country option').count() > 240
                         page.screenshot(path=str(out / f'{system}-{width}-initial.png'), full_page=True)
                         page.locator('#learning-skip').click()
                         page.locator('[name=usage_country]').fill('US')
-                        expect(page.locator('#target-region-profile')).to_have_value('us-new-york')
+                        try:
+                            expect(page.locator('#target-region-profile')).to_have_value('us-new-york')
+                        except AssertionError:
+                            print({'location':page.locator('#target-ip-status').inner_text(), 'requests':requests[-5:]},flush=True)
+                            raise
                         open_details(page, '#target-connection-options')
                         page.locator('#target-form [name=usage]').select_option('cli')
                         page.locator('#target-form [name=connection_mode]').select_option('direct')

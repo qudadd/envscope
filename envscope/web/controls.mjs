@@ -24,15 +24,19 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
   const session=await sessionPromise;if(!session)return;
   $("desktop-nav").hidden=false;
   let catalog=null,busy=false,lastReportId=null,statusRevision=0,statusPending=false;
+  let currentPage='audit';const scrollPositions=new Map();
   document.addEventListener('envscope-audit-start',()=>{statusRevision++;});
   document.addEventListener('envscope-operation-state',event=>{if(event.detail.busy)statusRevision++;});
   function page(name){
+    if(name!==currentPage)scrollPositions.set(currentPage,window.scrollY);
     for(const n of document.querySelectorAll(".page"))n.hidden=n.id!=="page-"+name;
     for(const n of document.querySelectorAll(".tab")){if(n.dataset.page===name)n.setAttribute("aria-current","page");else n.removeAttribute("aria-current");}
-    window.scrollTo(0,0);
     $('more-menu').open=false;
-    $('more-menu').querySelector('summary').textContent=name==='audit'?'更多功能':document.querySelector(`.tab[data-page="${name}"]`)?.textContent||'更多功能';
+    const selected=document.querySelector(`.tab[data-page="${name}"]`);
+    $('more-menu-label').textContent=selected?.closest('#more-menu')?selected.textContent:'更多功能';
     const heading=$('page-'+name)?.querySelector('h1');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
+    currentPage=name;document.title=(selected?.textContent||'环境检查')+' · EnvScope';
+    window.scrollTo(0,scrollPositions.get(name)||0);
   }
   document.addEventListener('click',event=>{if(!$('more-menu').contains(event.target))$('more-menu').open=false;});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('more-menu').open){$('more-menu').open=false;$('more-menu').querySelector('summary').focus();}});
