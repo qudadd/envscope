@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from playwright.sync_api import expect, sync_playwright
 from envscope.legacy import LegacyBridge
@@ -34,8 +34,11 @@ def main():
                         'timezone_id': 'China Standard Time' if system == 'Windows' else 'Asia/Shanghai'}}
                     writes, errors, requests = [], [], []
                     fault = [None]
+                    deny_write = [False]
 
                     def writer(key, value):
+                        if deny_write[0]:
+                            raise PermissionError('fixture: permission denied')
                         writes.append((key, value))
                         if key == 'timezone':
                             inventory['network']['timezone_id'] = value
@@ -98,18 +101,99 @@ def main():
                         expect(page.locator('#flow-upkeep')).to_be_visible()
                         expect(page.locator('#more-results')).not_to_have_attribute('open', '')
                         page.screenshot(path=str(out / f'{system}-{width}-problems.png'), full_page=True)
+                        # A problem's recheck must replace the consumed preview with a
+                        # fresh plan, including region fixes outside legacy repair_count.
+                        first_plan = next(r for r in reversed(requests) if r['action'] == 'inspection-plan')
+                        timezone_issue = page.locator('#problems>details').filter(has_text='系统时区与您设置的目标不同')
+                        timezone_issue.locator('summary').click()
+                        timezone_issue.get_by_role('button', name='重新检测', exact=True).click()
+                        expect(page.locator('#apply-solution')).to_be_visible(timeout=30000)
+                        expect(page.locator('#prepare-solution')).to_be_visible()
+                        next_plan = next(r for r in reversed(requests) if r['action'] == 'inspection-plan')
+                        assert next_plan['params']['report_id'] != first_plan['params']['report_id']
+                        assert not writes, 'rechecking must never apply a plan'
+                        # Expired approval cannot write, and must leave a working way
+                        # to generate another reviewed plan.
+                        for plan in ops.inspection_plans.values():
+                            plan['deadline'] = 0
+                        page.locator('#apply-solution').click()
+                        expect(page.locator('#solution-result')).to_contain_text('方案已失效')
+                        expect(page.locator('#prepare-solution')).to_be_enabled()
+                        assert not writes
+                        # Inject a transport error only at the read-only plan boundary.
+                        def fail_preview(route):
+                            if route.request.post_data_json.get('action') == 'inspection-plan':
+                                route.fulfill(status=503, json={'error': '模拟：方案服务暂时不可用'})
+                            else:
+                                route.continue_()
+                        page.route('**/api/action', fail_preview)
+                        page.locator('#prepare-solution').click()
+                        expect(page.locator('#solution-output')).to_contain_text('暂时不可用')
+                        expect(page.locator('#apply-solution')).to_have_count(0)
+                        expect(page.locator('#prepare-solution')).to_be_enabled()
+                        page.unroute('**/api/action', fail_preview)
+                        page.locator('#prepare-solution').click()
+                        expect(page.locator('#apply-solution')).to_be_enabled()
+                        assert not writes
+                        def waiting_install(route):
+                            if route.request.post_data_json.get('action') == 'inspection-apply':
+                                route.fulfill(json={'state': 'waiting_install', 'reason': '模拟安装：完成后继续复检'})
+                            else:
+                                route.continue_()
+                        page.route('**/api/action', waiting_install)
+                        page.locator('#apply-solution').click()
+                        expect(page.get_by_role('button', name='安装完成，继续复检', exact=True)).to_be_enabled()
+                        assert not writes
+                        page.unroute('**/api/action', waiting_install)
+                        page.get_by_role('button', name='安装完成，继续复检', exact=True).click()
+                        expect(page.locator('#apply-solution')).to_be_enabled(timeout=30000)
+                        expect(page.locator('#solution-result')).to_contain_text('安装后复检已完成')
+                        # The real transaction creates its recovery metadata, then the
+                        # file replacement fails. Its specific reason must remain visible.
+                        with patch('envscope.remedies._replace', side_effect=PermissionError('fixture denied')):
+                            page.locator('#apply-solution').click()
+                            expect(page.locator('#solution-result')).to_contain_text('已保留原文件备份', timeout=30000)
+                            expect(page.locator('#apply-solution')).to_be_enabled(timeout=30000)
+                        assert {key for key, value in writes} == {'timezone', 'locale'}
                         page.locator('#apply-solution').click()
                         expect(page.locator('#resolution')).to_be_visible(timeout=30000)
                         expect(page.locator('#start')).to_be_enabled()
                         assert {key for key, value in writes} == {'timezone', 'locale'}
-                        assert not page.locator('#problems [data-problem="baseline.timezone"]').count()
+                        expect(page.locator('#solution-result')).to_contain_text('修改已执行')
+                        expect(page.locator('#problems [data-problem="target.timezone"]')).to_have_count(0)
+                        expect(page.locator('#apply-solution')).to_have_count(0)
+                        expect(page.locator('#prepare-solution')).to_be_visible()
+                        # Failed recheck keeps the last execution receipt and explains
+                        # why a fresh repair is unavailable; recovery uses a new audit.
+                        page.route('**/api/audit', lambda route: route.fulfill(status=503, json={'error': 'fixture unavailable'}))
+                        page.locator('#start').click()
+                        expect(page.locator('#solution-output')).to_contain_text('本轮检测未完成', timeout=30000)
+                        expect(page.locator('#prepare-solution')).to_be_visible()
+                        expect(page.locator('#prepare-solution')).to_be_disabled()
+                        expect(page.locator('#solution-result')).to_contain_text('修改已执行')
+                        page.unroute('**/api/audit')
+                        page.locator('#start').click()
+                        expect(page.locator('#start')).to_be_enabled(timeout=30000)
                         page.locator('#flow-upkeep-guard-timezone').check()
+                        page.locator('#flow-upkeep-guard-locale').check()
                         page.locator('#flow-upkeep-prepare').click()
                         expect(page.locator('#flow-upkeep-plan')).to_contain_text('保持时区')
                         assert not maintenance.scheduler.definition
                         page.locator('#flow-upkeep-plan button').click()
                         expect(page.locator('#flow-upkeep-status')).to_contain_text('等待', timeout=10000)
                         assert maintenance.scheduler.definition
+                        inventory['network']['timezone_id'] = 'UTC'
+                        inventory['locale'] = 'fr-FR'
+                        assert maintenance.run_once()['state'] == 'completed'
+                        assert inventory['network']['timezone_id'] == ('Eastern Standard Time' if system == 'Windows' else 'America/New_York')
+                        assert inventory['locale'] == ('en-US' if system == 'Windows' else 'en_US')
+                        status = maintenance.status()
+                        assert status['watchdog']['timezone']['state'] == 'restored'
+                        assert status['watchdog']['locale']['state'] == 'restored'
+                        assert any(e['kind'] == 'watchdog_restored' for e in status['events'])
+                        expect(page.locator('#flow-upkeep-status')).to_contain_text('时区', timeout=25000)
+                        expect(page.locator('#flow-upkeep-status')).to_contain_text('地区格式')
+                        page.screenshot(path=str(out / f'{system}-{width}-guard-restored.png'), full_page=True)
                         page.locator('#flow-upkeep-stop').click()
                         expect(page.locator('#flow-upkeep-status')).to_contain_text('尚未启用')
                         fault[0] = 'permission'
@@ -118,6 +202,25 @@ def main():
                         expect(page.locator('#problems')).to_contain_text('权限')
                         assert page.locator('#problems>details[data-manual=true]>summary:visible').count() > 0
                         page.screenshot(path=str(out / f'{system}-{width}-permission.png'), full_page=True)
+                        # A denied OS write must survive the automatic recheck with
+                        # manual recovery guidance and no fabricated repair success.
+                        fault[0] = None
+                        inventory['network']['timezone_id'] = 'UTC'
+                        deny_write[0] = True
+                        previous_writes = list(writes)
+                        page.locator('#start').click()
+                        expect(page.locator('#apply-solution')).to_be_enabled(timeout=30000)
+                        page.locator('#apply-solution').click()
+                        expect(page.locator('#start')).to_be_enabled(timeout=30000)
+                        expect(page.locator('#solution-result')).to_contain_text('修复尚未完成')
+                        expect(page.locator('#solution-result')).to_have_class('solution-output inspection-error')
+                        expect(page.locator('#solution-plan')).to_contain_text('上次地区修改尚未完成')
+                        expect(page.locator('#prepare-solution')).to_be_visible()
+                        expect(page.locator('#apply-solution')).to_have_count(0)
+                        assert writes == previous_writes
+                        expect(page.get_by_role('button', name='查看地区修改与恢复记录', exact=True)).to_have_count(1)
+                        assert inventory['network']['timezone_id'] == 'UTC'
+                        page.screenshot(path=str(out / f'{system}-{width}-repair-denied.png'), full_page=True)
                         for name in ('accounts', 'tools', 'checks', 'upkeep', 'settings', 'coverage', 'history', 'audit'):
                             open_page(page, name)
                             expect(page.locator('#page-' + name)).to_be_visible()
@@ -128,6 +231,10 @@ def main():
                         results.append({'platform': system, 'width': width, 'single_workflow': True,
                                         'all_issue_summaries_visible': True, 'preview_before_write': True,
                                         'repair_retest': True, 'watchdog_preview_enable_disable': True,
+                                        'problem_recheck_fresh_plan': True, 'expired_plan_no_write': True,
+                                        'preview_error_retry': True, 'failed_recheck_recovery': True,
+                                        'denied_write_manual_recovery': True, 'watchdog_drift_restored_and_logged': True,
+                                        'install_continue_previews_remaining': True, 'file_write_failure_reason_retained': True,
                                         'advanced_navigation': True, 'production_changes': False})
                     finally:
                         context.close()
