@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from envscope.app_identity import APP_ID
+from .package_identity import windows_version_file, write_identity
 
 
 def main():
@@ -29,7 +31,9 @@ def main():
                "--distpath", str(root / "dist" / "desktop"), "--workpath", str(root / "build" / "desktop"),
                "--specpath", str(root / "build"), str(root / "scripts" / "desktop_entry.py")]
     environment = dict(os.environ)
+    if platform.system()=='Darwin':command.extend(['--osx-bundle-identifier',APP_ID])
     if platform.system() == 'Windows':
+        command.extend(['--version-file',str(windows_version_file(root/'build/windows-version.txt'))])
         from .build_windows_timezone import build as build_windows_timezone
         native=build_windows_timezone();name='timezone-helper'
         with zipfile.ZipFile(native/(name+'.payload.zip'),'w',zipfile.ZIP_DEFLATED) as archive:
@@ -99,6 +103,7 @@ def main():
                 shutil.copy2(dependency.locate_file(file), dest)
     architecture = {"amd64": "x64", "x86_64": "x64", "arm64": "arm64"}.get(platform.machine().lower(), platform.machine().lower())
     archive = root / "dist" / ("EnvScope-" + ("macOS-" if platform.system() == "Darwin" else "Windows-") + architecture + ".zip")
+    write_identity(app,platform.system())
     if platform.system() == "Darwin":
         subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
         subprocess.run(["/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(archive)], check=True)

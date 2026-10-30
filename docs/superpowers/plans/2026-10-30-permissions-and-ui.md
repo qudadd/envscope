@@ -67,7 +67,7 @@
 **Interfaces:** Build metadata carries stable `io.qudadd.envscope` identity, semantic/build versions and signed/unsigned mode. Signed release verification requires the configured publisher identity plus archive integrity; missing required signing credentials fail signed release builds.
 
 - [ ] Add executable-package metadata and signer-verification regressions using isolated signed/unsigned/tampered fixtures.
-- [ ] Implement Windows publisher signing and Apple Developer ID/notarytool integration through environment/CI secrets, without storing credentials in the repo.
+- [ ] Under the clarified open-source scope, ship unsigned/ad-hoc builds with fixed identity, native version resources and package identity validation. Document publisher signing/notarization as a future optional release mode; do not claim or silently accept unverified publisher identity.
 - [ ] Deliver the requested unsigned open-source build, verify identity continuity, and document optional signing configuration. Never label unsigned artifacts as publisher-signed or notarized.
 - [ ] Run builds, package verification, update smoke tests and full suites; commit and retain signing/notarization receipts without secrets.
 

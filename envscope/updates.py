@@ -17,6 +17,7 @@ import zipfile
 
 from . import __version__, __release__
 from .legacy import UPSTREAM_COMMIT
+from .app_identity import verify_package_identity
 
 REPOSITORY = "qudadd/envscope"
 RELEASE = __release__
@@ -266,6 +267,7 @@ class AppUpdates:
             except (zipfile.BadZipFile, UnicodeError, RuntimeError) as error:
                 raise ValueError("更新包不能安全展开，旧版本保持可用") from error
             relative = exe.relative_to(staging)
+            identity=verify_package_identity(exe,self.system,tag)
             digest = sha256(exe)
             archive.unlink()
             os.replace(staging, destination)
@@ -273,9 +275,9 @@ class AppUpdates:
             previous = self.store._read("desktop-install.private.json", {})
             if not isinstance(previous, dict):
                 previous = {}
-            receipt = {"version": tag, "executable": str((destination / relative).relative_to(self.store.root)), "sha256": digest}
+            receipt = {"version": tag, "executable": str((destination / relative).relative_to(self.store.root)), "sha256": digest,'identity':identity}
             self.store._write("desktop-install.private.json", {"active": receipt, "previous": previous.get("active")})
-            self.state = {**self.state, "state": "ready", "reason": "新版已核验并安装。可以重启 EnvScope；账号、网络与检测偏好没有修改。"}
+            self.state = {**self.state, "state": "ready",'identity':identity, "reason": "新版应用身份、版本与摘要已核验。此为未正式签名的开源构建；重启后使用新版，旧版和用户资料保留。"}
             return self.status()
         finally:
             if staging and staging.resolve().is_relative_to((self.store.root / "updates/versions").resolve()) and staging.name.startswith(".stage-"):
@@ -295,6 +297,8 @@ class AppUpdates:
             raise ValueError("已安装版本的路径无效")
         if sha256(path) != receipt.get("sha256"):
             raise ValueError("已安装的主程序发生变化，请重新下载")
+        if receipt.get('identity') is not None and verify_package_identity(path,self.system,receipt['version'])!=receipt['identity']:
+            raise ValueError('已安装版本的应用身份记录发生变化，请重新下载。')
         return path
 
     def rollback(self, confirmed=False):

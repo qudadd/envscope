@@ -261,6 +261,10 @@ def native_main(server):
         except (AccountError,OSError,ValueError):
             pass  # The read-only catalog exposes unreadable records for review.
         url = "http://127.0.0.1:" + str(server.server_port)
+        if platform.system()=='Windows':
+            import ctypes
+            from .app_identity import APP_ID
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
         webview.settings.update(ALLOW_DOWNLOADS=True, ALLOW_FILE_URLS=False, OPEN_EXTERNAL_LINKS_IN_BROWSER=True)
         window = webview.create_window("EnvScope", url, width=1180, height=800, min_size=(960, 640))
         runtime = DesktopRuntime(server, window)

@@ -128,6 +128,10 @@ def main(output=None):
         result['native_components_worker'] = 'not_applicable'
         result['native_language_bindings']='not_applicable'
         result['native_pipe_transport']='not_applicable'
+        from .app_identity import verify_package_identity, build_identity
+        result['build_identity']=(verify_package_identity(sys.executable,platform.system(),__release__)
+                                  if getattr(sys,'frozen',False) else build_identity(platform.system()))
+        result['identity_source']='package' if getattr(sys,'frozen',False) else 'source-fixture'
         result['native_wireguard_bindings']='not_applicable'
         if platform.system()=='Windows':
             from .timezone_service import bundle_worker
@@ -253,8 +257,8 @@ def main(output=None):
                 ids = read_js("[...document.querySelectorAll('[id]')].map(n=>n.id)")
                 assert len(ids) == len(set(ids)), 'Duplicate DOM IDs'
                 # Exercise the actual menu callback and its CSP-compatible JS.
-                runtime.icon.menu.items[1](runtime.icon)
-                assert read_js("document.getElementById('page-settings').hidden === false")
+                next(item for item in runtime.icon.menu.items if item.text=='软件更新与后台设置')(runtime.icon)
+                assert read_js("document.getElementById('page-settings').hidden === false"), 'Tray settings action must open settings'
                 result['tray_settings'] = True
                 assert runtime.closing() is False
                 result['close_hides'] = True
