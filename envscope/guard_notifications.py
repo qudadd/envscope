@@ -13,6 +13,7 @@ class GuardNotifications:
         self.saved=store._read('guard-notifications.private.json',{})
         if not isinstance(self.saved,dict):self.saved={}
         self.active=False
+        self.current=None
 
     def update(self,maintenance,timezone):
         saved=self.saved
@@ -36,9 +37,10 @@ class GuardNotifications:
         if waiting is not None and self.clock()-waiting>=180:issues['timezone']='heartbeat_lost'
         fingerprint=hashlib.sha256(json.dumps(issues,sort_keys=True).encode()).hexdigest() if issues else ''
         changed=bool(issues and fingerprint!=saved.get('fingerprint'))
+        names=sorted(issues)
+        self.current={'components':names,'message':'、'.join(LABELS[name] for name in names)+'需要处理。打开守护方案查看原因与恢复入口。'} if issues else None
         if changed:
-            names=sorted(issues)
-            self.sink({'components':names,'message':'、'.join(LABELS[name] for name in names)+'需要处理。打开守护方案查看原因与恢复入口。'})
+            self.sink(self.current)
         self.active=bool(issues)
         self.saved={'fingerprint':fingerprint,'timezone_expected':expected,'waiting_since':waiting}
         if self.saved!=saved:self.store._write('guard-notifications.private.json',self.saved)

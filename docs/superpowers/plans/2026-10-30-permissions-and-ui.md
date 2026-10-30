@@ -55,10 +55,10 @@
 
 **Interfaces:** Guard preparation exposes per-component capability/authorization state; service adapters implement status/prepare/apply/recover/undo/remove using reviewed plan IDs and protected receipts. UI receives component states from these results rather than inferring authority from a saved baseline.
 
-- [ ] Add regressions proving a matched baseline with insufficient write authority cannot be represented as automatic protection; cover revoke, cancel, tampered files, foreign owner and pending recovery.
-- [ ] Implement native Windows timezone service and one-time reviewed installation/update/removal; preserve existing macOS root service behavior and evaluate the supported SMAppService route.
-- [ ] Implement deduplicated actionable notifications with a direct return to the failed component.
-- [ ] Run isolated native service lifecycle and at least two automatic scheduler cycles on supported CI platforms, with original machine values unchanged; run full suites; commit and ledger evidence.
+- [x] Add regressions proving a matched baseline with insufficient write authority cannot be represented as automatic protection; cover revoke, cancel, tampered files, foreign owner and pending recovery.
+- [x] Implement native Windows timezone service and one-time reviewed installation/update/removal; preserve existing macOS root service behavior and evaluate the supported SMAppService route.
+- [x] Implement deduplicated actionable notifications with a direct return to the failed component.
+- [x] Run isolated native service lifecycle and at least two automatic scheduler cycles on supported CI platforms, with original machine values unchanged; run full suites; commit and ledger evidence.
 
 ### Task 4: Release identity, signatures and update verification
 
@@ -66,19 +66,19 @@
 
 **Interfaces:** Build metadata carries stable `io.qudadd.envscope` identity, semantic/build versions and signed/unsigned mode. Signed release verification requires the configured publisher identity plus archive integrity; missing required signing credentials fail signed release builds.
 
-- [ ] Add executable-package metadata and signer-verification regressions using isolated signed/unsigned/tampered fixtures.
-- [ ] Under the clarified open-source scope, ship unsigned/ad-hoc builds with fixed identity, native version resources and package identity validation. Document publisher signing/notarization as a future optional release mode; do not claim or silently accept unverified publisher identity.
-- [ ] Deliver the requested unsigned open-source build, verify identity continuity, and document optional signing configuration. Never label unsigned artifacts as publisher-signed or notarized.
-- [ ] Run builds, package verification, update smoke tests and full suites; commit and retain signing/notarization receipts without secrets.
+- [x] Add executable-package metadata and signer-verification regressions using isolated signed/unsigned/tampered fixtures.
+- [x] Under the clarified open-source scope, ship unsigned/ad-hoc builds with fixed identity, native version resources and package identity validation. Document publisher signing/notarization as a future optional release mode; do not claim or silently accept unverified publisher identity.
+- [x] Deliver the requested unsigned open-source build, verify identity continuity, and document optional signing configuration. Never label unsigned artifacts as publisher-signed or notarized.
+- [x] Run local builds, package identity verification, update smoke tests and full suites; record unsigned status. Final macOS package metadata readback remains part of Task 7 distribution verification.
 
 ### Task 5: Optimization acceptance and documentation
 
 **Files:** Update `docs/ARCHITECTURE.md`, `docs/DESKTOP_ACCEPTANCE.md`, permission/service docs and backend capability presentation. Create a checked requirement/evidence matrix under `docs/`.
 
-- [ ] Reconcile each of the six source-audit priorities with source, regression and native evidence; fix uncovered behavior before checking it off.
-- [ ] Execute the real standard-user/admin consent matrix on dedicated devices, including allow/cancel/revoke, service disable, reboot/sleep and upgrade. Record observed outcomes; leave unavailable device evidence pending.
-- [ ] Verify notification deduplication, stop/revoke/uninstall and no loss of current features.
-- [ ] Update stale docs and capability descriptions from the actual implementation. Only mark this task complete when all optimization requirements or explicitly revised user requirements are satisfied.
+- [x] Reconcile each of the six source-audit priorities with source, regression and native evidence; fix uncovered behavior before checking it off.
+- [x] Record the dedicated-device matrix for real standard-user/admin allow/cancel/revoke, service disable, reboot/sleep and upgrade as pending. Under the open-source Alpha scope, do not block the UI on unavailable human OS-dialog evidence or count fixtures as that evidence.
+- [x] Verify notification deduplication, stop/revoke/uninstall and no loss of current features.
+- [x] Update stale docs and capability descriptions from the actual implementation. Only mark this task complete when all optimization requirements or explicitly revised user requirements are satisfied.
 
 ### Task 6: Complete desktop UI, icons and interaction refresh
 

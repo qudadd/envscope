@@ -99,9 +99,15 @@ class DesktopRuntime:
         if lock is not None and lock.locked():return
         maintenance=operations.maintenance.status();timezone=operations.timezone_service.status()
         self.guard_notifications.update(maintenance,timezone)
+        if self.guard_notifications.current and self.guard_attention!=self.guard_notifications.current:
+            # Restore the in-app state after restart without a duplicate toast.
+            self.guard_attention=self.guard_notifications.current
+            self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-guard-attention",{detail:'+json.dumps(self.guard_attention,ensure_ascii=True)+'}))')
+            if self.icon:self.icon.update_menu()
         if self.guard_attention and not self.guard_notifications.active:
             self.guard_attention=None
             self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-guard-clear"))')
+            if self.icon:self.icon.update_menu()
 
     def status(self):
         installed = self.server.store._read("desktop-install.private.json", {})

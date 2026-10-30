@@ -183,6 +183,17 @@ class LifecycleTests(unittest.TestCase):
         self.server = SimpleNamespace(store=self.store, audit_lock=threading.Lock())
         self.runtime = DesktopRuntime(self.server, self.window)
 
+    def test_guard_failure_survives_restart_without_repeating_os_notification(self):
+        self.server.operations=SimpleNamespace(maintenance=Mock(),timezone_service=Mock())
+        self.server.operations.maintenance.status.return_value={'enabled':True,'watchdog':{'proxy':{'state':'attention'}}}
+        self.server.operations.timezone_service.status.return_value={'state':'not_installed'}
+        self.runtime.icon=Mock();self.runtime.ready.set();self.runtime.poll_guard()
+        self.runtime.icon.notify.assert_called_once()
+        again=DesktopRuntime(self.server,self.window);again.icon=Mock();again.ready.set();again.poll_guard()
+        again.icon.notify.assert_not_called()
+        self.assertEqual(again.guard_attention['components'],['proxy'])
+        self.assertIn('envscope-guard-attention',self.window.run_js.call_args.args[0])
+
     def test_close_hides_only_with_a_working_tray(self):
         self.assertTrue(self.runtime.closing())
         self.runtime.icon = Mock()

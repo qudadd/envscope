@@ -14,7 +14,8 @@ export function initWatchdogForms(run){
           const select=$(p+'-guard-client'),previous=select.value;
           select.replaceChildren(new Option('不重开客户端，仅恢复可读取节点',''),...(value.clients||[]).map(c=>new Option(c.label+' · '+c.path,c.id)));
           if([...select.options].some(o=>o.value===previous))select.value=previous;
-          $(p+'-guard-note').textContent=value.note+(!(value.clients||[]).length?' 未找到支持的已安装客户端；代理离线需手动处理。':'');
+          const capabilityNote=Object.values(value.capabilities||{}).map(c=>c.reason).filter(Boolean).join(' ');
+          $(p+'-guard-note').textContent=[capabilityNote,value.note,!(value.clients||[]).length?'未找到支持的已安装客户端；代理离线需手动处理。':''].filter(Boolean).join(' ');
           $(p+'-plan').replaceChildren();
         }
       }catch(e){$(prefix+'-guard-note').textContent='未读取客户端：'+e.message;}finally{button.disabled=false;}
