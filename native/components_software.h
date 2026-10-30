@@ -38,6 +38,7 @@ static int software_publish(int root,CFMutableDictionaryRef record,const char *p
  int ok=fd>=0&&safe_fd(fd,0,0)&&write_all(fd,line,(size_t)n)&&!fsync(fd);if(fd>=0)close(fd);return ok;
 }
 static int software_execute(int root,CFDictionaryRef plan,int restoring){
+ const char *step="validate-input";
  char id[40],owner[32],expected[40],lastid[40]="",phase[40]="";long long format=0;
  CFArrayRef selected=CFDictionaryGetValue(plan,CFSTR("roles")),before=CFDictionaryGetValue(plan,CFSTR("before"));
  if(!integer_at(plan,CFSTR("format"),&format)||format!=1||!get_text(plan,CFSTR("id"),id,sizeof(id))||!hex(id,32)
@@ -58,9 +59,10 @@ static int software_execute(int root,CFDictionaryRef plan,int restoring){
   if(CFDictionaryGetCount(last)&&strcmp(phase,"restored")){CFRelease(last);return 79;}
  }
  CFRelease(last);
- if(!is_array(before)||!software_jobs_absent()){if(record)CFRelease(record);return 79;}
+ if(!is_array(before)||!software_jobs_absent()){fprintf(stderr,"legacy-programs: old-jobs-or-plan-unverified\n");if(record)CFRelease(record);return 79;}
  int source=directory(ENVSCOPE_COMPONENT_SOURCE,0);if(source<0){if(record)CFRelease(record);return 77;}
  CFMutableArrayRef originals=array();
+ step="compare-programs";
  for(CFIndex j=0;j<CFArrayGetCount(selected);j++){
   CFStringRef wanted=CFArrayGetValueAtIndex(selected,j);int i;
   for(i=0;i<3;i++){CFStringRef s=string(software_ids[i]);int found=CFEqual(wanted,s);CFRelease(s);if(found)break;}
@@ -78,9 +80,9 @@ static int software_execute(int root,CFDictionaryRef plan,int restoring){
   text(record,CFSTR("release"),ENVSCOPE_RELEASE);boolean(record,CFSTR("fixture"),ENVSCOPE_COMPONENT_FIXTURE);
   CFDictionarySetValue(record,CFSTR("roles"),selected);CFDictionarySetValue(record,CFSTR("before"),originals);
  }
- if(!software_publish(root,record,restoring?"restoring":"prepared"))goto failed_software;
+ step="save-originals";if(!software_publish(root,record,restoring?"restoring":"prepared"))goto failed_software;
  char vault_name[90];snprintf(vault_name,sizeof(vault_name),".envscope-legacy-%s",id);
- int created=!restoring&&!mkdirat(source,vault_name,0700);
+ step="create-vault";int created=!restoring&&!mkdirat(source,vault_name,0700);
  if(!restoring&&!created&&errno!=EEXIST)goto failed_software;
  int vault=openat(source,vault_name,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
  if(vault>=0&&created){acl_t empty=acl_init(0);int ok=empty&&!fchmod(vault,0700)&&!acl_set_fd_np(vault,empty,ACL_TYPE_EXTENDED);if(empty)acl_free(empty);if(!ok){close(vault);goto failed_software;}}
@@ -88,6 +90,7 @@ static int software_execute(int root,CFDictionaryRef plan,int restoring){
  int private_acl=vault_acl&&acl_get_entry(vault_acl,ACL_FIRST_ENTRY,&entry)!=0;if(vault_acl)acl_free(vault_acl);
  if(vault<0||!safe_fd(vault,0,1)||fstat(vault,&vault_info)||(vault_info.st_mode&0077)||!private_acl){if(vault>=0)close(vault);goto failed_software;}
  if(!software_publish(root,record,restoring?"restoring":"moving")){close(vault);goto failed_software;}
+ step="move-and-readback";
  for(CFIndex j=0;j<CFArrayGetCount(originals);j++){
   CFDictionaryRef approved=CFArrayGetValueAtIndex(originals,j);int i=software_index(approved);
   CFMutableDictionaryRef original=software_row(source,i),backup=software_row(vault,i);
@@ -105,6 +108,6 @@ static int software_execute(int root,CFDictionaryRef plan,int restoring){
  }
  close(vault);close(source);CFRelease(originals);
  {int ok=software_publish(root,record,restoring?"restored":"committed");CFRelease(record);return ok?0:74;}
-failed_software:software_publish(root,record,"partial");CFRelease(record);CFRelease(originals);close(source);return 74;
-invalid_software:if(record)CFRelease(record);CFRelease(originals);close(source);return 79;
+failed_software:fprintf(stderr,"legacy-programs: %s incomplete (errno=%d)\n",step,errno);software_publish(root,record,"partial");CFRelease(record);CFRelease(originals);close(source);return 74;
+invalid_software:fprintf(stderr,"legacy-programs: %s changed-or-unverified\n",step);if(record)CFRelease(record);CFRelease(originals);close(source);return 79;
 }

@@ -1,6 +1,5 @@
 """Disposable program files and injected jobs only; no vendor code executes."""
 from copy import deepcopy
-import base64
 import json
 import os
 from pathlib import Path
@@ -188,14 +187,12 @@ class SoftwareTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name=='nt','Windows shell links and DACLs')
     def test_actual_shell_link_is_read_only_and_acl_changes_invalidate_plan(self):
-        from envscope.system_network_windows import powershell,quote
+        from envscope.system_network_windows import powershell
+        from scripts.software_fixtures import shortcut
         import subprocess
         path=self.subject.paths['shortcut'];path.parent.mkdir()
         args='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(self.ui)+'"'
-        command="$l=(New-Object -ComObject WScript.Shell).CreateShortcut("+quote(str(path))+");$l.TargetPath="+quote(powershell())+";$l.Arguments="+quote(args)+";$l.Save()"
-        encoded=base64.b64encode(command.encode('utf-16-le')).decode('ascii')
-        result=subprocess.run([powershell(),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW)
-        self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))
+        shortcut(path,powershell(),args)
         before=path.read_bytes();self.assertTrue(recognized(path,'shortcut','Windows',self.home));self.assertEqual(path.read_bytes(),before)
         self.assertEqual(self.apply(self.prepare(['shortcut']))['state'],'completed')
         self.assertFalse(path.exists());self.assertEqual(self.apply(self.prepare(restore=True))['state'],'restored')

@@ -119,8 +119,8 @@ def windows(home, result):
         ui=software.paths['ui'];ui.write_text('# claude-switcher Window SELF AUTHORED INERT FIXTURE\n')
         shortcut=software.paths['shortcut'];shortcut.parent.mkdir()
         args='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(ui)+'"'
-        create_link="$l=(New-Object -ComObject WScript.Shell).CreateShortcut("+quote(str(shortcut))+");$l.TargetPath="+quote(shell)+";$l.Arguments="+quote(args)+";$l.Save()"
-        command([shell,'-NoProfile','-NonInteractive','-EncodedCommand',base64.b64encode(create_link.encode('utf-16-le')).decode('ascii')])
+        from scripts.software_fixtures import shortcut as create_shortcut
+        create_shortcut(shortcut,shell,args)
         plan=software.prepare();assert plan['state']=='planned',plan
         value=software.apply(plan['plan_id'],True);assert value['state']=='completed',value
         assert not core.exists() and not ui.exists() and not source.exists() and not shortcut.exists()
@@ -193,7 +193,11 @@ def mac(home, result):
         def runner(args, **kwargs):
             if args[0] == '/usr/bin/osascript':
                 text = args[-1]; code = json.loads(text[len('do shell script '):text.index(' with administrator privileges')])
-                return subprocess.run(['/usr/bin/sudo', '-n', '/bin/sh', '-c', code], **kwargs)
+                value=subprocess.run(['/usr/bin/sudo', '-n', '/bin/sh', '-c', code], **kwargs)
+                if value.returncode:
+                    print('Owned native transaction exit:',value.returncode)
+                    print('Owned native transaction stderr:',value.stderr.decode(errors='replace')[-2000:])
+                return value
             return subprocess.run(args, **kwargs)
         io = MacComponents(home, layout=layout, runner=runner, helper=lambda: worker)
         before = io.snapshot(); assert all(r['owned'] for r in before['rows']), before
