@@ -33,7 +33,7 @@ def main():
         worker=json.loads((build_root/'timezone-helper.json').read_text())|{'path':str(binary)}
         class FixtureIO(WindowsTimezoneIO):
             interrupt=False
-            def execute(self,payload):super().execute({**payload,**({'fixture_interrupt':True} if self.interrupt else {})})
+            def execute(self,payload):super().execute({**payload,**({'fixture_interrupt':self.interrupt} if self.interrupt else {})})
         io=FixtureIO(root=root,task=task,fixture=True,worker=lambda:worker)
         def powershell(source):
             value=subprocess.run([io.executable,'-NoProfile','-NonInteractive','-Command','[Console]::InputEncoding=[Text.UTF8Encoding]::new($false); & ([scriptblock]::Create([Console]::In.ReadToEnd()))'],input=source.encode(),capture_output=True,timeout=30)
@@ -67,9 +67,33 @@ def main():
             plan=service.prepare_undo();assert service.undo(plan['plan_id'],True)['state']=='completed'
             assert reader()['network']['timezone_id']=='Eastern Standard Time'
             summary['remove_restore_undo']=True
-            r=report(Path(temporary),store.settings(),'Windows');plan=service.prepare(r);io.interrupt=True
+            r=report(Path(temporary),store.settings(),'Windows');plan=service.prepare(r);io.interrupt='after_pending'
             assert service.apply(plan['plan_id'],True)['state']=='partial';assert service.status()['state']=='recovery_required'
+            powershell(io.script("Set-Zone 'China Standard Time'"))
+            deadline=time.monotonic()+85
+            while time.monotonic()<deadline:
+                beat=io.inspect()['status']
+                if beat.get('state')=='lifecycle_pending' and beat.get('initial')=='0':break
+                time.sleep(2)
+            else:raise AssertionError('No scheduled cycle observed during incomplete lifecycle')
+            assert reader()['network']['timezone_id']=='China Standard Time'
+            summary['pending_lifecycle_blocks_scheduled_write']=True
             io.interrupt=False;plan=service.prepare_recovery();assert service.recover(plan['plan_id'],True)['state']=='completed'
+            # Distinct executable bytes reproduce a real upgrade's old-baseline /
+            # new-worker mismatch. A PE overlay leaves the fixture code unchanged.
+            upgraded=binary.with_name('timezone-upgrade-fixture.exe')
+            upgraded.write_bytes(binary.read_bytes()+b'ENVSCOPE_UPGRADE_FIXTURE')
+            worker=worker|{'path':str(upgraded),'sha256':hashlib.sha256(upgraded.read_bytes()).hexdigest()}
+            for stage in ('after_worker','baseline_partial'):
+                r=report(Path(temporary),store.settings(),'Windows');plan=service.prepare(r);io.interrupt=stage
+                assert service.apply(plan['plan_id'],True)['state']=='partial'
+                assert service.status()['state']=='recovery_required',service.status()
+                snapshot=io.inspect()
+                if stage=='after_worker':assert snapshot['baseline']['worker_sha256']!=snapshot['worker_sha']
+                else:assert not snapshot['baseline']
+                io.interrupt=False;plan=service.prepare_recovery();assert plan['state']=='planned',plan
+                result=service.recover(plan['plan_id'],True);assert result['state']=='completed',result
+                summary[stage+'_recovered']=True
             summary['interrupted_transaction_recovery']=True
             assert subprocess.check_output([tzutil,'/g'])==before_zone
             summary.update(real_timezone_unchanged=True,real_uac_consent=False,fixture_worker=True)

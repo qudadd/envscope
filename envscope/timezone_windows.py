@@ -14,6 +14,7 @@ from .consent import operation_outcome, raise_for_consent
 from .region_setup import current_region
 from .system_network_windows import COMMON, powershell, quote
 from .target_environment import fingerprint
+from .timezone_heartbeat import heartbeat_current, normalize_heartbeat
 
 # Reuse the existing reviewed ACL, reparse and atomic JSON-write primitives.
 PROTECTION = COMMON[COMMON.index('function Assert-Protected'):COMMON.index('$Root=@ROOT@')]
@@ -26,6 +27,7 @@ $env:PSModulePath=Join-Path ([Environment]::GetFolderPath('Windows')) 'System32/
 $Root=@ROOT@;$TaskName=@TASK@;$Fixture=@FIXTURE@
 $Worker=Join-Path $Root 'timezone-helper.exe'
 $Baseline=Join-Path $Root 'baseline.ini';$ReceiptPath=Join-Path $Root 'transaction.json'
+$CommitPath=Join-Path $Root 'worker-commit.json'
 $WorkerArgs=@ARGS@
 if([IO.DriveInfo]::new([IO.Path]::GetPathRoot($Root)).DriveType -ne 'Fixed'){throw 'local fixed volume required'}
 function Hash($path) {if(-not(Test-Path -LiteralPath $path)){return ''};Assert-Protected $path;return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
@@ -44,11 +46,21 @@ function Read-Task {
 function Snapshot {
  No-Links $Root
  if(Test-Path -LiteralPath $Root){Assert-Protected ([IO.DirectoryInfo]::new($Root).Parent.FullName);Assert-Protected $Root}
- $task=Read-Task;$base=Ini $Baseline;$status=Ini (Join-Path $Root 'status.ini');$receipt=@{}
+ $task=Read-Task;$receipt=@{}
  if(Test-Path -LiteralPath $ReceiptPath){Assert-Protected $ReceiptPath;if((Get-Item -LiteralPath $ReceiptPath).Length -gt 65536){throw 'oversized receipt'};$receipt=Get-Content -LiteralPath $ReceiptPath -Raw | ConvertFrom-Json}
- if($base.Count -and ($base.format -cne '1' -or $base.worker_sha256 -cne (Hash $Worker) -or $base.owner -cnotmatch '^S-1-5(-[0-9]+)+$')){throw 'invalid baseline'}
- if($task -and -not $base.Count -and $receipt.state -notin @('pending','partial')){throw 'orphan task'}
- return @{baseline=$base;status=$status;transaction=$receipt;registered=($null -ne $task);enabled=($null -ne $task -and $task.Settings.Enabled);baseline_sha=(Hash $Baseline);worker_sha=(Hash $Worker);pending=($receipt.state -in @('pending','partial'))}
+ if($receipt.id -and ($receipt.format -ne 1 -or $receipt.id -cnotmatch '^[a-f0-9]{32}$' -or $receipt.owner -cnotmatch '^S-1-5(-[0-9]+)+$' -or $receipt.fixture -isnot [bool] -or $receipt.fixture -ne $Fixture -or $receipt.state -notin @('pending','partial','committed','restored'))){throw 'invalid receipt'}
+ if((Test-Path -LiteralPath $ReceiptPath) -and -not $receipt.id){throw 'invalid receipt'}
+ $committed=$false
+ if(Test-Path -LiteralPath $CommitPath){Assert-Protected $CommitPath;if((Get-Item -LiteralPath $CommitPath).Length -eq 66){$committed=([IO.File]::ReadAllText($CommitPath) -ceq ('"'+(Hash $ReceiptPath)+'"'))}}
+ $pending=($receipt.id -and ($receipt.state -in @('pending','partial') -or -not $committed))
+ # Recovery trusts the protected receipt and its backup hashes, never a torn
+ # live baseline/worker pair. Still validate ACLs even when parsing is deferred.
+ $baselineHash=Hash $Baseline;$workerHash=Hash $Worker;[void](Hash (Join-Path $Root 'status.ini'))
+ try{$base=Ini $Baseline}catch{if(-not $pending){throw};$base=@{}}
+ try{$status=Ini (Join-Path $Root 'status.ini')}catch{if(-not $pending){throw};$status=@{}}
+ if(-not $pending -and $base.Count -and ($base.format -cne '1' -or $base.worker_sha256 -cne $workerHash -or $base.owner -cnotmatch '^S-1-5(-[0-9]+)+$')){throw 'invalid baseline'}
+ if($task -and -not $base.Count -and -not $pending){throw 'orphan task'}
+ return @{baseline=$base;status=$status;transaction=$receipt;registered=($null -ne $task);enabled=($null -ne $task -and $task.Settings.Enabled);baseline_sha=$baselineHash;worker_sha=$workerHash;pending=[bool]$pending}
 }
 function New-Root($path) {
  No-Links $path;if(Test-Path -LiteralPath $path){Assert-Protected $path;return}
@@ -106,9 +118,9 @@ try {
  if($p.nonce -cnotmatch '^[a-f0-9]{32}$' -or $p.owner -cnotmatch '^S-1-5(-[0-9]+)+$' -or $p.action -notin @('install','remove','restore')){throw 'invalid plan'}
  $now=Snapshot
  if($now.baseline_sha -cne $p.before.baseline_sha -or $now.worker_sha -cne $p.before.worker_sha -or $now.registered -ne $p.before.registered -or $now.enabled -ne $p.before.enabled -or $now.transaction.id -cne $p.before.transaction.id){throw 'state changed'}
- if($now.baseline.Count -and $now.baseline.owner -cne $p.owner){throw 'foreign owner'}
+ if($now.baseline.Count -and $now.baseline.owner -cne $p.owner -and -not ($now.pending -and $p.action -eq 'restore')){throw 'foreign owner'}
  if($p.action -eq 'restore') {
-  $r=$now.transaction;if($r.id -cne $p.restore_id -or $r.owner -cne $p.owner -or $r.state -notin @('committed','pending','partial')){throw 'foreign receipt'}
+  $r=$now.transaction;if($r.id -cne $p.restore_id -or $r.owner -cne $p.owner -or $r.state -notin @('committed','pending','partial','restored')){throw 'foreign receipt'}
   $backup=Join-Path $Root ('backup-'+$r.id);Assert-Protected $backup
   foreach($name in @('timezone-helper.exe','baseline.ini','state.ini','status.ini')){$old=Join-Path $backup $name;if($r.hashes.$name -and (Hash $old) -cne $r.hashes.$name){throw 'backup changed'}}
   Stop-Guard
@@ -119,7 +131,7 @@ try {
   }
   Set-Zone $r.before_zone
   if($r.before_registered){Register-Guard ([bool]$r.before_enabled)}
-  $r.state='restored';Record $r
+  $r.state='restored';Record $r;Save $CommitPath (Hash $ReceiptPath) $true
  } else {
   if($now.pending){throw 'recovery required'}
   if((Zone) -cne $p.observed){throw 'zone changed'}
@@ -135,29 +147,34 @@ try {
   }
   $r=@{format=1;id=$p.nonce;owner=$p.owner;state='pending';before_zone=$p.observed;before_registered=$now.registered;before_enabled=$now.enabled;hashes=$hashes;fixture=$Fixture;action=$p.action}
   Record $r
-  if($Fixture -and $p.fixture_interrupt){throw 'fixture interruption'}
+  if($Fixture -and (($p.fixture_interrupt -is [bool] -and $p.fixture_interrupt) -or $p.fixture_interrupt -ceq 'after_pending')){throw 'fixture interruption'}
   Stop-Guard
   if($p.action -eq 'install') {
    if($p.target -cnotmatch '^[A-Za-z0-9 +_-]{1,100}$' -or $p.release -cnotmatch '^v[0-9a-zA-Z.+-]+$'){throw 'invalid target'}
    Copy-Item -LiteralPath (Join-Path $stage 'worker.exe') -Destination $Worker -Force;Protect $Worker $false $true
+   if($Fixture -and $p.fixture_interrupt -eq 'after_worker'){throw 'fixture worker interruption'}
    $original=if($now.baseline.original){$now.baseline.original}else{$p.observed}
    $ini="[guard]`nformat=1`nowner=$($p.owner)`ntarget=$($p.target)`noriginal=$original`nrelease=$($p.release)`nworker_sha256=$($p.worker.sha256)`nnonce=$($p.nonce)`n"
+   if($Fixture -and $p.fixture_interrupt -eq 'baseline_partial'){[IO.File]::WriteAllText($Baseline,"[guard]`nformat=1`nbroken");Protect $Baseline $false $true;throw 'fixture baseline interruption'}
    [IO.File]::WriteAllText($Baseline,$ini,[Text.UTF8Encoding]::new($false));Protect $Baseline $false $true
    foreach($name in @('state.ini','status.ini')){$file=Join-Path $Root $name;if(Test-Path -LiteralPath $file){Assert-Protected $file;Remove-Item -LiteralPath $file -Force}}
-   if($Fixture){& $Worker --once $Root}else{& $Worker --once};if($LASTEXITCODE -ne 0 -or (Zone) -cne $p.target){throw 'worker failed'}
+   # Only this explicitly reviewed foreground transaction may initialize the
+   # timezone. Scheduled workers require the committed receipt and same lock.
+   Set-Zone $p.target
    Register-Guard $true
   } else {
    if($p.restore){Set-Zone $now.baseline.original}
    if(Test-Path -LiteralPath $Baseline){Assert-Protected $Baseline;Remove-Item -LiteralPath $Baseline -Force}
   }
   $r.after_baseline_sha=Hash $Baseline;$r.after_worker_sha=Hash $Worker
-  $r.state='committed';Record $r
+  $r.state='committed';Record $r;Save $CommitPath (Hash $ReceiptPath) $true
  }
 } catch {if($r -and $r.state -ne 'restored'){$r.state='partial';Record $r};throw}
 finally {
  # Keep stage and receipts for recovery; never recursively delete system paths.
  $transactionLock.Dispose()
 }
+if(Test-Path -LiteralPath $Baseline){if($Fixture){& $Worker --once $Root}else{& $Worker --once};if($LASTEXITCODE -ne 0){throw 'post-commit worker failed'}}
 '''
 
 
@@ -198,7 +215,7 @@ class WindowsTimezoneIO:
     def authority(self):
         value=self.inspect();beat=value.get('status',{})
         return {**value,'registered':value['registered'] and value['enabled'],'foreign_owner':bool(value['baseline']) and value['baseline'].get('owner')!=self.owner(),
-                'status':{**beat,'at_epoch':float(beat.get('at_epoch',0)),'initial':beat.get('initial')!='0'}}
+                'fixture':self.fixture,'status':normalize_heartbeat(beat,'Windows')}
 
     def execute(self,payload):
         data=json.dumps(payload,sort_keys=True).encode()
@@ -250,8 +267,9 @@ class WindowsTimezoneService:
     def status(self):
         try:
             snapshot=self.io.inspect();base=snapshot['baseline'];beat=snapshot['status'];receipt=snapshot.get('transaction',{})
-            owner=base.get('owner')==self.io.owner() if base else receipt.get('owner')==self.io.owner()
-            stamp=float(beat.get('at_epoch',0));current=(beat.get('format')=='1' and beat.get('guard_policy')=='2' and beat.get('target')==base.get('target') and beat.get('release')==base.get('release') and beat.get('fixture')==str(int(self.io.fixture)) and beat.get('initial')=='0' and 0<=self.io.clock()-stamp<180)
+            owner=base.get('owner')==self.io.owner() if base and not snapshot['pending'] else receipt.get('owner')==self.io.owner()
+            normalized=normalize_heartbeat(beat,'Windows');stamp=normalized.get('at_epoch',0)
+            current=heartbeat_current(base,normalized,self.io.clock(),fixture=self.io.fixture)
             state=('recovery_required' if snapshot['pending'] else 'conflict' if base and not owner else 'not_installed' if not base else
                    'unregistered' if not snapshot['registered'] or not snapshot['enabled'] else 'waiting' if not current else
                    'active' if beat.get('state') in ('healthy','restored') and beat.get('observed')==base.get('target') else 'attention')
@@ -321,8 +339,8 @@ class WindowsTimezoneService:
         snapshot=self.io.inspect();record=snapshot.get('transaction',{});owner=self.io.owner()
         if record.get('owner')!=owner:return {'state':'blocked','reason':'恢复记录不属于当前用户。'}
         if nonce and record.get('id')!=nonce:return {'state':'retest_required','reason':'已有后续时区操作，未覆盖。'}
-        if (pending and not snapshot['pending']) or record.get('state') not in ('committed','partial','pending'):return {'state':'guided','reason':'没有符合条件的恢复记录。'}
-        if record.get('state')=='committed' and (record.get('after_baseline_sha')!=snapshot['baseline_sha'] or record.get('after_worker_sha')!=snapshot['worker_sha']):
+        if (pending and not snapshot['pending']) or record.get('state') not in ('committed','partial','pending','restored') or record.get('state')=='restored' and not snapshot['pending']:return {'state':'guided','reason':'没有符合条件的恢复记录。'}
+        if record.get('state')=='committed' and not snapshot['pending'] and (record.get('after_baseline_sha')!=snapshot['baseline_sha'] or record.get('after_worker_sha')!=snapshot['worker_sha']):
             return {'state':'blocked','reason':'事务完成后的系统基线或程序又有变化，未覆盖后续修改。'}
         payload={'nonce':secrets.token_hex(16),'owner':owner,'action':'restore','before':stable(snapshot),'restore_id':record['id']}
         return self._plan(payload,['申请系统授权，停止当前时区任务，并恢复最新事务保存的时区、辅助程序与后台任务状态。','保留完整备份和日志；恢复后重新检测。'])

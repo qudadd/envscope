@@ -93,9 +93,9 @@ static int replace_text(const wchar_t *name,const char *data) {
 static int ascii(const wchar_t *in,char *out,int size) {
     return WideCharToMultiByte(CP_UTF8,0,in,-1,out,size,NULL,NULL)>0;
 }
-static int own_hash(wchar_t out[65]) {
-    wchar_t file[MAX_PATH];BYTE digest[32], buffer[16384];BCRYPT_ALG_HANDLE alg=NULL;BCRYPT_HASH_HANDLE hash=NULL;
-    if(!GetModuleFileNameW(NULL,file,MAX_PATH)||!safe_file(file,0))return 0;
+static int file_hash(const wchar_t *file,wchar_t out[65]) {
+    BYTE digest[32], buffer[16384];BCRYPT_ALG_HANDLE alg=NULL;BCRYPT_HASH_HANDLE hash=NULL;
+    if(!safe_file(file,0))return 0;
     HANDLE h=CreateFileW(file,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
     if(h==INVALID_HANDLE_VALUE)return 0;
     int ok=BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA256_ALGORITHM,NULL,0)==0 && BCryptCreateHash(alg,&hash,NULL,0,NULL,0,0)==0;
@@ -103,6 +103,18 @@ static int own_hash(wchar_t out[65]) {
     if(ok)ok=BCryptFinishHash(hash,digest,sizeof(digest),0)==0;
     if(hash)BCryptDestroyHash(hash);if(alg)BCryptCloseAlgorithmProvider(alg,0);CloseHandle(h);
     if(ok){for(int i=0;i<32;i++)swprintf(out+i*2,3,L"%02x",digest[i]);out[64]=0;}return ok;
+}
+static int own_hash(wchar_t out[65]) {
+    wchar_t file[MAX_PATH];return GetModuleFileNameW(NULL,file,MAX_PATH)&&file_hash(file,out);
+}
+static int committed_lifecycle(void) {
+    wchar_t file[MAX_PATH],hash[65];char receipt[67],expected[65];DWORD count=0;
+    if(!path_for(file,L"transaction.json")||!file_hash(file,hash)||!ascii(hash,expected,sizeof(expected)))return 0;
+    if(!path_for(file,L"worker-commit.json")||!safe_file(file,0))return 0;
+    HANDLE h=CreateFileW(file,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
+    if(h==INVALID_HANDLE_VALUE)return 0;
+    int ok=ReadFile(h,receipt,sizeof(receipt),&count,NULL)&&count==66&&receipt[0]=='"'&&receipt[65]=='"'&&!memcmp(receipt+1,expected,64);
+    CloseHandle(h);return ok;
 }
 static int read_zone(void) {
 #if ENVSCOPE_FIXTURE
@@ -149,7 +161,7 @@ static int status(const char *state,const wchar_t *attempts,int pending) {
     }
     snprintf(data,sizeof(data),"[guard]\nstate=%s\nattempts=%s\npending=%d\n",state,tries,pending);return replace_text(L"state.ini",data);
 }
-static int once(void) {
+static int once_locked(void) {
     wchar_t file[MAX_PATH],value[512],hash[65];
     if(!safe_file(root,0)||!path_for(file,L"baseline.ini")||!safe_file(file,0))return 72;
     if(!read_value(L"baseline.ini",L"worker_sha256",value,512)||!own_hash(hash)||wcscmp(hash,value))return 73;
@@ -161,6 +173,7 @@ static int once(void) {
     path_for(state_path,L"state.ini");
     if(GetFileAttributesW(state_path)!=INVALID_FILE_ATTRIBUTES && (!read_value(L"state.ini",L"pending",pending,8)||!safe_file(state_path,0)||(wcscmp(pending,L"0")&&wcscmp(pending,L"1"))))goto done;
     read_value(L"state.ini",L"attempts",attempts,512);
+    if(!committed_lifecycle()){ok=status("lifecycle_pending",attempts,!wcscmp(pending,L"1"));goto done;}
     if(!wcscmp(pending,L"1")){ok=status("attention",attempts,1);goto done;}
     if(!wcscmp(observed,target)){ok=status("healthy",attempts,0);goto done;}
     long long last=0, values[3];int count=0;wchar_t *cursor=attempts;
@@ -175,6 +188,13 @@ static int once(void) {
     if(!write_zone()||!read_zone()||wcscmp(observed,target)){ok=status("write_failed",attempts,0);goto done;}
     ok=status("restored",attempts,0);
 done:CloseHandle(lock);return ok?0:76;
+}
+static int once(void) {
+    wchar_t file[MAX_PATH];
+    if(!safe_file(root,0)||!path_for(file,L"transaction.lock")||!safe_file(file,1))return 72;
+    HANDLE lock=CreateFileW(file,GENERIC_READ|GENERIC_WRITE,0,NULL,OPEN_ALWAYS,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
+    if(lock==INVALID_HANDLE_VALUE)return 75;
+    int result=once_locked();CloseHandle(lock);return result;
 }
 int wmain(int argc,wchar_t **argv) {
     if(argc==2&&!wcscmp(argv[1],L"--version")){printf("{\"format\":1,\"release\":\"%s\",\"fixture\":%s}\n",ENVSCOPE_RELEASE,fixture?"true":"false");return 0;}

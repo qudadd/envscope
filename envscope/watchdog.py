@@ -16,6 +16,7 @@ from .region_profiles import profile
 from .region_setup import current_region, discover_controller, set_system_value, _run
 from .accounts import _safe_chain
 from .transport import CurlTransport
+from .timezone_heartbeat import heartbeat_current
 
 
 def native_write(key, value, system=None, runner=_run):
@@ -100,7 +101,7 @@ class Watchdog:
             native_io=NativeTimezoneIO()
             def native_authority():
                 value=native_io.inspect();base=value.get('baseline',{})
-                return {**value,'foreign_owner':bool(base) and base.get('owner_uid')!=os.getuid()}
+                return {**value,'fixture':native_io.fixture,'foreign_owner':bool(base) and base.get('owner_uid')!=os.getuid()}
             self.authority=native_authority
         if authority is None and self.system=='Windows' and platform.system()=='Windows' and reader is None and writer is None:
             from .timezone_windows import WindowsTimezoneIO
@@ -201,9 +202,9 @@ class Watchdog:
                     if authority.get('baseline') and (not authority.get('registered') or authority['baseline'].get('target')!=target):
                         mark('attention','系统时区守护与用户任务的基线不一致或尚未注册；未覆盖，请重新批准本次维护方案。');continue
                     if authority.get('registered'):
-                        heartbeat=authority.get('status',{});stamp=heartbeat.get('at_epoch')
-                        healthy=(type(stamp) in (int,float) and 0<=now-stamp<180
-                                 and heartbeat.get('state') in ('healthy','restored','repairing','cooldown') and heartbeat.get('initial') is False)
+                        heartbeat=authority.get('status',{})
+                        healthy=(heartbeat_current(authority.get('baseline',{}),heartbeat,now,fixture=authority.get('fixture',False))
+                                 and heartbeat.get('state') in ('healthy','restored','repairing','cooldown'))
                         mark(('delegated' if drift else 'healthy') if healthy else 'attention',('时区漂移已交给获授权的系统守护，等待下次 60 秒检查并读回。' if drift else '批准的时区基线及系统守护心跳正常') if healthy else '已注册系统时区守护，但心跳过期或恢复已暂停；请在本页核对状态并重新批准。')
                         continue
                 if key=='timezone' and self.capability_reader().get('timezone',{}).get('state')!='available':

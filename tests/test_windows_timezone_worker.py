@@ -1,6 +1,7 @@
 """Compiled fixture has no OS clock-writing branch; only disposable files change."""
 import configparser
 import hashlib
+import json
 import os
 from pathlib import Path
 import platform
@@ -30,6 +31,10 @@ class WindowsTimezoneWorkerTests(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.write('baseline', target='Eastern Standard Time', worker_sha256=hashlib.sha256(self.exe.read_bytes()).hexdigest())
         self.write('clock', timezone='China Standard Time', at_epoch=1793400000)
+        self.receipt={'format':1,'id':'a'*32,'owner':'S-1-5-21-1-2-3-1001','fixture':True,'state':'committed'}
+        raw=json.dumps(self.receipt).encode()
+        (self.root/'transaction.json').write_bytes(raw)
+        (self.root/'worker-commit.json').write_text(json.dumps(hashlib.sha256(raw).hexdigest()),encoding='ascii')
 
     def write(self, name, **values):
         (self.root / (name + '.ini')).write_text('[guard]\n' + ''.join(str(k) + '=' + str(v) + '\n' for k, v in values.items()), encoding='ascii')
@@ -71,3 +76,32 @@ class WindowsTimezoneWorkerTests(unittest.TestCase):
         self.write('state',pending='unknown',state='repairing',attempts='')
         self.assertNotEqual(self.run_worker(),0)
         self.assertEqual(self.read('clock')['timezone'],'China Standard Time')
+
+    def test_incomplete_lifecycle_blocks_worker_until_receipt_is_committed(self):
+        for state in ('pending','partial'):
+            with self.subTest(state=state):
+                (self.root/'transaction.json').write_text(json.dumps(self.receipt|{'state':state}))
+                self.run_worker()
+                self.assertEqual(self.read('clock')['timezone'],'China Standard Time')
+        (self.root/'worker-commit.json').unlink()
+        (self.root/'transaction.json').write_text(json.dumps(self.receipt))
+        self.run_worker()
+        self.assertEqual(self.read('clock')['timezone'],'China Standard Time')
+        raw=(self.root/'transaction.json').read_bytes()
+        (self.root/'worker-commit.json').write_text(json.dumps(hashlib.sha256(raw).hexdigest()))
+        self.assertEqual(self.run_worker(),0)
+        self.assertEqual(self.read('clock')['timezone'],'Eastern Standard Time')
+
+    def test_live_lifecycle_lock_blocks_worker(self):
+        import ctypes
+        from ctypes import wintypes
+        create=ctypes.windll.kernel32.CreateFileW
+        create.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD,wintypes.DWORD,wintypes.HANDLE]
+        create.restype=wintypes.HANDLE
+        close=ctypes.windll.kernel32.CloseHandle;close.argtypes=[wintypes.HANDLE]
+        handle=create(str(self.root/'transaction.lock'),0xC0000000,0,None,4,0x80,None)
+        self.assertNotEqual(handle,wintypes.HANDLE(-1).value)
+        try:
+            self.assertNotEqual(self.run_worker(),0)
+            self.assertEqual(self.read('clock')['timezone'],'China Standard Time')
+        finally:close(handle)

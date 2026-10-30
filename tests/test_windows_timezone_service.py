@@ -91,12 +91,46 @@ class WindowsTimezoneTransportTests(unittest.TestCase):
     def test_snapshot_retains_transaction_receipt_in_powershell_case_insensitive_scope(self):
         import json
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);receipt={'id':'a'*32,'owner':'S-1-5-21-1-2-3-1001','state':'pending'}
+            root=Path(folder);receipt={'format':1,'id':'a'*32,'owner':'S-1-5-21-1-2-3-1001','fixture':True,'state':'pending'}
             (root/'transaction.json').write_text(json.dumps(receipt))
             io=WindowsTimezoneIO(root=root,task='EnvScope-TimezoneFixture-12345678',fixture=True)
             value=io._read('function Assert-Protected($path){};function Read-Task{return $null};Snapshot | ConvertTo-Json -Depth 12 -Compress')
             self.assertEqual(value['transaction'],receipt)
             self.assertTrue(value['pending'])
+
+    def test_pending_receipt_remains_recoverable_with_incomplete_live_pair(self):
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);receipt={'format':1,'id':'a'*32,'owner':'S-1-5-21-1-2-3-1001','fixture':True,'state':'partial'}
+            (root/'transaction.json').write_text(json.dumps(receipt))
+            (root/'timezone-helper.exe').write_bytes(b'new fixture worker')
+            io=WindowsTimezoneIO(root=root,task='EnvScope-TimezoneFixture-12345678',fixture=True)
+            for base in ('[guard]\nformat=1\nowner='+receipt['owner']+'\nworker_sha256='+'0'*64+'\n','[guard]\nformat=1\nbroken'):
+                with self.subTest(base=base):
+                    (root/'baseline.ini').write_text(base)
+                    value=io._read('function Assert-Protected($path){};function Read-Task{return $null};Snapshot | ConvertTo-Json -Depth 12 -Compress')
+                    self.assertTrue(value['pending']);self.assertEqual(value['transaction'],receipt)
+                    self.assertEqual(value['worker_sha'],hashlib.sha256(b'new fixture worker').hexdigest())
+            # An incomplete live pair is tolerated only for protected recovery.
+            raw=json.dumps(receipt|{'state':'committed'}).encode()
+            (root/'transaction.json').write_bytes(raw)
+            (root/'worker-commit.json').write_text(json.dumps(hashlib.sha256(raw).hexdigest()))
+            with self.assertRaises(ValueError):
+                io._read('function Assert-Protected($path){};function Read-Task{return $null};Snapshot | ConvertTo-Json -Depth 12 -Compress')
+
+    def test_commit_publication_interruption_retains_recovery(self):
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);io=WindowsTimezoneIO(root=root,task='EnvScope-TimezoneFixture-12345678',fixture=True)
+            for state in ('committed','restored'):
+                raw=json.dumps({'format':1,'id':'a'*32,'owner':'S-1-5-21-1-2-3-1001','fixture':True,'state':state}).encode()
+                (root/'transaction.json').write_bytes(raw)
+                (root/'worker-commit.json').write_text('"'+'0'*64+'"')
+                value=io._read('function Assert-Protected($path){};function Read-Task{return $null};Snapshot | ConvertTo-Json -Depth 12 -Compress')
+                self.assertTrue(value['pending'])
+                (root/'worker-commit.json').write_text(json.dumps(hashlib.sha256(raw).hexdigest()))
+                value=io._read('function Assert-Protected($path){};function Read-Task{return $null};Snapshot | ConvertTo-Json -Depth 12 -Compress')
+                self.assertFalse(value['pending'])
 
     def test_windows_powershell_ini_parser_preserves_values_and_rejects_duplicates(self):
         import re

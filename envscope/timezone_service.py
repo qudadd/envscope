@@ -28,6 +28,7 @@ from .region_profiles import profile
 from .region_setup import current_region
 from .remedies import SolutionPlans
 from .target_environment import fingerprint
+from .timezone_heartbeat import heartbeat_current
 
 
 @dataclass(frozen=True)
@@ -479,11 +480,7 @@ class TimezoneService:
                 state,reason='unregistered','服务文件存在，但系统未确认注册。可预览重新安装。'
             elif heartbeat and (type(heartbeat.get('guard_policy')) is not int or heartbeat.get('guard_policy')!=2):
                 state,reason='outdated','系统时区守护仍使用旧策略，不能确认已监测旧任务冲突；请预览更新并等待新心跳。'
-            elif (type(heartbeat.get('format')) is not int or heartbeat.get('format')!=1
-                  or heartbeat.get('release')!=base.get('release')
-                  or type(heartbeat.get('at_epoch')) not in (int,float) or not 0<=self.io.clock()-heartbeat['at_epoch']<180
-                  or heartbeat.get('target')!=base['target'] or heartbeat.get('fixture') is not self.io.fixture
-                  or heartbeat.get('initial') is not False):
+            elif not heartbeat_current(base,heartbeat,self.io.clock(),fixture=self.io.fixture):
                 state,reason='waiting','尚未收到当前基线的新心跳，请刷新；没有心跳不计为守护正常。'
             elif heartbeat.get('state')=='legacy_conflict':
                 state,reason='conflict','后台检测到旧时区任务重新出现或登记读取失败，已暂停写入。请处理旧任务并复检。'
