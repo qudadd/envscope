@@ -32,7 +32,7 @@ function Hash($path) {if(-not(Test-Path -LiteralPath $path)){return ''};Assert-P
 function Ini($path) {
  if(-not(Test-Path -LiteralPath $path)){return @{}}
  Assert-Protected $path;if((Get-Item -LiteralPath $path).Length -gt 8192){throw 'oversized ini'}
- $value=@{};foreach($line in [IO.File]::ReadAllLines($path)){if($line -eq '[guard]' -or -not $line.Trim()){continue};$parts=$line.Split(@('='),2);if($parts.Count -ne 2 -or $value.ContainsKey($parts[0])){throw 'invalid ini'};$value[$parts[0]]=$parts[1]};return $value
+ $value=@{};foreach($line in [IO.File]::ReadAllLines($path)){if($line -eq '[guard]' -or -not $line.Trim()){continue};$parts=$line -split '=',2;if($parts.Count -ne 2 -or $value.ContainsKey($parts[0])){throw 'invalid ini'};$value[$parts[0]]=$parts[1]};return $value
 }
 function Read-Task {
  $scheduler=New-Object -ComObject 'Schedule.Service';$scheduler.Connect()

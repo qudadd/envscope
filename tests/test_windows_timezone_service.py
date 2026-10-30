@@ -88,6 +88,21 @@ class WindowsTimezoneServiceTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system()=='Windows','Windows PowerShell transport')
 class WindowsTimezoneTransportTests(unittest.TestCase):
+    def test_windows_powershell_ini_parser_preserves_values_and_rejects_duplicates(self):
+        import re
+        from envscope.timezone_windows import HEADER
+        source=re.search(r'function Ini\(\$path\) \{.*?\n\}',HEADER,re.S).group()
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'fixture.ini';path.write_text('[guard]\ntimezone=Eastern Standard Time\nvalue=a=b\n')
+            command=[WindowsTimezoneIO().executable,'-NoProfile','-NonInteractive','-Command',
+                     'function Assert-Protected($path){};'+source+';Ini '+"'"+str(path).replace("'","''")+"'"+' | ConvertTo-Json -Compress']
+            value=subprocess.run(command,capture_output=True,timeout=15)
+            self.assertEqual(value.returncode,0,value.stderr)
+            import json
+            self.assertEqual(json.loads(value.stdout)['value'],'a=b')
+            path.write_text('[guard]\nvalue=1\nvalue=2\n')
+            self.assertNotEqual(subprocess.run(command,capture_output=True,timeout=15).returncode,0)
+
     def test_verified_source_is_snapshot_and_tamper_never_executes(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"installer with 'quote.ps1"
