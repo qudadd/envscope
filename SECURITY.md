@@ -1,5 +1,9 @@
 # Security and privacy boundaries
 
+For data handling, external services and user controls, see the
+[privacy notice](PRIVACY.md). For stopping background components and removing
+local data, see the [uninstall guide](docs/UNINSTALL.md).
+
 ## Reviewed configuration remedies
 
 Diagnostics do not change system or client settings. A separate reviewed plan
@@ -153,9 +157,10 @@ privilege, backup and rollback behavior. Their bundled hashes verify provenance,
 not native-device acceptance. Installers can register background services and
 the macOS original updater. Original output is marked unverified by EnvScope.
 
-Local history and preferences are under `~/.envscope`; no raw addresses are
-stored there by the normal UI. Comparison uses a private random HMAC key and
-does not infer IP ownership or risk. Loss of that key invalidates comparisons.
+Local history and preferences are under `~/.envscope`. Normal diagnostic history
+redacts observed addresses; user-entered settings, including permitted address
+ranges, may still contain addresses. Comparison uses a private random HMAC key
+and does not infer IP ownership or risk. Loss of that key invalidates comparisons.
 Redaction is best effort, not a guarantee of anonymization.
 
 ## Reporting an issue
