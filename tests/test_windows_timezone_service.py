@@ -88,6 +88,16 @@ class WindowsTimezoneServiceTests(unittest.TestCase):
 
 @unittest.skipUnless(platform.system()=='Windows','Windows PowerShell transport')
 class WindowsTimezoneTransportTests(unittest.TestCase):
+    def test_snapshot_retains_transaction_receipt_in_powershell_case_insensitive_scope(self):
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);receipt={'id':'a'*32,'owner':'S-1-5-21-1-2-3-1001','state':'pending'}
+            (root/'transaction.json').write_text(json.dumps(receipt))
+            io=WindowsTimezoneIO(root=root,task='EnvScope-TimezoneFixture-12345678',fixture=True)
+            value=io._read('function Assert-Protected($path){};function Read-Task{return $null};Snapshot | ConvertTo-Json -Depth 12 -Compress')
+            self.assertEqual(value['transaction'],receipt)
+            self.assertTrue(value['pending'])
+
     def test_windows_powershell_ini_parser_preserves_values_and_rejects_duplicates(self):
         import re
         from envscope.timezone_windows import HEADER

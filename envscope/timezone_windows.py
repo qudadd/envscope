@@ -25,7 +25,7 @@ $env:PSModulePath=Join-Path ([Environment]::GetFolderPath('Windows')) 'System32/
 @PROTECTION@
 $Root=@ROOT@;$TaskName=@TASK@;$Fixture=@FIXTURE@
 $Worker=Join-Path $Root 'timezone-helper.exe'
-$Baseline=Join-Path $Root 'baseline.ini';$Receipt=Join-Path $Root 'transaction.json'
+$Baseline=Join-Path $Root 'baseline.ini';$ReceiptPath=Join-Path $Root 'transaction.json'
 $WorkerArgs=@ARGS@
 if([IO.DriveInfo]::new([IO.Path]::GetPathRoot($Root)).DriveType -ne 'Fixed'){throw 'local fixed volume required'}
 function Hash($path) {if(-not(Test-Path -LiteralPath $path)){return ''};Assert-Protected $path;return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
@@ -45,7 +45,7 @@ function Snapshot {
  No-Links $Root
  if(Test-Path -LiteralPath $Root){Assert-Protected ([IO.DirectoryInfo]::new($Root).Parent.FullName);Assert-Protected $Root}
  $task=Read-Task;$base=Ini $Baseline;$status=Ini (Join-Path $Root 'status.ini');$receipt=@{}
- if(Test-Path -LiteralPath $Receipt){Assert-Protected $Receipt;if((Get-Item -LiteralPath $Receipt).Length -gt 65536){throw 'oversized receipt'};$receipt=Get-Content -LiteralPath $Receipt -Raw | ConvertFrom-Json}
+ if(Test-Path -LiteralPath $ReceiptPath){Assert-Protected $ReceiptPath;if((Get-Item -LiteralPath $ReceiptPath).Length -gt 65536){throw 'oversized receipt'};$receipt=Get-Content -LiteralPath $ReceiptPath -Raw | ConvertFrom-Json}
  if($base.Count -and ($base.format -cne '1' -or $base.worker_sha256 -cne (Hash $Worker) -or $base.owner -cnotmatch '^S-1-5(-[0-9]+)+$')){throw 'invalid baseline'}
  if($task -and -not $base.Count -and $receipt.state -notin @('pending','partial')){throw 'orphan task'}
  return @{baseline=$base;status=$status;transaction=$receipt;registered=($null -ne $task);enabled=($null -ne $task -and $task.Settings.Enabled);baseline_sha=(Hash $Baseline);worker_sha=(Hash $Worker);pending=($receipt.state -in @('pending','partial'))}
@@ -82,7 +82,7 @@ function Set-Zone($value) {
  if((Zone) -cne $value){throw 'zone readback failed'}
 }
 function Record($r) {
- Save $Receipt $r $true;Save (Join-Path $Root ('receipt-'+$r.id+'.json')) $r $true
+ Save $ReceiptPath $r $true;Save (Join-Path $Root ('receipt-'+$r.id+'.json')) $r $true
  $log=Join-Path $Root ('lifecycle-'+[DateTime]::UtcNow.ToString('yyyy-MM-dd')+'.jsonl')
  if(Test-Path -LiteralPath $log){Assert-Protected $log}
  $entry=@{at_epoch=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds();transaction=$r.id;state=$r.state;action=$r.action;fixture=$Fixture}
