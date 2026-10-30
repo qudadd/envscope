@@ -86,8 +86,10 @@ static int software_execute(int root,CFDictionaryRef plan,int restoring){
  if(!restoring&&!created&&errno!=EEXIST)goto failed_software;
  int vault=openat(source,vault_name,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
  if(vault>=0&&created){acl_t empty=acl_init(0);int ok=empty&&!fchmod(vault,0700)&&!acl_set_fd_np(vault,empty,ACL_TYPE_EXTENDED);if(empty)acl_free(empty);if(!ok){close(vault);goto failed_software;}}
- struct stat vault_info;acl_t vault_acl=vault>=0?acl_get_fd_np(vault,ACL_TYPE_EXTENDED):NULL;acl_entry_t entry;
- int private_acl=vault_acl&&acl_get_entry(vault_acl,ACL_FIRST_ENTRY,&entry)!=0;if(vault_acl)acl_free(vault_acl);
+ struct stat vault_info;acl_t vault_acl=vault>=0?acl_get_fd_np(vault,ACL_TYPE_EXTENDED):NULL;int acl_error=errno;acl_entry_t entry;
+ /* Darwin represents an empty extended ACL either as an empty ACL object or
+  * ENOENT. Both require the same independent root ownership and 0700 checks. */
+ int private_acl=vault_acl?acl_get_entry(vault_acl,ACL_FIRST_ENTRY,&entry)!=0:acl_error==ENOENT;if(vault_acl)acl_free(vault_acl);
  if(vault<0||!safe_fd(vault,0,1)||fstat(vault,&vault_info)||(vault_info.st_mode&0077)||!private_acl){if(vault>=0)close(vault);goto failed_software;}
  if(!software_publish(root,record,restoring?"restoring":"moving")){close(vault);goto failed_software;}
  step="move-and-readback";
