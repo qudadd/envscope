@@ -4,9 +4,11 @@
 [`92cd62f95f98599215995406deaa7edd89c97c40`](https://github.com/YOURSJEYO/claude-switcher/tree/92cd62f95f98599215995406deaa7edd89c97c40)，核对日期 2026-10-30。
 Linux 和手机端按产品范围延后。随包 57 个上游文件仍固定在 `870c4ca`，未改写其字节。
 
-当前 0.23 源码已将所列功能映射到原生实现或明确的兼容 / 手动入口。发布前仍须通过
-对应提交的三平台 Python、20 组浏览器流程、三架构桌面包及实际 OS 夹具验收。
-本文列的是实现与证据范围，不把候选版本、模拟账号或静态表格当作已发布或真实登录成功。
+当前公开版本为 [0.25.0 Alpha](https://github.com/qudadd/envscope/releases/tag/v0.25.0-alpha.1)，
+所列功能分别映射到原生实现或明确的兼容 / 手动入口。该版源提交的
+[规则与页面 CI](https://github.com/qudadd/envscope/actions/runs/41045089026) 和
+[三架构桌面 / 原生隔离验收](https://github.com/qudadd/envscope/actions/runs/41045082167) 已通过。
+本文列的是实现与证据范围，不把模拟账号或静态表格当作真实登录成功。
 
 ## 功能映射
 
@@ -31,7 +33,7 @@ Linux 和手机端按产品范围延后。随包 57 个上游文件仍固定在 
 | open-safe | 两平台独立临时资料、允许网址与代理参数检查、UDP 选项、独立隐藏清理进程、重启恢复 | BROWSER_SESSIONS；真实无害父子进程退出与冻结包夹具；不等于浏览器内部状态或防火墙验证 |
 | snapshot-export / import | 原生跨平台 ENVSNAP1、原版 Windows CSNAP001、Mac 原版加密 DMG | CSNAP_ARCHIVES / DMG_ARCHIVES；密码经内存 / stdin、先认证、边界限制、空槽、独立 .NET 交叉验证与逐文件回读 |
 | 10 秒进程守护 | 独立用户任务、固定 PID / 用户 / 路径和批准基线、心跳、冷却与日志 | PROCESS_GUARD；只停止已识别 Claude；是轮询，不是零数据包泄漏保证 |
-| 时区 Watchdog / 漂移恢复 | Mac root 60 秒服务与用户巡检；Windows 批准基线恢复；安装 / 更新 / 撤销 / 中断恢复 | TIMEZONE_SERVICE / WATCHDOG_AND_IDENTITIES；权限不足转手动，旧守护冲突时暂停自动写入 |
+| 时区 Watchdog / 漂移恢复 | Mac root 服务；Windows 按用户能力使用原用户任务或经前台授权的 SYSTEM 服务；系统服务每 60 秒检查，支持安装 / 更新 / 撤销 / 中断恢复 | TIMEZONE_SERVICE / WATCHDOG_AND_IDENTITIES；拒绝授权、组织策略和旧守护冲突明确显示，未取得新心跳不算正常 |
 | 后台维护 / 代理离线 | 审核过的配置保持、所选客户端重开、节点恢复、冷却、复检、按日日志 | maintenance / watchdog；新目标需要新批准，不在后台随意切换账号或国家 |
 | 48 小时出口历史 | 观测次数、不同出口集合数、变化次数分别展示；HMAC、过期清理、缺样本说明 | maintenance / watchdog；集合不等于单个 IP，密钥轮换后不延续不可比计数 |
 | 安装、更新、卸载维护组件 | 原生组件各自安装 / 更新 / 可逆移除；固定旧安装器兼容入口保留 | 系统权限由本次 OS 授权，第三方驱动仍用原客户端；不把 CI 提升权限等同实际授权弹窗验收 |

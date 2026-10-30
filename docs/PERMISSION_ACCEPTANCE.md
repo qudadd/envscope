@@ -18,10 +18,12 @@ Windows 原生验收 `scripts.windows_timezone_acceptance` 只在明确启用的
 `scripts.timezone_acceptance`，使用唯一 fixture 路径及真实 LaunchDaemon，并核对
 `/etc/localtime` 未改变。fixture 辅助程序不进入发布包。
 
-当前本地完整回归：720 项 Python 测试通过（5 项平台跳过），19 项 JavaScript 测试通过；
+0.25.0 Alpha 发布源提交的本地完整回归：运行 726 项 Python 测试（5 项平台跳过，其余通过），19 项 JavaScript 测试通过；
 真实 Windows 冻结包和离线更新包的窗口、托盘、隐藏、恢复、退出与版本身份检查通过。
-跨平台原生验收以本分支和最终发布标签的 [desktop packages 工作流](https://github.com/qudadd/envscope/actions/workflows/desktop.yml)
-结果与对应产物为准；未成功的运行不计为通过。
+该版源提交 `e7cd61d0e8f1884441a1845c5a72f429102ae300` 的
+[检查 CI](https://github.com/qudadd/envscope/actions/runs/41045089026) 与
+[三架构 desktop packages](https://github.com/qudadd/envscope/actions/runs/41045082167) 已通过。
+后续版本以自己的提交、运行结果与对应产物为准；未成功的运行不计为通过。
 
 后续专用设备矩阵仍待执行：普通用户首次允许/取消、组织策略拒绝、运行中撤权、升级后
 再次打开、系统重启、睡眠唤醒。当前开源 Alpha 可继续交付，但不得将这些待验证场景写成
