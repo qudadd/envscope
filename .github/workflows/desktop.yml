@@ -162,6 +162,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          name: Components-evidence-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/components-acceptance/result.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
           name: Scheduler-evidence-${{ runner.os }}-${{ runner.arch }}
           path: artifacts/scheduler-acceptance.json
           if-no-files-found: error

@@ -96,7 +96,7 @@ def main(output=None):
         result['native_diagnostics_export']=True
         # Exercise the packaged cryptography/OpenSSL runtime on disposable data.
         manager = operations.accounts
-        manager.accounts_dir.mkdir(parents=True)
+        manager.accounts_dir.mkdir(parents=True,exist_ok=True)
         manager.data_dir.mkdir(parents=True)
         (manager.state_dir/manager.current_filename).write_text('A')
         archived = manager.accounts_dir/'B'

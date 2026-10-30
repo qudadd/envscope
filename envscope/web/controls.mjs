@@ -61,7 +61,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
     const needsConfirmation=confirmation!==null||descriptor?.requires_confirmation===true;
     const effects=confirmation||descriptor?.effects?.join("\n")||"此操作会修改本机资料。";
     if(needsConfirmation&&confirmation!==true&&!window.confirm(effects+"\n\n继续执行？"))return null;
-    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button, #timezone-service-panel button, #timezone-service-panel input, #network-panel button, #network-panel input, #client-panel button, #client-panel input, #client-panel select, #language-panel button, #components-panel button, #components-panel input, #software-panel button, #software-panel input, #check-preferences-panel button, #check-preferences-panel input')].map(node=>[node,node.disabled]);
+    const disabledBefore=[...document.querySelectorAll('#page-accounts button, #page-accounts input, #page-accounts select, #page-upkeep button, #page-upkeep input, #page-upkeep select, #param-snapshot input, #param-snapshot select, #environment-tools button, #proxy-test, #maintenance-run, #browser-cleanup, #history-compare, #settings-form button, #process-guard-panel button, #routing-panel button, #timezone-service-panel button, #timezone-service-panel input, #network-panel button, #network-panel input, #client-panel button, #client-panel input, #client-panel select, #language-panel button, #components-panel button, #components-panel input, #software-panel button, #software-panel input, #check-preferences-panel button, #check-preferences-panel input')].map(node=>[node,node.disabled]);
     disabledBefore.push(...['browser-folder','browser-logs','browser-open','safe-url'].map(id=>[$(id),$(id).disabled]));
     for(const [node] of disabledBefore)node.disabled=true;
     busy=true;statusRevision++;document.documentElement.dataset.operationBusy='true';$('start').disabled=true;$(output).textContent=["account-switch","app-launch","open-safe"].includes(id)?"正在重新检测启动条件，请稍候…":"正在执行，请稍候…";
@@ -101,7 +101,7 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
         try{await refresh();}catch{$(output).append(el('p','操作已返回，但功能列表刷新失败。请重新打开程序核对状态。','note'));}
       }return result;
     }catch(error){if(error instanceof TypeError){disconnected();$(output).textContent=DISCONNECTED;}else $(output).textContent=error.name==="AbortError"?"等待已超时。操作可能仍在后台执行；请查看实际状态，避免重复执行。":String(error.message);if(/^(archive|snapshot)-/.test(id)){ $(output).classList.add('manual-guidance'); try{await refresh();}catch{} }return null;}
-    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();setParameters();renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);renderTimezoneService(catalog.timezone_service);renderNetwork(catalog.system_network,catalog.settings);renderClient(catalog.client_repair,catalog.settings);renderLanguage(catalog.client_language,catalog.settings);renderComponents(catalog.legacy_components);renderSoftware(catalog.software_cleanup);}}
+    finally{clearTimeout(timer);busy=false;document.documentElement.dataset.operationBusy='false';$('start').disabled=false;for(const [node,disabled] of disabledBefore)if(node.isConnected)node.disabled=disabled;if(catalog){renderAccounts();setParameters();renderUpkeep(catalog.maintenance);renderProcessGuard(catalog.process_guard,catalog.settings);renderRouting(catalog.routing);renderTimezoneService(catalog.timezone_service);renderNetwork(catalog.system_network,catalog.settings);renderClient(catalog.client_repair,catalog.settings);renderLanguage(catalog.client_language,catalog.settings);renderComponents(catalog.legacy_components);renderSoftware(catalog.software_cleanup);}}
   }
   function renderBrowserSessions(sessions={}){
     const attention=sessions.state==='unreadable'||sessions.unverified||sessions.pending||sessions.legacy||sessions.overflow||(sessions.sessions&&['unverified','stale'].includes(sessions.worker));
@@ -193,6 +193,8 @@ export async function initDesktopControls({sessionPromise,onReport,download,rete
       });undo.disabled=backup.availability!=='available';controls.append(undo);}body.append(row);
     }
     $('upkeep-events').replaceChildren(value.events?.length?t:el('p','尚无维护事件。','note'));
+    $('upkeep-prepare').disabled=busy;
+    if(busy)for(const node of document.querySelectorAll('#page-upkeep button, #page-upkeep input, #page-upkeep select'))node.disabled=true;
   }
   function renderBackups(){
     const records=catalog.config_backups||[],[t,body]=table(['备份时间','配置','恢复状态']);

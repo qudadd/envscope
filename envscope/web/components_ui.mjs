@@ -75,6 +75,10 @@ export function renderSoftware(value=softwareLast,busy=false){
   softwareLast=value;
   const states={not_checked:'尚未读取',not_configured:'尚未清理',prepared:'上次操作未完成',retiring_jobs:'正在停用旧任务',moving:'程序移动待核对',restoring:'程序恢复待核对',partial:'需要恢复或手动核对',committed:'所选程序已清理，存档保留',restored:'旧程序已恢复',invalid:'恢复记录无法核实'};
   const rows=value.rows||[],choices=rows.filter(r=>r.eligible===true&&r.present===true);
+  if(!softwareLoaded&&value.state&&value.state!=='not_checked'){
+    for(const row of choices)softwareSelected.add(row.id);
+    softwareLoaded=true;
+  }
   const blocked=!!value.can_restore;
   for(const id of [...softwareSelected])if(!choices.some(r=>r.id===id))softwareSelected.delete(id);
   $('software-state').textContent=states[value.state]||'状态待核对';
@@ -107,18 +111,8 @@ export function initSoftware({action,retest}){
     softwareLoaded=true;renderSoftware(value);
   }
   $('software-read').addEventListener('click',read);
-  document.querySelector('[data-page="upkeep"]').addEventListener('click',()=>{
-    if(softwareLoaded)return;
-    // The task inventory starts first on this page. Queue this read so the
-    // shared operation lock does not silently discard the second inventory.
-    void(async()=>{
-      for(let i=0;i<2400;i++){
-        if(softwareLoaded||$('page-upkeep').hidden)return;
-        if(document.documentElement.dataset.operationBusy!=='true'&&!$('start').disabled){await read();return;}
-        await new Promise(resolve=>setTimeout(resolve,100));
-      }
-    })();
-  });
+  // The first components-status request reads both inventories. Keeping one
+  // operation avoids a delayed background read racing a new repair preview.
   $('software-all').addEventListener('change',()=>{
     const checked=$('software-all').checked;softwareSelected.clear();
     if(checked)for(const row of softwareLast.rows||[])if(row.eligible===true&&row.present===true)softwareSelected.add(row.id);

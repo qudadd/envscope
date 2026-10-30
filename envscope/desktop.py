@@ -19,9 +19,22 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--process-guard-worker":
         from .process_guard import main as guard_main
         return guard_main(sys.argv[2:])
-    if len(sys.argv) == 3 and sys.argv[1] == "--desktop-smoke":
+    if len(sys.argv)>1 and sys.argv[1] == "--desktop-smoke":
+        if len(sys.argv)!=3:
+            raise SystemExit(2)
         from ._desktop_test import main as desktop_test
-        return desktop_test(sys.argv[2])
+        try:
+            return desktop_test(sys.argv[2])
+        except Exception as error:
+            # Windowed executables otherwise hide setup failures behind an
+            # exception dialog and timeout. This entry uses isolated fixtures.
+            import json
+            from pathlib import Path
+            from . import __release__
+            path=Path(sys.argv[2]);path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_text(json.dumps({'release':__release__,'errors':[type(error).__name__+': '+str(error)[:2000]],
+                                        'network_probes':False,'user_data_changed':False}),encoding='utf-8')
+            return 1
     if len(sys.argv) > 1 and sys.argv[1] == "--maintenance-worker":
         from .maintenance import main as maintenance_main
         return maintenance_main(sys.argv[2:])

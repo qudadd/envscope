@@ -336,7 +336,10 @@ class Operations:
         if action.startswith('components-'):
             allowed = {'components-status': set(), 'components-plan': {'roles', 'restore'}, 'components-apply': {'plan_id'}}
             if action not in allowed or set(params)-allowed[action]: raise ValueError('旧组件参数无效')
-            if action == 'components-status': return self.components.status(True)
+            if action == 'components-status':
+                value=self.components.status(True)
+                value['software_cleanup']=self.software.status()
+                return value
             if action == 'components-plan': return self.components.prepare(params.get('roles'), restore=params.get('restore', False))
             value = self.components.apply(params.get('plan_id'), confirmed)
             if value.get('retest') or value.get('state') == 'partial': value['needs_retest'] = True
