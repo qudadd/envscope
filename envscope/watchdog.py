@@ -28,7 +28,7 @@ def native_write(key, value, system=None, runner=_run):
         command=([str(Path(os.environ.get('SystemRoot','C:/Windows'))/'System32/tzutil.exe'),'/s',value]
                  if system=='Windows' else ['/usr/sbin/systemsetup','-settimezone',value])
         if system not in ('Windows','Darwin') or runner(command,timeout=15).returncode:
-            raise ValueError('后台没有修改时区的权限；请在持续维护页授权 macOS 系统时区守护，或在系统设置处理')
+            raise ValueError('后台没有修改时区的权限；请在守护方案中授权系统时区守护，或在系统设置处理')
     else:
         set_system_value(system,key,value,runner)
 
@@ -86,19 +86,28 @@ def launch_proxy(client,system=None):
 
 
 class Watchdog:
-    def __init__(self,home=None,system=None,reader=None,writer=None,controller=None,clients=None,launcher=None,listener=None,tester=None,sleeper=None,authority=None):
+    def __init__(self,home=None,system=None,reader=None,writer=None,controller=None,clients=None,launcher=None,listener=None,tester=None,sleeper=None,authority=None,capability_reader=None):
         self.home=Path(home or Path.home());self.system=system or platform.system()
         self.reader=reader or collect;self.writer=writer or (lambda k,v:native_write(k,v,self.system))
         self.controller=controller or (lambda:discover_controller(self.home,self.system))
         self.clients=clients or (lambda:proxy_apps(self.home,self.system));self.launcher=launcher or (lambda c:launch_proxy(c,self.system))
         self.listener=listener or proxy_alive;self.tester=tester or proxy_works;self.sleep=sleeper or time.sleep
         self.authority=authority
+        from .guard_capabilities import write_capabilities
+        self.capability_reader=capability_reader or (lambda:{'timezone':{'state':'available','source':'injected-writer'}} if writer else write_capabilities(self.system))
         if authority is None and self.system=='Darwin' and platform.system()=='Darwin' and reader is None and writer is None:
             from .timezone_service import NativeTimezoneIO
-            self.authority=NativeTimezoneIO().inspect
+            native_io=NativeTimezoneIO()
+            def native_authority():
+                value=native_io.inspect();base=value.get('baseline',{})
+                return {**value,'foreign_owner':bool(base) and base.get('owner_uid')!=os.getuid()}
+            self.authority=native_authority
+        if authority is None and self.system=='Windows' and platform.system()=='Windows' and reader is None and writer is None:
+            from .timezone_windows import WindowsTimezoneIO
+            self.authority=WindowsTimezoneIO().authority
 
     def options(self):
-        return {'clients':self.clients(),'note':'仅重开已安装并明确选择的客户端；不安装、强杀进程或回退直连。macOS 时区可在本页单独授权系统守护；用户任务不会弹出管理员授权。'}
+        return {'clients':self.clients(),'capabilities':self.capability_reader(),'note':'仅重开已安装并明确选择的客户端；不安装、强杀进程或回退直连。时区保持按需单独授权系统守护；后台不会弹出管理员授权。'}
 
     def validate(self,baseline):
         from .region_profiles import profiles
@@ -115,7 +124,7 @@ class Watchdog:
                         or not re.fullmatch('[a-f0-9]{64}',client['sha256'])):raise ValueError('批准的客户端基线无效')
             if any(k in value for k in ('group','node','identity')) and not all(isinstance(value.get(k),str) and 0<len(value[k])<=240 for k in ('group','node','identity')):raise ValueError('节点守护基线无效')
 
-    def prepare(self,settings,options):
+    def prepare(self,settings,options,*,allow_authorization=False):
         allowed={'timezone','locale','proxy','client'}
         if not isinstance(options,dict) or set(options)-allowed or any(type(options.get(k,False)) is not bool for k in ('timezone','locale','proxy')):
             raise ValueError('守护选项无效')
@@ -125,6 +134,8 @@ class Watchdog:
             if not options.get(key):continue
             if not selected or settings.get(key)!=selected[key] or observed[key]!=selected[key]:
                 raise ValueError('先将'+label+'配置到已选城市目标并复检，再保存守护基线')
+            if key=='timezone' and self.capability_reader().get('timezone',{}).get('state')!='available' and not allow_authorization:
+                raise ValueError('后台时区权限尚未核实或需要授权，请先预览系统时区守护方案')
             result[key]=selected[key];effects.append('保持'+label+'：'+selected[key]+'；漂移时读回核对并恢复，权限不足转为手动处理')
         if options.get('proxy'):
             url=settings.get('target_proxy')
@@ -181,12 +192,11 @@ class Watchdog:
                         if controller.identity!=target['identity'] or not row:raise ValueError('节点控制配置变化，需重新批准基线')
                     drift=not good or row is not None and row['now']!=target['node']
                 else:drift=observed.get(key)!=target
-                if not drift:mark('healthy','批准的'+label+'基线正常');continue
-                if key=='timezone' and self.system=='Darwin' and self.authority:
+                if key=='timezone' and self.authority:
                     try:authority=self.authority()
                     except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):
                         mark('attention','系统时区服务状态无法核实，未并发写入；请在持续维护页核对。');continue
-                    if authority.get('pending') or authority.get('legacy_registered'):
+                    if authority.get('pending') or authority.get('legacy_registered') or authority.get('foreign_owner'):
                         mark('attention','系统时区服务有未完成操作或旧任务冲突，请先在持续维护页处理。');continue
                     if authority.get('baseline') and (not authority.get('registered') or authority['baseline'].get('target')!=target):
                         mark('attention','系统时区守护与用户任务的基线不一致或尚未注册；未覆盖，请重新批准本次维护方案。');continue
@@ -194,8 +204,11 @@ class Watchdog:
                         heartbeat=authority.get('status',{});stamp=heartbeat.get('at_epoch')
                         healthy=(type(stamp) in (int,float) and 0<=now-stamp<180
                                  and heartbeat.get('state') in ('healthy','restored','repairing','cooldown') and heartbeat.get('initial') is False)
-                        mark('delegated' if healthy else 'attention','时区漂移已交给获授权的系统守护，等待下次 60 秒检查并读回。' if healthy else '已注册系统时区守护，但心跳过期或恢复已暂停；请在本页核对状态并重新批准。')
+                        mark(('delegated' if drift else 'healthy') if healthy else 'attention',('时区漂移已交给获授权的系统守护，等待下次 60 秒检查并读回。' if drift else '批准的时区基线及系统守护心跳正常') if healthy else '已注册系统时区守护，但心跳过期或恢复已暂停；请在本页核对状态并重新批准。')
                         continue
+                if key=='timezone' and self.capability_reader().get('timezone',{}).get('state')!='available':
+                    mark('attention','后台时区权限尚未取得或已撤销，请在持续维护中重新审核授权。');continue
+                if not drift:mark('healthy','批准的'+label+'基线正常');continue
                 attempts=record.get('attempts',[])
                 if any(not isinstance(t,(int,float)) or t>now for t in attempts):raise ValueError('守护时间记录异常，请核对系统时钟')
                 attempts=[t for t in attempts if now-t<86400]

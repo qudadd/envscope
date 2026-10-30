@@ -151,9 +151,9 @@ class Operations:
         self.remedy_opener = remedy_opener or self._open_remedy
         self.config_remedies = ConfigRemedies(self.home, self.accounts.data_dir)
         self.maintenance = maintenance or Maintenance(store, remedies=self.config_remedies, home=self.home)
-        from .timezone_service import TimezoneService
+        from .timezone_service import system_timezone_service
         from .inventory import collect
-        self.timezone_service = TimezoneService(store,lambda:(self.environment_reader or collect)())
+        self.timezone_service = system_timezone_service(store,lambda:(self.environment_reader or collect)())
         self.maintenance.timezone_service=self.timezone_service
         from .process_guard import ProcessGuard
         self.process_guard = process_guard or ProcessGuard(store, self.home)

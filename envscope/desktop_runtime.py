@@ -73,6 +73,35 @@ class DesktopRuntime:
         self.preferences = {k: saved.get(k, v) if type(saved.get(k, v)) is bool else v for k, v in DEFAULTS.items()}
         self.icon, self.quitting, self.next_executable = None, False, None
         self.ready, self.stopped = threading.Event(), threading.Event()
+        self.guard_attention=None
+        from .guard_notifications import GuardNotifications
+        self.guard_notifications=GuardNotifications(server.store,self.notify_guard)
+
+    def notify_guard(self,value):
+        self.guard_attention=value
+        if self.icon:
+            try:
+                if getattr(self.icon,'HAS_NOTIFICATION',False):self.icon.notify(value['message'],'EnvScope 守护提醒')
+                self.icon.update_menu()
+            except (OSError,RuntimeError,NotImplementedError):pass
+        # Details remain in local records. The fixed event only carries known IDs.
+        try:self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-guard-attention",{detail:'+json.dumps(value,ensure_ascii=True)+'}))')
+        except (OSError,RuntimeError):pass
+
+    def show_guard(self):
+        self.show()
+        self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-open-guard"))')
+
+    def poll_guard(self):
+        operations=getattr(self.server,'operations',None)
+        if operations is None or not self.ready.is_set():return
+        lock=getattr(self.server,'audit_lock',None)
+        if lock is not None and lock.locked():return
+        maintenance=operations.maintenance.status();timezone=operations.timezone_service.status()
+        self.guard_notifications.update(maintenance,timezone)
+        if self.guard_attention and not self.guard_notifications.active:
+            self.guard_attention=None
+            self.window.run_js('document.dispatchEvent(new CustomEvent("envscope-guard-clear"))')
 
     def status(self):
         installed = self.server.store._read("desktop-install.private.json", {})
@@ -156,13 +185,17 @@ class DesktopRuntime:
 
     def background(self):
         # This is update discovery, not implicit diagnostic/maintenance consent.
-        last = None
+        last = None;guard_checked=0
         while not self.stopped.wait(10):
             if self.preferences["check_updates"] and (last is None or time.monotonic() - last > 24 * 3600):
                 self.updates.check(self.preferences["preview_updates"])
                 last = time.monotonic()
                 if self.icon:
                     self.icon.update_menu()
+            if time.monotonic()-guard_checked>=30:
+                try:self.poll_guard()
+                except (OSError,ValueError,RuntimeError,subprocess.SubprocessError):pass
+                guard_checked=time.monotonic()
 
     def start_tray(self):
         import pystray
@@ -180,6 +213,7 @@ class DesktopRuntime:
             self.ready.set()
         self.icon = pystray.Icon("EnvScope", image, "EnvScope", pystray.Menu(
             pystray.MenuItem("打开 EnvScope", lambda icon, item: self.show(), default=True),
+            pystray.MenuItem(lambda item:'守护需要处理' if self.guard_attention else '查看守护状态',lambda icon,item:self.show_guard()),
             pystray.MenuItem(lambda item: "有新版可用" if self.updates.status()["state"] == "available" else "软件更新与后台设置", open_settings),
             pystray.MenuItem("退出 EnvScope", lambda icon, item: self.quit())))
         self.icon.run_detached(setup=ready)

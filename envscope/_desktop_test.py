@@ -130,6 +130,12 @@ def main(output=None):
         result['native_pipe_transport']='not_applicable'
         result['native_wireguard_bindings']='not_applicable'
         if platform.system()=='Windows':
+            from .timezone_service import bundle_worker
+            import subprocess
+            worker=bundle_worker(cache=directory/'native-timezone-cache',system='Windows')
+            info=json.loads(subprocess.check_output([worker['path'],'--version'],timeout=10))
+            assert info=={'format':1,'release':__release__,'fixture':False}
+            result['native_timezone_worker']=True
             from .wireguard import WindowsServices, command_identity, PREFIX
             path = 'C:\\Program Files\\WireGuard\\wireguard.exe'
             args = WindowsServices().argv('"'+path+'" /tunnelservice "C:\\EnvScopeFixture.conf"')

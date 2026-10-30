@@ -14,6 +14,25 @@ from scripts.environment_fixtures import report, target
 
 
 class WatchdogTests(unittest.TestCase):
+    def test_windows_missing_write_privilege_cannot_approve_automatic_guard(self):
+        guard=Watchdog(system='Windows',reader=lambda:self.inventory,writer=Mock(),
+                       capability_reader=lambda:{'timezone':{'state':'authorization_required'}})
+        from envscope.region_profiles import profiles
+        selected=next(p for p in profiles('Windows') if p['timezone']=='Eastern Standard Time' and p['locale']=='en-US')
+        settings=target('Windows',region_profile=selected['id'],timezone=selected['timezone'],locale=selected['locale'],country=selected['country'])
+        with self.assertRaisesRegex(ValueError,'授权'):
+            guard.prepare(settings,{'timezone':True})
+        self.assertEqual(guard.options()['capabilities']['timezone']['state'],'authorization_required')
+
+    def test_revoked_windows_privilege_is_detected_even_before_drift(self):
+        writer=Mock()
+        guard=Watchdog(system='Windows',reader=lambda:self.inventory,writer=writer,
+                       capability_reader=lambda:{'timezone':{'state':'authorization_required'}})
+        stats={}
+        guard.run({'timezone':'Eastern Standard Time'},stats,lambda *a,**k:None,lambda:None)
+        self.assertEqual(stats['watchdog']['timezone']['state'],'attention')
+        writer.assert_not_called()
+
     def test_authorized_mac_service_owns_timezone_repairs_without_duplicate_writes(self):
         from datetime import datetime,timezone
         now=datetime.now(timezone.utc).timestamp()

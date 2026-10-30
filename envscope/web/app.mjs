@@ -28,6 +28,10 @@ const sessionPromise=(async()=>{
 })();
 initConnection(sessionPromise);
 initCoverage();
+document.addEventListener('envscope-open-guard',()=>{document.querySelector('[data-page="upkeep"]').click();byId('guard-alert').hidden=true;});
+document.addEventListener('envscope-guard-attention',event=>{byId('guard-alert').hidden=false;byId('guard-alert-message').textContent=event.detail.message;});
+document.addEventListener('envscope-guard-clear',()=>{byId('guard-alert').hidden=true;});
+byId('guard-alert-open').addEventListener('click',()=>document.dispatchEvent(new CustomEvent('envscope-open-guard')));
 const environment={timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"unknown",languages:[...navigator.languages],
   platform:navigator.userAgentData?.platform||navigator.platform||"unknown",automated:navigator.webdriver===true};
 const envRows=[["时区",environment.timezone],["语言",environment.languages.join(" · ")],["运行环境",environment.platform+(environment.automated?" / 自动化会话":"")]];

@@ -44,6 +44,11 @@ jobs:
         env:
           ENVSCOPE_TIMEZONE_ACCEPTANCE: '1'
         run: python -m scripts.timezone_acceptance
+      - name: Actual SYSTEM timezone task lifecycle (fixture clock only)
+        if: runner.os == 'Windows'
+        env:
+          ENVSCOPE_TIMEZONE_ACCEPTANCE: '1'
+        run: python -m scripts.windows_timezone_acceptance
       - name: Actual local Mihomo routing and rollback (isolated fixture)
         run: python -m scripts.routing_core_smoke
       - name: Actual native client lifecycle (owned disposable GUI only)
@@ -121,7 +126,9 @@ jobs:
         if: always()
         with:
           name: Timezone-evidence-${{ runner.os }}-${{ runner.arch }}
-          path: artifacts/timezone-acceptance/result.json
+          path: |
+            artifacts/timezone-acceptance/result.json
+            artifacts/windows-timezone-acceptance.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()

@@ -150,6 +150,7 @@ class Maintenance:
                 return {"state": "blocked", "reason": "基线代理的 API TLS 连接尚未验证，不启用自动配置恢复。先测试并修复代理。"}
         baseline,guard_effects={},[]
         timezone_plan=None
+        needs_timezone_service=False
         if watchdog:
             from .regions import region_finding, PARTIAL
             if (not self.store.settings().get('environment_confirmed') or not self.store.settings().get('usage_country')
@@ -157,10 +158,13 @@ class Maintenance:
                     or self.store.settings().get('usage_country') in PARTIAL
                     or not any(f['id']=='target.region' and f['status']=='pass' for f in report.get('findings',[]))):
                 return {'state':'blocked','reason':'请先确认官方支持的实际地区，并修复环境后保存守护基线。'}
-            baseline,guard_effects=self.watchdog.prepare(self.store.settings(),watchdog)
-            if baseline.get('timezone') and self.timezone_service and self.timezone_service.system=='Darwin':
+            baseline,guard_effects=self.watchdog.prepare(self.store.settings(),watchdog,allow_authorization=self.timezone_service is not None)
+            if baseline.get('timezone') and self.timezone_service:
                 status=self.timezone_service.status()
-                if not (status.get('installed') and status.get('registered') and status.get('owner')
+                if status.get('state') in ('conflict','recovery_required') or status.get('state')=='attention' and 'installed' not in status:
+                    return {'state':'blocked','reason':status.get('reason','系统时区执行能力无法核实，请先处理。')}
+                needs_timezone_service=(self.timezone_service.system=='Darwin' or status.get('installed') or self.watchdog.capability_reader().get('timezone',{}).get('state')!='available')
+                if needs_timezone_service and not (status.get('installed') and status.get('registered') and status.get('owner')
                         and status.get('target')==baseline['timezone'] and not status.get('needs_update')
                         and status.get('state') in ('active','waiting')):
                     timezone_plan=self.timezone_service.prepare(report)
@@ -186,10 +190,10 @@ class Maintenance:
         if baseline:effects.append('守护每项至少间隔 5 分钟、24 小时最多尝试恢复 3 次；失败留痕，反复漂移暂停并提示重新审核')
         token = secrets.token_urlsafe(20)
         self.plans = {token: {"deadline": time.monotonic() + 90, "report_id": report["report_id"],
-                              "settings_hash": fingerprint(self.store.settings()), "file_hash": file_hash,"timezone_plan":timezone_plan,
+                              "settings_hash": fingerprint(self.store.settings()), "file_hash": file_hash,"timezone_plan":timezone_plan,'needs_timezone_service':needs_timezone_service,
                               "config": {"version": 1, "enabled": False, "interval": interval, "auto_restore": auto_restore,
                                          "approved": approved, "watchdog":baseline,"schedule": schedule, "created_at": utc_now()}}}
-        return {"state": "planned", "plan_id": token, "effects": effects,
+        return {"state": "planned", "plan_id": token, "effects": effects,'capabilities':self.watchdog.capability_reader(),
                 "reason": "审核后确认启用。开发或试用不会自动替你安装后台任务。"}
 
     def enable(self, token, report, confirmed=False):
@@ -216,7 +220,7 @@ class Maintenance:
                     except (OSError,ValueError):pass  # Root-owned transaction evidence remains authoritative.
                     return {'state':'partial','reason':'系统时区守护未完成，尚未启用本次巡检。'+result.get('reason',''),
                             'timezone_service':result,'needs_retest':True}
-            elif config.get('watchdog',{}).get('timezone') and self.timezone_service and self.timezone_service.system=='Darwin':
+            elif plan.get('needs_timezone_service') and self.timezone_service:
                 root_status=self.timezone_service.status()
                 if not (root_status.get('installed') and root_status.get('registered') and root_status.get('owner')
                         and root_status.get('target')==config['watchdog']['timezone'] and not root_status.get('pending')):
@@ -263,7 +267,7 @@ class Maintenance:
                 self._write("config", config)
             try:
                 self.scheduler.remove(config.get("schedule"))
-                note='已单独授权的 macOS 系统时区守护需在下方预览停用；本次不改系统时区。' if self.timezone_service and self.timezone_service.system=='Darwin' else '不恢复系统设置。'
+                note='已单独授权的系统时区守护需在下方预览停用；本次不改系统时区。' if self.timezone_service else '不恢复系统设置。'
                 result = {"state": "disabled", "reason": "持续维护已停用，用户巡检任务已移除。保留检测记录和私有备份。"+note}
             except (OSError, ValueError):
                 result = {"state": "partial", "reason": "自动恢复已停用，但系统任务未确认移除。保留任务文件供核对；后台再次唤起也不会执行恢复。"}

@@ -194,7 +194,7 @@ class RegionSetup:
                 changes[key] = selected[key]
                 effects.append(label + '：' + before[key] + ' → ' + selected[key])
         timezone_plan=None
-        if 'timezone' in components and self.system=='Darwin' and self.timezone_service:
+        if 'timezone' in components and self.timezone_service:
             status=self.timezone_service.status()
             if status.get('pending') or status.get('state')=='conflict' or status.get('state')=='attention' and 'installed' not in status:
                 return {'state':'blocked','reason':status.get('reason','先处理系统时区守护状态。')}

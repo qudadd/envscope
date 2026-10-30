@@ -64,22 +64,22 @@ def daemon_bytes(layout):
                           'StandardOutPath':'/dev/null','StandardErrorPath':'/dev/null'},sort_keys=True)
 
 
-def bundle_worker(root=None,cache=None,*,component='timezone'):
+def bundle_worker(root=None,cache=None,*,component='timezone',system='Darwin'):
     if component not in ('timezone','network','components'):raise ValueError('不支持的系统辅助程序')
-    binary=component+'-helper';label={'timezone':'时区','network':'网络','components':'组件迁移'}[component]
+    name=component+'-helper';binary=name+('.exe' if system=='Windows' else '');label={'timezone':'时区','network':'网络','components':'组件迁移'}[component]
     root=Path(root) if root is not None else Path(__file__).resolve().parent/'native-runtime'
     try:
-        metadata=root/(binary+'.json')
+        metadata=root/(name+'.json')
         if metadata.stat().st_size>65536:raise ValueError('oversized helper metadata')
         manifest=json.loads(metadata.read_text(encoding='utf-8'))
-        payload=root/(binary+'.payload.zip')
+        payload=root/(name+'.payload.zip')
         if payload.stat().st_size>2*1024**2:raise ValueError('oversized helper payload')
         with zipfile.ZipFile(payload) as archive:
             if archive.namelist()!=[binary] or not 0<archive.getinfo(binary).file_size<=2*1024**2:
                 raise ValueError('invalid helper payload')
             data=archive.read(binary)
     except (OSError,ValueError,zipfile.BadZipFile,RuntimeError):
-        raise ValueError('请使用完整 macOS 独立桌面包，本入口需要随附的原生'+label+'辅助程序。') from None
+        raise ValueError('请使用完整 '+('Windows' if system=='Windows' else 'macOS')+' 独立桌面包，本入口需要随附的原生'+label+'辅助程序。') from None
     if (not isinstance(manifest,dict) or type(manifest.get('format')) is not int or manifest.get('format')!=1
             or manifest.get('fixture') is not False or manifest.get('release')!=__release__
             or not isinstance(manifest.get('sha256'),str) or not SHA.fullmatch(manifest['sha256'])
@@ -448,6 +448,14 @@ class NativeTimezoneIO:
         raise_for_consent(result, 'Darwin')
 
 
+def system_timezone_service(store,reader,*,system=None,**kwargs):
+    system=system or platform.system()
+    if system=='Windows':
+        from .timezone_windows import WindowsTimezoneService
+        return WindowsTimezoneService(store,reader,**kwargs)
+    return TimezoneService(store,reader,system=system,**kwargs)
+
+
 class TimezoneService:
     def __init__(self,store,reader,*,system=None,io=None,uid=None):
         self.store,self.reader=store,reader
@@ -486,6 +494,7 @@ class TimezoneService:
             return {'supported':True,'state':state,'reason':reason,'target':base.get('target'),
                     'observed':heartbeat.get('observed'),'heartbeat_at':heartbeat.get('at_epoch'),
                     'installed':bool(base),'registered':value['registered'],'pending':value['pending'],
+                    'intentionally_removed':not base and value.get('transaction',{}).get('owner_uid')==self.uid and (value.get('outcome',{}).get('state')=='rolled_back' or value.get('outcome',{}).get('state')=='committed' and value.get('transaction',{}).get('operation')=='remove'),
                     'original':base.get('original'),'release':base.get('release'),
                     'journal_path':str(self.io.layout.root),'owner':base.get('owner_uid')==self.uid,
                     'can_undo':not value['pending'] and value.get('transaction',{}).get('owner_uid')==self.uid
