@@ -86,11 +86,11 @@
 
 **Interfaces:** Preserve existing backend capabilities/confirmation contracts. The visual layer renders states supplied by the backend and retains fresh report/repair/guard flows.
 
-- [ ] Confirm Task 5 is complete. Read Impeccable context and the existing design constraints; document the concrete visual system.
-- [ ] Implement the complete minimal desktop layout and consistent application/tray/navigation/status icon set, with original licenses for reused assets.
-- [ ] Improve phase/progress feedback, keyboard/focus handling, stable selection/scroll, duplicate-operation prevention and recovery affordances across every screen.
-- [ ] Run real browser workflows at 1024/1280/1440 widths for Windows/macOS fixtures; inspect screenshots, keyboard access, overflow, empty/loading/error/permission/recovery states and frozen-package icon rendering.
-- [ ] Commit the verified UI, asset and interaction changes with documentation.
+- [x] Confirm Task 5 is complete. Read Impeccable context and the existing design constraints; document the concrete visual system.
+- [x] Implement the complete minimal desktop layout and consistent application/tray/navigation/status icon set, with original licenses for reused assets.
+- [x] Improve phase/progress feedback, keyboard/focus handling, stable selection/scroll, duplicate-operation prevention and recovery affordances across every screen.
+- [x] Run real browser workflows at 1024/1280/1440 widths for Windows/macOS fixtures; inspect screenshots, keyboard access, overflow, empty/loading/error/permission/recovery states and frozen-package icon rendering.
+- [x] Commit the verified UI, asset and interaction changes with documentation.
 
 ### Task 7: Full review, native distribution and public delivery
 

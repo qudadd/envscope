@@ -28,7 +28,10 @@ jobs:
       - name: Detached browser cleanup after parent exit (owned processes only)
         if: runner.os != 'Linux'
         run: python -m scripts.browser_session_acceptance
-      - run: node --test tests/browser.test.mjs
+      - run: node --test tests/browser.test.mjs tests/permission_flow.test.mjs
+      - run: node --check envscope/web/permission_flow.mjs
+      - run: node --check envscope/web/workspace_ui.mjs
+      - run: node --check envscope/web/icons.mjs
       - run: node --check envscope/web/app.mjs
       - run: node --check envscope/web/controls.mjs
       - run: node --check envscope/web/diagnosis.mjs
@@ -62,6 +65,8 @@ jobs:
       - run: python -m scripts.browser_smoke
       - run: python -m scripts.usability_smoke
       - run: python -m scripts.desktop_ui_smoke
+      - run: python -m scripts.desktop_refresh_smoke
+      - run: python -m scripts.permission_flow_smoke
       - run: python -m scripts.target_environment_smoke
       - run: python -m scripts.coverage_smoke
       - run: python -m scripts.browser_recovery_smoke

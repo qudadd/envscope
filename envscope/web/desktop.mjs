@@ -40,7 +40,11 @@ export function initDesktopApp({run,operate}){
   $('app-update-install').addEventListener('click',()=>action('app-update-install',{version:desktop?.updates?.version}));
   $('app-update-restart').addEventListener('click',()=>action('app-update-restart'));
   $('app-update-rollback').addEventListener('click',()=>action('app-update-rollback'));
-  document.querySelector('[data-page="settings"]').addEventListener('click',()=>{if(desktop?.mode==='native')void run('desktop-status').then(v=>v.desktop&&render(v.desktop)).catch(()=>{});});
+  document.querySelector('[data-page="settings"]').addEventListener('click',()=>{
+    if(desktop?.mode==='native')void operate(async()=>{
+      const value=await run('desktop-status');if(value.desktop)render(value.desktop);
+    },output);
+  });
   document.addEventListener('envscope-catalog',e=>render(e.detail.desktop));
   document.addEventListener('envscope-report',e=>{
     report=e.detail.report;const a=report.assessment;$('qualification').hidden=!a;if(!a)return;

@@ -29,6 +29,13 @@ def main():
                 thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
                 context=browser.new_context(viewport={'width':1280,'height':950},locale='zh-CN')
                 page=context.new_page();errors=[]
+                busy_reads=[0]
+                def first_lookup_busy(route):
+                    if route.request.post_data_json.get('action')=='environment-location' and busy_reads[0]==0:
+                        busy_reads[0]+=1
+                        route.fulfill(status=409,json={'error':'audit_running'})
+                    else:route.continue_()
+                page.route('**/api/action',first_lookup_busy)
                 page.on('pageerror',lambda e:errors.append(str(e)))
                 page.route('https://**/*',lambda route:route.abort())
                 try:
@@ -37,6 +44,7 @@ def main():
                     country=page.locator('#target-form [name=usage_country]')
                     city=page.locator('#target-region-profile');status=page.locator('#target-ip-status')
                     country.fill('US');expect(status).to_contain_text('仅显示 US')
+                    assert busy_reads[0]==1,'A busy read must recover without another user click'
                     assert city.locator('option[value^="us-"]').count()>=29
                     assert city.locator('option').count()==city.locator('option[value^="us-"]').count()+1
                     expect(city).to_have_value('us-new-york')

@@ -69,7 +69,17 @@ export function initTargetEnvironment({sessionPromise,run,retest,isBusy}){
     const params={connection_mode:field('connection_mode').value,target_proxy:field('connection_mode').value==='http_proxy'?field('target_proxy').value.trim():''};
     lookupBusy=true;controls();$('target-ip-status').textContent='正在按所选连接读取出口 IP…';
     try{
-      const value=await run('environment-location',params);
+      let value;
+      for(let attempt=0;attempt<4;attempt++){
+        if(revision!==lookupRevision||form.hidden)return;
+        try{value=await run('environment-location',params);break;}
+        catch(error){
+          // Only retry this read, never a configuration change or consent action.
+          if(error.code!=='audit_running'||attempt===3)throw error;
+          $('target-ip-status').textContent='等待当前操作完成，随后自动读取出口 IP…';
+          await new Promise(resolve=>setTimeout(resolve,300*(attempt+1)));
+        }
+      }
       if(revision!==lookupRevision||form.hidden)return;
       if(edited!==editRevision||manualTarget){$('target-ip-status').textContent=`${value.country?'本次出口 '+value.country+'。':''}已保留手动选择或已保存目标。点“重新读取 IP”可重新匹配。`;return;}
       const country=countryCode(value.country),actual=countryCode(field('usage_country').value);

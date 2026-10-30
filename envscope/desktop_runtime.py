@@ -205,12 +205,9 @@ class DesktopRuntime:
 
     def start_tray(self):
         import pystray
-        from PIL import Image, ImageDraw
-        image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(image)
-        draw.rounded_rectangle((4, 4, 60, 60), radius=12, fill="white", outline="black", width=3)
-        for rect in ((19, 17, 25, 47), (25, 17, 45, 23), (25, 29, 40, 35), (25, 41, 45, 47)):
-            draw.rectangle(rect, fill="black")
+        from PIL import Image
+        with Image.open(Path(__file__).parent/'web/tray.png') as source:
+            image=source.convert('RGBA')
         def open_settings(icon, item):
             self.show()
             self.window.run_js("document.querySelector('[data-page=\"settings\"]').click()")

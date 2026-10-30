@@ -31,6 +31,7 @@ def main():
                "--distpath", str(root / "dist" / "desktop"), "--workpath", str(root / "build" / "desktop"),
                "--specpath", str(root / "build"), str(root / "scripts" / "desktop_entry.py")]
     environment = dict(os.environ)
+    command.extend(['--icon',str(root/'envscope/web'/('app.icns' if platform.system()=='Darwin' else 'app.ico'))])
     if platform.system()=='Darwin':command.extend(['--osx-bundle-identifier',APP_ID])
     if platform.system() == 'Windows':
         command.extend(['--version-file',str(windows_version_file(root/'build/windows-version.txt'))])

@@ -26,6 +26,8 @@ def verify(read, names):
     assert read('envscope/web/components_ui.mjs'), 'missing component migration UI'
     assert read('envscope/web/check_preferences_ui.mjs'), 'missing optional checks / diagnostics UI'
     assert read('envscope/web/workflow.mjs'), 'missing single-workflow UI'
+    for name in ('workspace.css','workspace_ui.mjs','icons.mjs','mark.svg','scan.svg','app-icon.png','app.ico','app.icns','tray.png','permission_flow.mjs'):
+        assert read('envscope/web/'+name),'Missing desktop refresh resource: '+name
     print("Verified full pinned vendor bundle and all desktop UI resources.")
 
 

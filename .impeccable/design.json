@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-30T10:37:02.2768526Z",
+  "title": "Design System: EnvScope",
+  "extensions": {
+    "colorMeta": {
+      "paper": { "role": "neutral", "displayName": "主画布" },
+      "rail": { "role": "neutral", "displayName": "侧栏与筛选底色" },
+      "ink": { "role": "primary", "displayName": "正文与主操作" },
+      "muted": { "role": "neutral", "displayName": "辅助文字" },
+      "line": { "role": "neutral", "displayName": "分隔线" },
+      "selected": { "role": "neutral", "displayName": "当前导航" },
+      "panel": { "role": "neutral", "displayName": "目标与守护摘要" },
+      "expanded": { "role": "neutral", "displayName": "展开行" },
+      "danger": { "role": "primary", "displayName": "手动说明与检查错误" },
+      "manual-danger": { "role": "primary", "displayName": "现有手动徽标与左边线" }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "页面标题", "purpose": "主页面标题。" },
+      "title": { "displayName": "分节标题", "purpose": "常规功能分节，继承系统字体。" },
+      "body": { "displayName": "正文", "purpose": "默认正文。" },
+      "label": { "displayName": "操作文字", "purpose": "按钮；主按钮单独增加字重。" },
+      "field": { "displayName": "输入与导航", "purpose": "输入框、选择框与导航的字号和行高。" },
+      "note": { "displayName": "辅助说明", "purpose": "范围、限制与状态补充。" },
+      "link": { "displayName": "文本操作", "purpose": "带下划线的次要操作。" },
+      "mono": { "displayName": "原始证据", "purpose": "可换行的原始证据。" }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "button-state", "value": "background-color .12s, border-color .12s", "purpose": "按钮背景和边框变化，沿用 CSS 默认 ease。" },
+      { "name": "reduced-motion", "value": "transition: none !important; animation: none !important; scroll-behavior: auto !important", "purpose": "在 prefers-reduced-motion: reduce 下应用。" }
+    ],
+    "breakpoints": [
+      { "name": "compact-desktop-max-width", "value": "1100px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "主按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "当前主要动作使用深色实心白字。",
+      "html": "<button type=\"button\" class=\"ds-primary\">生成方案</button>",
+      "css": ".ds-primary{font:550 13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;min-height:40px;padding:10px 22px;color:var(--paper,#fff);background:var(--ink,#202322);border:1px solid var(--ink,#202322);border-radius:var(--radius,7px);cursor:pointer;transition:background-color .12s,border-color .12s}.ds-primary:hover:not(:disabled){background:#394038;border-color:#394038}.ds-primary:focus-visible{outline:2px solid var(--ink,#202322);outline-offset:3px}.ds-primary:disabled{opacity:.45;cursor:default}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none!important}}"
+    },
+    {
+      "name": "普通按钮",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "次要操作与工具调用使用白底细边。",
+      "html": "<button type=\"button\" class=\"ds-secondary\">预览所选修改</button>",
+      "css": ".ds-secondary{font:400 13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;min-height:36px;padding:8px 14px;color:var(--ink,#202322);background:var(--paper,#fff);border:1px solid #bdc5b9;border-radius:var(--radius,7px);cursor:pointer;transition:background-color .12s,border-color .12s}.ds-secondary:hover:not(:disabled){background:#f1f4ef;border-color:#919c89}.ds-secondary:active:not(:disabled){background:#e8ede4}.ds-secondary:focus-visible{outline:2px solid var(--ink,#202322);outline-offset:3px}.ds-secondary:disabled{opacity:.45;cursor:default}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none!important}}"
+    },
+    {
+      "name": "文本操作",
+      "kind": "button",
+      "refersTo": "button-link",
+      "description": "设置、查看和选择等操作使用下划线。",
+      "html": "<button type=\"button\" class=\"ds-link\">调整地区与时区</button>",
+      "css": ".ds-link{display:inline-flex;align-items:center;gap:8px;min-height:28px;padding:2px 0;font:400 12px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;color:var(--ink,#202322);background:transparent;border:0;border-radius:2px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}.ds-link:hover:not(:disabled){background:transparent;color:#000}.ds-link:focus-visible{outline:2px solid var(--ink,#202322);outline-offset:3px}.ds-link:disabled{opacity:.45;cursor:default}"
+    },
+    {
+      "name": "输入框",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "带可见标签的白底输入框。",
+      "html": "<label class=\"ds-field\">查找项目<input type=\"search\" placeholder=\"例如：DNS、登录、证书\"></label>",
+      "css": ".ds-field{display:block;font:400 13px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;color:var(--ink,#202322)}.ds-field input{box-sizing:border-box;display:block;width:100%;min-height:40px;margin-top:7px;padding:9px 11px;font:400 13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;background:var(--paper,#fff);color:var(--ink,#202322);border:1px solid #b9c1b5;border-radius:var(--radius,7px)}.ds-field input::placeholder{color:#6d7269;opacity:1}.ds-field input:focus{outline:2px solid var(--ink,#202322);outline-offset:1px;border-color:var(--ink,#202322)}.ds-field input:focus-visible{outline-offset:3px}"
+    },
+    {
+      "name": "侧栏导航",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "文字配原创线条图标，当前页面有浅底色。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"主要功能\"><button type=\"button\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M8 12h8M12 8v8\"/></svg>检测与修复</button><button type=\"button\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Zm-4 9 3 3 5-6\"/></svg>持续守护</button></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:5px;padding:16px;background:var(--rail,#f5f6f4)}.ds-nav button{display:flex;align-items:center;gap:10px;min-height:42px;width:100%;padding:10px 12px;font:400 13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;text-align:left;white-space:normal;border:0;border-radius:var(--radius,7px);color:var(--muted,#626763);background:transparent;cursor:pointer;transition:background-color .12s,border-color .12s}.ds-nav button[aria-current=page]{background:var(--selected,#e5e9e3);color:var(--ink,#202322);font-weight:600}.ds-nav button:hover:not(:disabled){background:#ecefea}.ds-nav button:focus-visible{outline:2px solid var(--ink,#202322);outline-offset:3px}.ds-nav svg{width:19px;height:19px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}@media(prefers-reduced-motion:reduce){.ds-nav button{transition:none!important}}"
+    },
+    {
+      "name": "目标与守护摘要",
+      "kind": "card",
+      "refersTo": "summary-panel",
+      "description": "浅底细边的状态容器。",
+      "html": "<section class=\"ds-panel\"><h2>尚未启用</h2><p>后台任务需先生成方案并明确启用。</p></section>",
+      "css": ".ds-panel{padding:18px 20px;background:#f7f9f5;color:var(--ink,#202322);border:1px solid var(--line,#dde1dc);border-radius:var(--radius,7px);font:400 14px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif}.ds-panel h2{font-size:16px;font-weight:600;line-height:1.5;margin:0}.ds-panel p{font-size:12.5px;line-height:1.75;max-width:80ch;margin:6px 0;color:var(--muted,#626763)}"
+    },
+    {
+      "name": "逐项检查",
+      "kind": "custom",
+      "refersTo": "inspection-row",
+      "description": "原生展开行保留选择、名称、状态与证据入口。",
+      "html": "<details class=\"ds-inspection\"><summary><label class=\"ds-inspection-select\"><input type=\"checkbox\" checked aria-label=\"选择 所选用途的域名解析\"></label><span class=\"ds-inspection-name\"><strong>所选用途的域名解析</strong><small>所选用途的域名解析 · 目标验收</small></span><span class=\"ds-inspection-state\">尚未检测<small>查看说明</small></span></summary><h3>查什么</h3><p>按已确认的用途和连接方式，核对本次证据是否达到目标。</p></details>",
+      "css": ".ds-inspection{margin:0;padding:13px 12px;border-top:1px solid var(--line,#dde1dc);font:400 13px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;color:var(--ink,#202322)}.ds-inspection[open]{background:#fafbf9;padding-bottom:20px}.ds-inspection summary{display:flex;align-items:center;justify-content:space-between;gap:14px;line-height:1.8;cursor:pointer}.ds-inspection summary:focus-visible,.ds-inspection input:focus-visible{outline:2px solid var(--ink,#202322);outline-offset:3px}.ds-inspection-select{display:inline-flex;width:auto;margin:0 12px 0 0}.ds-inspection-select input{width:16px;height:16px;margin:0 8px 0 0;accent-color:var(--ink,#202322)}.ds-inspection-name{flex:1}.ds-inspection strong{font-size:13px;font-weight:550}.ds-inspection small{display:block;margin-top:3px;color:var(--muted,#626763);font-size:11px}.ds-inspection-state{font-size:12px;min-width:120px;text-align:right;white-space:nowrap}.ds-inspection-state small{text-decoration:underline;text-underline-offset:3px}.ds-inspection h3{font-size:14px;font-weight:550;margin:16px 0 4px 34px}.ds-inspection p{font-size:13px;line-height:1.75;max-width:80ch;margin:0 0 0 34px}"
+    },
+    {
+      "name": "问题摘要",
+      "kind": "custom",
+      "refersTo": "problem-row",
+      "description": "名称、观察与手动处理状态排在同一行，原因按需展开。",
+      "html": "<details class=\"ds-problem\"><summary><span class=\"ds-problem-title\"><strong>配置读取权限</strong><span>操作系统拒绝读取现有配置。</span></span><span class=\"ds-problem-badge\">需要授权</span></summary><p>展开后查看具体影响与处理步骤。</p></details>",
+      "css": ".ds-problem{margin:0;padding:18px 0;border-top:1px solid var(--line,#dde1dc);font:400 13px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei UI',sans-serif;color:var(--ink,#202322)}.ds-problem[open]{padding-bottom:20px}.ds-problem summary{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;list-style:none;width:100%;line-height:1.8;cursor:pointer}.ds-problem summary::-webkit-details-marker{display:none}.ds-problem summary:focus-visible{outline:2px solid var(--ink,#202322);outline-offset:3px}.ds-problem-title{min-width:0;flex:1}.ds-problem-title strong{display:block;font-size:14px;font-weight:600}.ds-problem-title>span{display:block;color:var(--muted,#626763);font-size:12px;line-height:1.8;margin:5px 0 0;max-width:82ch;overflow-wrap:anywhere}.ds-problem-badge{font-size:12px;color:#a92828;white-space:nowrap;text-decoration:underline;text-underline-offset:4px;padding-top:1px}.ds-problem p{font-size:13px;line-height:1.75;max-width:80ch;margin:12px 0;color:var(--muted,#626763)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "黑白极简桌面工具",
+    "overview": "面向 Windows 与 macOS 的日常操作界面。文字、细分隔线和少量浅色容器建立层级；检查、修复与守护沿同一操作流程展开，技术证据按需查看。",
+    "keyCharacteristics": [
+      "固定窄侧栏与单一主内容区。",
+      "系统字体、可见操作文字和原创线条图标。",
+      "中性色为主，红色提示需要处理的故障或手动步骤。",
+      "桌面布局，不做手机适配。"
+    ],
+    "rules": [],
+    "dos": [
+      "Do 保留可见文字、明确状态、键盘焦点与原生表单语义。",
+      "Do 把完整检查与技术证据放在可展开区域，保留访问路径。",
+      "Do 在 1024、1280、1440px 桌面宽度核对布局。"
+    ],
+    "donts": [
+      "Don't 引入手机布局、营销首页、大量装饰卡片、渐变、发光或 emoji。",
+      "Don't 用颜色、图标或“通过”文案掩盖未测、未实现或权限不足。",
+      "Don't 把静态预览或视觉状态当作检测与修复已完成的证据。"
+    ]
+  }
+}

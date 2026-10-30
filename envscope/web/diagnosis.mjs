@@ -41,13 +41,13 @@ export function initDiagnosis({sessionPromise,retest}) {
   const busyObserver=new MutationObserver(updateRepairEntry);
   busyObserver.observe($('start'),{attributes:true,attributeFilter:['disabled']});
   busyObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-operation-busy']});
-  function setBusy(value){busy=value;for(const id of ['start','target-edit','target-confirm','target-cancel','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;for(const node of document.querySelectorAll('#desktop-preferences button'))node.disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';updateRepairEntry();document.dispatchEvent(new CustomEvent('envscope-operation-state',{detail:{busy:value}}));}
+  function setBusy(value){busy=value;for(const id of ['start','target-edit','target-confirm','target-cancel','quick-proxy','flow-upkeep-prepare','flow-upkeep-stop','flow-upkeep-interval','flow-upkeep-restore','enhance-cli','workflow-proxy','workflow-proxy-url','usage'])$(id).disabled=value;for(const node of document.querySelectorAll('#desktop-preferences button,#desktop-preferences input'))node.disabled=value;document.documentElement.dataset.operationBusy=value?'true':'false';updateRepairEntry();document.dispatchEvent(new CustomEvent('envscope-operation-state',{detail:{busy:value}}));}
   async function run(action,params={},confirmed=false){
     const session=await sessionPromise;if(!session)throw new Error('请打开本地桌面程序，再使用处理功能。');
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),240000);
     try{
       const response=await fetch('/api/action',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json','X-EnvScope-Token':session.token},body:JSON.stringify({action,params,confirmed})});
-      const value=await response.json();if(!response.ok)throw new Error(errorText[value.error]||value.error||'本次操作没有完成。');return value;
+      const value=await response.json();if(!response.ok){const error=new Error(errorText[value.error]||value.error||'本次操作没有完成。');error.code=value.error;throw error;}return value;
     }finally{clearTimeout(timer);}
   }
   async function action(fn,errorOutput=output){
