@@ -15,6 +15,11 @@ Windows 使用当前用户的 `%APPDATA%/Claude`；macOS 使用
 `~/Library/Application Support/Claude`。存档在 `~/.claude-switcher/accounts/<slot>`。
 同一时刻只有一个活动桌面目录。Claude Code 与日常浏览器资料不随其交换。
 
+从旧版迁移时，旁边的 `Claude.old` 或 `.claude-switcher/staging/` 中的副本与
+`cleanup.json` 也会阻止继续切换和启动。EnvScope 不根据旧标记自动删除或收编它们。
+先退出旧程序，复制保存整个旧目录、账号存档和指针文件，再核对副本所属账号；
+没有原生 v2 事务证据时走人工恢复，避免把旧副本或过期存档当成当前身份。
+
 ## 隔离及性能
 
 - 原样保留目录内的 Local State、Cookies、Local Storage、IndexedDB 等文件，

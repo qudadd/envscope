@@ -137,7 +137,7 @@ class AccountRecovery:
             inspected = self._inspect()
         except (AccountError, OSError, ValueError) as error:
             return {'state': 'blocked', 'reason': str(error), 'effects': [], 'manual':
-                    '请先退出 Claude，保留并复制 .new、.previous 和 account-transaction.json，再核对资料所属账号。不要删除恢复副本或反复切换。'}
+                    '请先退出 Claude，复制保存 .new、.previous、Claude.old、.claude-switcher/staging 中的副本 / cleanup.json，以及账号存档和 account-transaction.json，再核对资料所属账号。旧版副本不按原生事务自动清理；不要删除恢复材料或反复切换。'}
         value, _, _, _, mode, _, _, token = inspected
         identifier = uuid.uuid4().hex
         self.plans = {identifier: (time.monotonic(), token)}

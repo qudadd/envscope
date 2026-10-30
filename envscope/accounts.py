@@ -232,6 +232,20 @@ class AccountManager:
                      self.data_dir.with_name(self.data_dir.name + ".previous")):
             if os.path.lexists(path):
                 pending.append("profile/" + path.name)
+        # Original Windows versions use .old and newer upstream revisions use
+        # BASE/staging instead of our v2 journal layout. None of these copies
+        # may be ignored or treated as a completed native transaction.
+        legacy_previous=self.data_dir.with_name(self.data_dir.name+'.old')
+        if os.path.lexists(legacy_previous):pending.append('legacy-profile/'+legacy_previous.name)
+        legacy_staging=self.state_dir/'staging'
+        _safe_chain(legacy_staging)
+        if os.path.lexists(legacy_staging):
+            if not legacy_staging.is_dir():pending.append('legacy-staging')
+            else:
+                from itertools import islice
+                entries=list(islice(legacy_staging.iterdir(),257))
+                pending.extend('legacy-staging/'+entry.name for entry in entries[:256])
+                if len(entries)>256:pending.append('legacy-staging/overflow')
         return sorted(pending)
 
     def _slots(self, labels=None):
@@ -330,7 +344,7 @@ class AccountManager:
     def _require_clean(self, slot=None):
         self._check_roots()
         if self._pending():
-            raise RecoveryRequired("Incomplete .new/.previous state or transaction journal exists; all copies were preserved.")
+            raise RecoveryRequired("Pending .new/.previous, legacy .old/staging, or transaction journal exists; all copies were preserved. Review account recovery before continuing.")
         slots = self._slots()
         if slot and any(existing.casefold() == slot.casefold() and existing != slot for existing in slots):
             raise AccountError("Use the existing slot's exact letter case.")

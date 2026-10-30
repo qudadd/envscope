@@ -16,7 +16,7 @@ Linux 和手机端按产品范围延后。随包 57 个上游文件仍固定在 
 | set-check-config，可选检查 | 持久偏好，一键、所选项目与后台共用；必要依赖不能关闭 | CHECK_PREFERENCES；跳过不算通过，不绕过 TLS 或地区条件 |
 | status，A–D 卡片和命名 | 原生 AccountManager，另支持自定义槽位；体积、日期、当前与待恢复状态 | accounts 与账号 UI；本机状态不等于服务端订阅或认证验证 |
 | switch，首次收编、空槽登录、启动 | 正常退出、完整目录独立复制 / APFS COW、摘要、重命名、指针读回、事务恢复 | ACCOUNT_VOLUMES；失败与实际测试子进程中断均保留副本；不调用登出或伪造设备标识 |
-| 暂存冲突、指针与清理 | 独占锁、v2 日志、提交后清理；清理失败保持已提交指针并阻止启动，恢复入口可继续处理 | 覆盖上游 92cd 的目录冲突 / 指针不一致故障；EnvScope 使用自己的 `.new` / `.previous` 与恢复协议，不执行其 cleanup.json 删除路径 |
+| 暂存冲突、指针与清理 | 独占锁、v2 日志、提交后清理；清理失败保持已提交指针并阻止启动，恢复入口可继续处理；旧 `Claude.old` 和非空 `staging` 也阻止继续切换 | 覆盖上游 92cd 的目录冲突 / 指针不一致故障；EnvScope 使用自己的 `.new` / `.previous` 与恢复协议，不执行旧 cleanup.json 删除路径；未知旧副本保留并给出人工恢复指引 |
 | keep-in-workspace | 显式 skills 白名单、暂存合并、目标存档保持独立 | settings、OAuth、Cookie、身份文件不跨账号共享；旧越界清单停止并指导修正 |
 | fix，一键设置与复检 | 先修客户端，再读取实际连接，预览 Code、地区、路由、网络与守护；确认后执行并复检 | workflow / SolutionPlans / region_setup；按新结果分阶段，不提前批准尚未出现的网卡 |
 | 代理客户端选择 / 识别 | Clash Verge、FlClash、Shadowrocket、sing-box、ClashX、Surge、WireGuard 等分型；批准所选程序后启动 / 正常重开 | CLIENT_REPAIR / WIREGUARD；无统一管理 API 的开关在原客户端处理，不把进程存在当作 VPN 生效 |

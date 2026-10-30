@@ -291,6 +291,24 @@ class AccountTests(unittest.TestCase):
         self.assertTrue(self.manager.list_accounts()["pending"])
         self.assertNotIn("launch", self.events)
 
+    def test_original_old_and_new_upstream_staging_are_retained_and_block_native_switch(self):
+        self.seed()
+        legacy=self.data.with_name('Claude.old');self.profile(legacy,'LEGACY_NEWEST_FIXTURE')
+        staged=self.state/'staging/Claude.new';self.profile(staged,'UPSTREAM_STAGE_FIXTURE')
+        previous=self.state/'staging/Claude.old';self.profile(previous,'UPSTREAM_PREVIOUS_FIXTURE')
+        marker=self.state/'staging/cleanup.json';marker.write_text('{"version":1,"target":"A"}',encoding='utf-8')
+        before={path:accounts._manifest(path) for path in (legacy,staged,previous,self.data)}
+        self.assertEqual(self.manager._pending(),['legacy-profile/Claude.old','legacy-staging/Claude.new','legacy-staging/Claude.old','legacy-staging/cleanup.json'])
+        with self.assertRaises(RecoveryRequired):self.manager.switch('B',lambda:True)
+        with self.assertRaises(RecoveryRequired):
+            self.manager.launch_checked(lambda:True,lambda:self.events.append('launch'))
+        self.assertEqual(self.events,[])
+        self.assertEqual(self.manager.list_accounts()['current'],'A')
+        for path,manifest in before.items():self.assertEqual(accounts._manifest(path),manifest)
+        self.assertTrue(marker.exists())
+        self.assertFalse(self.manager.recovery.status().get('available',False))
+        self.assertIn('Claude.old',self.manager.recovery.plan()['manual'])
+
     def test_launch_failure_does_not_undo_safe_committed_profile(self):
         self.seed()
         self.manager.launch_app = lambda: False
