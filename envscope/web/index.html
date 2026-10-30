@@ -95,7 +95,7 @@
       <p id="resolution" class="resolution" aria-live="polite" hidden></p>
       <section id="issue-section"><h2 class="sr-only">发现的问题</h2><p id="issue-summary" class="sr-only"></p><div id="problems"></div></section>
       <section id="solution-tools" class="solution-tools" hidden>
-        <h2>修复方案</h2><div class="actions"><button id="prepare-solution" class="link" hidden>重新生成处理方案</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy" class="link">单独测试已有代理</button></div>
+        <h2>修复方案</h2><div id="solution-result" class="solution-output" role="status"></div><div class="actions"><button id="prepare-solution" class="link" disabled>生成修复方案</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy" class="link">单独测试已有代理</button></div>
         <div id="solution-plan"></div><div id="solution-output" class="solution-output" aria-live="polite"></div><div id="solution-backups" class="actions"></div>
       </section>
       <section id="flow-upkeep" class="flow-upkeep" hidden aria-labelledby="flow-upkeep-title"><h2 id="flow-upkeep-title">持久化守护</h2><p class="note">定期复检，按你批准的基线恢复配置。关闭界面后继续运行，每次处理都有记录。</p><p id="flow-upkeep-status" class="note" aria-live="polite">尚未启用。</p>

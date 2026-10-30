@@ -182,9 +182,10 @@ def main():
                 assert config_shape(config_file)['valid']
                 page.screenshot(path=str(ARTIFACTS/f'{label}-resolved.png'))
                 page.get_by_role('button',name='撤销 Claude 桌面配置',exact=True).click()
-                expect(page.locator('#solution-output')).to_contain_text('已恢复原配置')
+                expect(page.locator('#solution-result')).to_contain_text('已恢复原配置')
                 expect(page.locator('#verdict')).to_contain_text('目标环境有不合格项')
                 assert config_file.read_bytes()==original
+                expect(page.locator('#apply-solution')).to_be_enabled()
                 page.locator('#start').click()
                 expect(page.locator('#apply-solution')).to_be_visible()
                 page.locator('#apply-solution').click()

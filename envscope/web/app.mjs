@@ -89,7 +89,7 @@ function renderDesktop(report,source='current') {
   document.dispatchEvent(new CustomEvent('envscope-report',{detail:{report,source}}));
   byId("session-state").textContent="完成于 "+new Date(report.created_at).toLocaleTimeString();
 }
-const diagnosisUI=initDiagnosis({sessionPromise,retest:()=>runAudit({phase:'recheck'})});
+const diagnosisUI=initDiagnosis({sessionPromise,retest:options=>runAudit({phase:'recheck',...options})});
 const targetUI=initTargetEnvironment({sessionPromise,run:diagnosisUI.run,retest:()=>runAudit({oneStop:true}),isBusy:diagnosisUI.isBusy});
 initWatchdogForms(diagnosisUI.run);
 initInspection({run:diagnosisUI.run,operate:diagnosisUI.operate,isBusy:diagnosisUI.isBusy,retest:checks=>runAudit({checks})});
@@ -110,7 +110,7 @@ async function nativeAudit(session,snapshot,checks=null) {
   } finally {clearTimeout(timer);}
 }
 
-async function runAudit({oneStop=false,phase='check',checks=null}={}){
+async function runAudit({oneStop=true,phase='check',checks=null}={}){
   if(!await targetUI.ensure())return;
   byId('audit-results').hidden=false;
   setFlowStage(phase==='recheck'?'repair':'check',phase==='recheck'?'正在重新检测配置与连接，写入成功不代替复检结果。':'正在检查连接和环境设置，尚未写入任何配置。');
