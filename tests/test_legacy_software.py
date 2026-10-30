@@ -1,5 +1,6 @@
 """Disposable program files and injected jobs only; no vendor code executes."""
 from copy import deepcopy
+import base64
 import json
 import os
 from pathlib import Path
@@ -88,7 +89,7 @@ class SoftwareTests(unittest.TestCase):
         self.subject=SoftwareCleanup(self.home,self.components,system='Windows',processes=self.processes)
         plan=self.prepare(restore=True);self.assertEqual(self.apply(plan)['state'],'restored')
         self.assertTrue(self.core.exists());self.assertTrue(self.ui.exists());self.assertEqual(len(self.jobs.calls),1)
-        logs=''.join(p.read_text() for p in (self.subject.root/'events').glob('*.jsonl'))
+        logs=''.join(p.read_text(encoding='utf-8') for p in (self.subject.root/'events').glob('*.jsonl'))
         self.assertNotIn('SELF AUTHORED',logs);self.assertNotIn('ACCOUNT_FIXTURE_ONLY',logs)
 
     def test_new_installation_and_changed_backup_are_never_overwritten(self):
@@ -192,7 +193,9 @@ class SoftwareTests(unittest.TestCase):
         path=self.subject.paths['shortcut'];path.parent.mkdir()
         args='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(self.ui)+'"'
         command="$l=(New-Object -ComObject WScript.Shell).CreateShortcut("+quote(str(path))+");$l.TargetPath="+quote(powershell())+";$l.Arguments="+quote(args)+";$l.Save()"
-        subprocess.run([powershell(),'-NoProfile','-NonInteractive','-Command',command],check=True,capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW)
+        encoded=base64.b64encode(command.encode('utf-16-le')).decode('ascii')
+        result=subprocess.run([powershell(),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW)
+        self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))
         before=path.read_bytes();self.assertTrue(recognized(path,'shortcut','Windows',self.home));self.assertEqual(path.read_bytes(),before)
         self.assertEqual(self.apply(self.prepare(['shortcut']))['state'],'completed')
         self.assertFalse(path.exists());self.assertEqual(self.apply(self.prepare(restore=True))['state'],'restored')

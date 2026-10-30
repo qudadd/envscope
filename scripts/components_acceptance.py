@@ -120,7 +120,7 @@ def windows(home, result):
         shortcut=software.paths['shortcut'];shortcut.parent.mkdir()
         args='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(ui)+'"'
         create_link="$l=(New-Object -ComObject WScript.Shell).CreateShortcut("+quote(str(shortcut))+");$l.TargetPath="+quote(shell)+";$l.Arguments="+quote(args)+";$l.Save()"
-        command([shell,'-NoProfile','-NonInteractive','-Command',create_link])
+        command([shell,'-NoProfile','-NonInteractive','-EncodedCommand',base64.b64encode(create_link.encode('utf-16-le')).decode('ascii')])
         plan=software.prepare();assert plan['state']=='planned',plan
         value=software.apply(plan['plan_id'],True);assert value['state']=='completed',value
         assert not core.exists() and not ui.exists() and not source.exists() and not shortcut.exists()

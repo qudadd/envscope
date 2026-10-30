@@ -5,6 +5,7 @@ same-volume move preserves the original file, ACLs, xattrs and inode; unknown
 items and conflicting destinations are retained for manual review.
 """
 from contextlib import nullcontext
+import base64
 import ctypes
 import hashlib
 import json
@@ -169,8 +170,9 @@ def recognized(path, role, system, home):
     if role=='shortcut':
         # Read the shell-link object only. Save/Run/Invoke are never used.
         from .system_network_windows import powershell, quote
-        code = "$ErrorActionPreference='Stop';$l=(New-Object -ComObject WScript.Shell).CreateShortcut("+quote(str(path))+");@{target=$l.TargetPath;args=$l.Arguments}|ConvertTo-Json -Compress"
-        result = subprocess.run([powershell(),'-NoProfile','-NonInteractive','-Command',code],capture_output=True,timeout=8,
+        code = "$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$l=(New-Object -ComObject WScript.Shell).CreateShortcut("+quote(str(path))+");@{target=$l.TargetPath;args=$l.Arguments}|ConvertTo-Json -Compress"
+        encoded=base64.b64encode(code.encode('utf-16-le')).decode('ascii')
+        result = subprocess.run([powershell(),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],capture_output=True,timeout=8,
                                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if result.returncode or len(result.stdout)>8192: return False
         value = json.loads(result.stdout.decode('utf-8-sig'))
