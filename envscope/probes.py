@@ -8,6 +8,7 @@ from pathlib import Path
 from .browser import assess_snapshot, environment_finding
 from .controller import inspect_controller
 from .inventory import collect
+from .observation_errors import inventory_errors
 from .model import Finding, Status, utc_now
 from .network_facts import bounded_facts
 from .local_facts import local_snapshot
@@ -87,9 +88,11 @@ def audit(policy, transport, online=False, stun=False, ipv6=False, targets=(), b
         network = facts_job.result() if facts_job else {"dns": [], "routes": []}
         v4, v6 = v4_job.result() if v4_job else [], v6_job.result() if v6_job else []
         udp = (udp4_job.result() if udp4_job else []) + (udp6_job.result() if udp6_job else [])
+    incomplete = inventory_errors(inventory)
     findings = [
-        Finding("system.inventory", "系统只读信息采集", Status.UNKNOWN if "network_error" in inventory or inventory.get("network", {}).get("errors") else Status.PASS,
-                "系统信息已采集；虚拟网卡和进程存在均不是接管证明", "native-inventory", [inventory]),
+        Finding("system.inventory", "系统只读信息采集", Status.UNKNOWN if incomplete else Status.PASS,
+                '部分系统信息读取失败；请查看对应原因' if incomplete else '系统信息已采集；虚拟网卡和进程存在均不是接管证明',
+                'native-inventory', [inventory, {'collection_errors': incomplete}] if incomplete else [inventory]),
         Finding("network.route", "目标流量接管验证", Status.UNKNOWN, "当前只记录路由配置，尚未完成目标进程流量关联",
                 "native-inventory", limitations=["默认路由、TUN 名称或 Fake-IP 不能单独证明目标流量没有旁路。"]),
     ]
