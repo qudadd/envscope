@@ -89,9 +89,10 @@ def suggest(settings, inventory, cli, proxies):
         tun = any(re.search(r'TUN|TAP|utun|WireGuard|VPN', str(a.get('InterfaceDescription', a.get('name', ''))), re.I) for a in adapters)
         proposed['connection_mode'] = 'http_proxy' if proxies else 'tun' if tun else 'direct'
     # Observed values are shown above the form, never silently made into goals.
-    from .region_profiles import profiles
+    from .region_profiles import profiles, countries
     return {'state': 'completed', 'observed': actual, 'proposed': proposed,
             'profiles': profiles(actual['system']),
+            'countries': countries(),
             'proxies': [{'url': p['url']} for p in proxies if isinstance(p.get('url'), str)],
             'wireguard': network.get('wireguard', {'platform': actual['system'], 'complete': False, 'services': [], 'error': 'unavailable'}),
             'note': '这是只读建议。确认仅保存检测目标，不会修改系统时区、语言、网络或账号。'}

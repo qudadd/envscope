@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect,sync_playwright
 from envscope.maintenance import Maintenance
 from envscope.operations import Operations
@@ -46,7 +47,7 @@ def main():
                     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
                     page.locator('#start').click();expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#upkeep-egress')).to_contain_text('尚无有效出口观测')
                     page.locator('#upkeep-guard-timezone').check()
                     page.locator('#upkeep-prepare').click();expect(page.locator('#upkeep-plan')).to_contain_text('保持时区')

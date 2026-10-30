@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect,sync_playwright
 
 from envscope.language_repair import LanguageIO,LanguageRepair
@@ -44,13 +45,13 @@ def main():
                 page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
                 page.add_init_script('window.RTCPeerConnection=undefined;');page.route('https://**/*',lambda request:request.abort())
                 def idle():expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                def upkeep():idle();page.locator('.tab[data-page=upkeep]').click()
+                def upkeep():idle();open_page(page, 'upkeep')
                 try:
                     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
                     page.locator('#start').click();idle()
                     if system=='Windows':
-                        page.locator('.tab[data-page=checks]').click()
+                        open_page(page, 'checks')
                         row=page.locator('[data-inspection="baseline.language"]');row.locator(':scope > summary').click()
                         expect(row).to_have_attribute('data-manual','true');expect(row).to_contain_text('Windows 尚未提供')
                         upkeep();expect(page.locator('#language-prepare')).to_be_disabled()

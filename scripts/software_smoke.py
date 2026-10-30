@@ -5,6 +5,7 @@ import plistlib
 import tempfile
 import threading
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import sync_playwright,expect
 from envscope.legacy_components import ComponentMigration
 from envscope.legacy_software import SoftwareCleanup
@@ -49,7 +50,7 @@ def main():
                 try:
                     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#software-state')).to_have_text('尚未清理',timeout=30000);idle()
                     expect(page.locator('#software-all')).to_be_checked()
                     expect(page.locator('#software-status')).to_have_class('note manual-guidance')

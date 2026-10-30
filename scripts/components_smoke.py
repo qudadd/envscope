@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import threading
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import sync_playwright, expect
 from envscope.legacy_components import ComponentMigration
 from envscope.operations import Operations
@@ -71,7 +72,7 @@ def main():
                         page.locator('#apply-solution').click()
                         expect(page.locator('#solution-plan')).to_contain_text('注册独立的当前用户进程守护',timeout=30000);idle()
                         assert jobs.calls==['retire'] and scheduler.calls==[] and len(audits)>=2
-                        page.locator('.tab[data-page=upkeep]').click();idle()
+                        open_page(page, 'upkeep');idle()
                         expect(page.locator('#components-state')).to_contain_text('旧任务已移除')
                         page.locator('#components-restore').click();expect(page.locator('#components-plan')).to_contain_text('RunAtLoad')
                         page.locator('#components-plan button').click()
@@ -79,7 +80,7 @@ def main():
                         assert jobs.calls==['retire','restore'] and scheduler.calls==[] and not errors
                         proof.append({'system':system,'width':width,'one_stop_stages':True,'new_guard_needs_new_approval':True,'restore':True,'real_jobs_changed':False})
                         continue
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#components-state')).to_have_text('尚未迁移');idle()
                     expect(page.locator('#components-all')).to_be_checked()
                     page.locator('#components-all').uncheck();expect(page.locator('#components-prepare')).to_be_disabled()

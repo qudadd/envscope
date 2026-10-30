@@ -25,6 +25,7 @@ def verify(read, names):
         assert read("envscope/web/" + path), "missing UI resource"
     assert read('envscope/web/components_ui.mjs'), 'missing component migration UI'
     assert read('envscope/web/check_preferences_ui.mjs'), 'missing optional checks / diagnostics UI'
+    assert read('envscope/web/workflow.mjs'), 'missing single-workflow UI'
     print("Verified full pinned vendor bundle and all desktop UI resources.")
 
 
@@ -39,6 +40,8 @@ def main():
             return
     with zipfile.ZipFile(target) as wheel:
         assert wheel.read('envscope/csnap_archive.py'), 'missing CSNAP001 compatibility module'
+        assert wheel.read('envscope/region_data.py'), 'missing offline CLDR region presets'
+        assert any(n.endswith('/licenses/licenses/Unicode-3.0.txt') for n in wheel.namelist()), 'missing Unicode license'
         metadata=[n for n in wheel.namelist() if n.endswith('.dist-info/METADATA')]
         assert len(metadata)==1,'Missing or ambiguous package metadata'
         values=BytesParser().parsebytes(wheel.read(metadata[0]))

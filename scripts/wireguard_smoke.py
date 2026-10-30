@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 import threading
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.operations import Operations
 from envscope.model import Status
@@ -55,7 +56,7 @@ def main():
                 page.add_init_script('window.RTCPeerConnection=undefined;'); page.route('https://**/*', lambda r: r.abort())
                 def idle(): expect(page.locator('#start')).to_be_enabled(timeout=30000)
                 def all_checks():
-                    idle(); page.locator('.tab[data-page=checks]').click()
+                    idle(); open_page(page, 'checks')
                     return page.locator('[data-inspection="target.wireguard"]')
                 try:
                     page.goto('http://127.0.0.1:'+str(server.server_port), wait_until='networkidle')
@@ -63,6 +64,7 @@ def main():
                     page.locator('#target-edit').click()
                     expect(page.locator('#target-observed')).to_contain_text('Windows')
                     expect(page.locator('#target-confirm')).to_be_enabled(timeout=15000)
+                    open_details(page, '#target-connection-options')
                     page.locator('#target-form select[name=client]').select_option('wireguard')
                     expect(page.locator('#target-wireguard')).to_be_visible()
                     expect(page.locator('#target-form select[name=connection_mode]')).to_have_value('tun')
@@ -78,7 +80,7 @@ def main():
                     assert not scheduler.calls and not io.stops
                     # Manual controls also select the single matching NIC, never
                     # offer another active VPN as a substitute for this service.
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     page.locator('#process-guard-load').click()
                     expect(page.locator('#process-guard-interface')).to_have_value('EnvScope Fixture US')
                     expect(page.locator('#process-guard-interface')).not_to_contain_text('Other VPN')
@@ -95,16 +97,16 @@ def main():
                     guard.pulse(); page.locator('#process-guard-refresh').click()
                     expect(page.locator('#process-guard-status')).to_contain_text('所选 WireGuard 隧道服务离线')
                     assert len(io.stops) == 1
-                    page.locator('.tab[data-page=audit]').click(); page.locator('#start').click()
+                    open_page(page, 'audit'); page.locator('#start').click()
                     expect(all_checks()).to_contain_text('所选 WireGuard 隧道服务未运行')
                     page.locator('[data-inspection="target.wireguard"]').screenshot(path=str(output/f'{width}-offline.png'))
                     services['services'][0].update(observed()['services'][0]); route[0] = 'Other VPN'
-                    page.locator('.tab[data-page=audit]').click(); page.locator('#start').click(); all_checks()
+                    open_page(page, 'audit'); page.locator('#start').click(); all_checks()
                     expect(page.locator('[data-inspection="target.tun_route"]')).to_contain_text('目标地址存在非隧道选路')
                     services['services'][0]['error'] = 'permission_denied'
-                    page.locator('.tab[data-page=audit]').click(); page.locator('#start').click()
+                    open_page(page, 'audit'); page.locator('#start').click()
                     expect(all_checks()).to_contain_text('系统拒绝读取所选 WireGuard 服务或进程')
-                    page.locator('.tab[data-page=upkeep]').click(); page.locator('#process-guard-stop').click()
+                    open_page(page, 'upkeep'); page.locator('#process-guard-stop').click()
                     expect(page.locator('#process-guard-state')).to_have_text('未启用')
                     assert not scheduler.definition and not errors
                     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')

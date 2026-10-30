@@ -199,6 +199,40 @@ class RegionSelectionTests(TestCase):
         self.assertTrue(value['manual_items'])
         self.assertFalse(self.writes)
 
+    def test_combined_plan_repairs_json_and_code_security_in_one_review(self):
+        ops = Operations(self.store, self.home, discoverer=lambda: [], environment_reader=lambda: self.inventory)
+        ops.config_remedies.environ = {}
+        self.report()
+        config = self.home / '.claude/settings.json'
+        original = b'{"env":{"NODE_TLS_REJECT_UNAUTHORIZED":"0"},"permissions":{"deny":["Read(.env)"]},}'
+        config.write_bytes(original)
+        report = self.report()
+        params = {'report_id': report['report_id'], 'check_ids': ['extra.config', 'extra.cli_env'], 'enhance_cli': True}
+        plan = ops.run('inspection-plan', params, report=report)
+        self.assertEqual(plan['state'], 'planned')
+        self.assertTrue(any('TLS' in effect for effect in plan['effects']))
+        self.assertEqual(config.read_bytes(), original)
+        result = ops.run('inspection-apply', {'plan_id': plan['plan_id']}, confirmed=True, report=report)
+        self.assertEqual(result['state'], 'executed')
+        self.assertTrue(result['needs_retest'])
+        self.assertTrue(result['before']['configuration'])
+        content = json.loads(config.read_bytes())
+        self.assertEqual(content['env']['NODE_TLS_REJECT_UNAUTHORIZED'], '1')
+        self.assertEqual(content['permissions'], {'deny': ['Read(.env)']})
+
+    def test_combined_code_enhancement_requires_measured_code_scope(self):
+        ops = Operations(self.store, self.home, discoverer=lambda: [], environment_reader=lambda: self.inventory)
+        report = self.report(['baseline.timezone'])
+        params = {'report_id': report['report_id'], 'check_ids': ['baseline.timezone'], 'enhance_cli': True}
+        with self.assertRaises(ValueError):
+            ops.run('inspection-plan', params, report=report)
+        with self.assertRaises(ValueError):
+            ops.run('inspection-plan', {**params, 'enhance_cli': 'true'}, report=report)
+        with self.assertRaises(ValueError):
+            ops.solutions.prepare(report, check_ids=['baseline.timezone'], enhance_cli=True)
+        self.assertEqual(ops.run('inspection-plan', {**params, 'check_ids': ['extra.cli_env']}, report=report)['state'], 'retest_required')
+        self.assertFalse(self.writes)
+
     def test_pending_region_recovery_is_not_replaced_by_another_plan(self):
         report = self.report()
         plan = self.region.prepare(report, ['timezone'])

@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import threading
 from unittest.mock import Mock, patch
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import sync_playwright, expect
 
 from envscope.accounts import AccountManager
@@ -65,7 +66,7 @@ def main():
                         if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
                         page.locator('#start').click()
                         expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                        page.locator('[data-page="coverage"]').click()
+                        open_page(page, 'coverage')
                         expect(page.locator('[data-dimension]')).to_have_count(8)
                         expect(page.locator('[data-feature]')).to_have_count(30)
                         expect(page.locator('[data-feature="components"]')).to_contain_text('原生实现')
@@ -78,7 +79,7 @@ def main():
                         page.screenshot(path=str(out/f'{width}-coverage.png'),full_page=True)
                         page.locator('[data-dimension="device"] button').first.click()
                         expect(page.locator('[data-inspection="device.environment"]')).to_be_visible()
-                        page.locator('[data-page="accounts"]').click()
+                        open_page(page, 'accounts')
                         page.locator('#encrypted-slot').fill('B')
                         page.locator('#encrypted-path').fill(str(home/'fixture.envsnap'))
                         page.locator('#encrypted-password').fill('fixture-ui-password-123')
@@ -156,7 +157,7 @@ def main():
                         expect(page.locator('#account-output')).to_contain_text('已校验并导入',timeout=20000)
                         expect(page.locator('#encrypted-password')).to_have_value('')
                         assert (source/'fixture.txt').read_bytes()==(manager.accounts_dir/'C/fixture.txt').read_bytes()
-                        page.locator('[data-page="tools"]').click()
+                        open_page(page, 'tools')
                         page.locator('#maintenance-action').select_option('open-safe')
                         expect(page.locator('#maintenance-run')).to_be_enabled()
                         page.locator('#maintenance-run').click()

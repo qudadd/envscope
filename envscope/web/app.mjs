@@ -20,7 +20,7 @@ const sessionPromise=(async()=>{
     const value=await response.json();
     if(value.mode!=="desktop"||typeof value.token!=="string")return null;
     byId('app-version').textContent=value.release||value.version||'版本未读取';
-    byId("mode-note").textContent="检测连接，合并配置与修复方案；确认后自动处理并复检。";
+    byId("mode-note").textContent="确认地区与时区，检测问题，修复后持续守护。";
     nodes.quit.hidden=false;
     return value;
   } catch {return null;} finally {clearTimeout(timer);}
@@ -112,6 +112,7 @@ async function nativeAudit(session,snapshot,checks=null) {
 
 async function runAudit({oneStop=false,phase='check',checks=null}={}){
   if(!await targetUI.ensure())return;
+  byId('audit-results').hidden=false;
   setFlowStage(phase==='recheck'?'repair':'check',phase==='recheck'?'正在重新检测配置与连接，写入成功不代替复检结果。':'正在检查连接和环境设置，尚未写入任何配置。');
   document.dispatchEvent(new CustomEvent('envscope-audit-start'));
   byId('connection-options').open=false;
@@ -156,7 +157,7 @@ async function runAudit({oneStop=false,phase='check',checks=null}={}){
     }else{byId("verdict-note").textContent="当前仅检测浏览器；Windows / macOS 请使用本地启动程序完成系统检测。";}
     nodes.share.disabled=false;
   } catch {byId("verdict").textContent="检测没有完成";byId("verdict-note").textContent="本地服务或浏览器探测没有返回有效结果。请重新检测；仍失败时重新打开本地程序。缺失观测不会判定为通过。";byId("session-state").textContent="需要重新检测";}
-  finally {nodes.start.disabled=false;for(const id of ['usage','enhance-cli','workflow-proxy','workflow-proxy-url'])byId(id).disabled=diagnosisUI.isBusy();nodes.start.textContent="重新检测与修复";byId("audit-results").setAttribute("aria-busy","false");document.dispatchEvent(new CustomEvent('envscope-audit-end',{detail:{has_report:!!lastReport}}));if(!lastReport)setFlowStage(phase==='recheck'?'repair':'check','本次检测未完成，没有据此写入配置。请重新检测。');}
+  finally {nodes.start.disabled=false;for(const id of ['usage','enhance-cli','workflow-proxy','workflow-proxy-url'])byId(id).disabled=diagnosisUI.isBusy();nodes.start.textContent="重新检测";byId("audit-results").setAttribute("aria-busy","false");document.dispatchEvent(new CustomEvent('envscope-audit-end',{detail:{has_report:!!lastReport}}));if(!lastReport)setFlowStage(phase==='recheck'?'repair':'check','本次检测未完成，没有据此写入配置。请重新检测。');}
   if(oneStop&&lastReport)await diagnosisUI.prepareWorkflow();
 }
 nodes.start.addEventListener("click",()=>{if(!diagnosisUI.isBusy())void runAudit({oneStop:true});});

@@ -5,6 +5,7 @@ import tempfile
 import threading
 from unittest.mock import Mock
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect, sync_playwright
 from envscope.legacy import LegacyBridge
 from envscope.operations import Operations
@@ -56,15 +57,16 @@ def main():
                         page.locator('#learning-skip').click()
                         expect(page.locator('#target-form')).to_be_visible()
                         expect(page.locator('#target-confirm')).to_be_enabled()
-                        page.locator('#start').click()
+                        expect(page.locator('#start')).to_be_hidden()
+                        page.locator('#target-confirm').click()
                         assert not calls and not outbound and code.read_bytes() == original
                         token = context.request.get(origin+'/api/session').json()['token']
                         snapshot = {'schema_version':1,'kind':'envscope-browser-observations','contains_sensitive':True,
                                     'created_at':utc_now(),'http':[],'ice':[],'ice_complete':False}
                         denied = context.request.post(origin+'/api/audit', data={'snapshot':snapshot}, headers={'Origin':origin,'X-EnvScope-Token':token})
                         assert denied.status == 409 and not calls
-                        page.locator('#target-form [name=usage]').select_option('cli')
-                        page.locator('#target-form [name=connection_mode]').select_option('direct')
+                        open_details(page, '#target-connection-options'); page.locator('#target-form [name=usage]').select_option('cli')
+                        open_details(page, '#target-connection-options'); page.locator('#target-form [name=connection_mode]').select_option('direct')
                         expect(page.locator('#target-form [name=timezone]')).to_have_value('')
                         expect(page.locator('#target-form [name=locale]')).to_have_value('')
                         expect(page.locator('#target-form [name=usage_country]')).to_have_value('')
@@ -111,20 +113,20 @@ def main():
                         expect(page.locator('#apply-solution')).to_have_count(0)
                         page.locator('#target-edit').click()
                         expect(page.locator('#target-confirm')).to_be_enabled()
-                        page.locator('#target-form [name=connection_mode]').select_option('http_proxy')
-                        page.locator('#target-form [name=target_proxy]').fill(PROXY)
+                        open_details(page, '#target-connection-options'); page.locator('#target-form [name=connection_mode]').select_option('http_proxy')
+                        open_details(page, '#target-connection-options'); page.locator('#target-form [name=target_proxy]').fill(PROXY)
                         page.locator('#target-cancel').click()
                         assert store.settings()['connection_mode'] == 'direct'
                         page.locator('#target-edit').click()
                         expect(page.locator('#target-confirm')).to_be_enabled()
-                        page.locator('#target-form [name=usage]').select_option('web')
+                        open_details(page, '#target-connection-options'); page.locator('#target-form [name=usage]').select_option('web')
                         page.locator('#target-confirm').click()
                         expect(page.locator('#target-form')).to_be_hidden()
                         expect(page.locator('#target-summary')).to_contain_text('网页版')
                         expect(page.locator('#verdict')).to_have_text('所选目标的环境检查合格')
                         assert code.read_bytes() == repaired, 'web selection must not rewrite Code'
                         assert store.settings()['usage'] == 'web'
-                        page.locator('[data-page=checks]').click()
+                        open_page(page, 'checks')
                         row = page.locator('[data-inspection="extra.cli_paths"]')
                         expect(row).to_contain_text('不适用')
                         page.locator('#check-status').select_option('excluded')

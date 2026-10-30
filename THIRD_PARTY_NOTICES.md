@@ -1,5 +1,16 @@
 # Third-party origins
 
+## Region and timezone data
+
+`envscope/region_data.py` contains derived data from Unicode CLDR 48, revision
+`acd6d88ae493633240e19a87a721076a8a75c310`, under Unicode-3.0.
+The complete license is in `licenses/Unicode-3.0.txt`. The generator
+`scripts/generate_region_data.py` records each input SHA-256 and uses the official
+CLDR Windows timezone mappings, Chinese place names, timezone aliases and likely
+language defaults. These are editable configuration suggestions, independent of
+Claude's supported-region policy and never evidence of a user's physical location.
+Source: https://github.com/unicode-org/cldr/tree/acd6d88ae493633240e19a87a721076a8a75c310
+
 ## WireGuard interoperability
 
 The read-only Windows service adapter is EnvScope code using documented Windows

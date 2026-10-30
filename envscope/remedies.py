@@ -471,8 +471,10 @@ class SolutionPlans:
         if check_ids is not None:
             from .inspection import validate_selection, problem_prefixes
             checks = validate_selection(check_ids)
-            if check_id is not None or enhance_cli or proxy is not None:
+            if check_id is not None:
                 raise ValueError('勾选处理不能混用其他修改范围')
+            if (enhance_cli or proxy is not None) and 'extra.cli_env' not in checks:
+                raise ValueError('完善 Code 配置必须包含已检测的 Code 连接配置项目')
             prefixes = problem_prefixes(checks)
             problems = [p for p in problems if p['id'].startswith(prefixes)]
         if check_id is not None:

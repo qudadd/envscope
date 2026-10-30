@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import threading
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect,sync_playwright
 from envscope.client_repair import ClientRepair
 from envscope.client_config import tun_model
@@ -47,7 +48,7 @@ def main():
                 page.add_init_script('window.RTCPeerConnection=undefined;')
                 page.route('https://**/*',lambda request:request.abort())
                 def idle():expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                def upkeep():idle();page.locator('.tab[data-page=upkeep]').click()
+                def upkeep():idle();open_page(page, 'upkeep')
                 try:
                     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()

@@ -10,10 +10,15 @@
   <script type="module" src="app.mjs"></script>
 </head>
 <body>
-  <header><a href="./">EnvScope</a><span id="app-version">正在读取版本</span></header>
-  <nav id="desktop-nav" aria-label="主要功能" hidden>
-    <button class="tab" data-page="audit" aria-current="page">检测</button><button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="coverage">环境全览</button><button class="tab" data-page="upkeep">持续维护</button><button class="tab" data-page="accounts">账号</button><button class="tab" data-page="tools">工具</button><button class="tab" data-page="history">历史</button><button class="tab" data-page="settings">设置</button>
-  </nav>
+  <div class="app-header">
+    <header><a href="./">EnvScope</a><span id="app-version">正在读取版本</span></header>
+    <nav id="desktop-nav" aria-label="主要功能" hidden>
+      <button class="tab" data-page="audit" aria-current="page">检测与修复</button>
+      <details id="more-menu"><summary>更多功能</summary><div class="more-menu-items">
+        <button class="tab" data-page="checks">全部检查</button><button class="tab" data-page="upkeep">守护与高级修复</button><button class="tab" data-page="accounts">账号资料</button><button class="tab" data-page="tools">工具与备份</button><button class="tab" data-page="history">检测历史</button><button class="tab" data-page="settings">设置与更新</button><button class="tab" data-page="coverage">环境全览</button>
+      </div></details>
+    </nav>
+  </div>
   <main id="workspace" data-state="ready">
     <section id="connection-banner" class="connection-banner" role="status" hidden><strong id="connection-title">本地服务已断开</strong><p id="connection-message">请重新双击 EnvScope 启动器，并使用它新打开的页面；旧地址可能已经失效。</p><button id="connection-retry" class="link">重新连接本页</button></section>
     <p id="connection-status" class="connection-status" role="status">正在连接本地服务…</p><div id="catalog-error" class="connection-banner" role="status" hidden><p>功能列表暂时无法读取。环境信息仍可单独查看；账号和维护操作请先重新读取列表。</p><button id="catalog-retry" class="link">重新读取功能列表</button></div>
@@ -29,52 +34,56 @@
     </section>
     <div id="audit-content" hidden>
     <section class="introduction">
-      <div class="intro-heading"><h1>让 Claude 稳定可用</h1><div class="actions"><button id="start">一键检测与修复</button><span id="session-state" aria-live="polite">未开始</span></div></div>
+      <div class="intro-heading"><h1>Claude 环境检查</h1><div class="actions"><button id="start">一键检测</button><span id="session-state" aria-live="polite">未开始</span></div></div>
       <p id="mode-note">检查当前浏览器的 HTTP 出口和 WebRTC 候选地址。</p>
       <details class="network-note"><summary>只读检测，探测会联系外部服务</summary><p class="note">检测会联系 Cloudflare、ipify、ipinfo、Claude / Anthropic 及 Google / Cloudflare STUN。服务可见探测来源；本机保存最近 50 次脱敏结果。</p></details>
     </section>
 
     <section id="target-environment" class="target-environment" aria-label="目标环境">
-      <div class="target-heading"><div><h2>本次按什么目标检查</h2><p id="target-summary" class="note">首次检测前，确认一次使用方式和连接方式。</p></div><button id="target-edit" class="link">设置目标</button></div>
+      <div class="target-heading"><div><h2>地区与时区</h2><p id="target-summary" class="note">首次检测前，确认一次使用方式和连接方式。</p></div><button id="target-edit" class="link">设置目标</button></div>
       <form id="target-form" hidden>
-        <p id="target-observed" class="note" role="status">正在读取电脑当前设置…</p>
-        <div class="form-grid">
-          <label>使用方式<select name="usage" required><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版与 Code</option><option value="web">Claude 网页</option></select></label>
-          <label>连接方式<select name="connection_mode" required><option value="direct">直连</option><option value="http_proxy">HTTP / 系统代理</option><option value="tun">TUN / VPN</option></select></label>
-          <label>连接客户端<select name="client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="flclash">FlClash</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option><option value="wireguard">WireGuard（Windows）</option><option value="other">其他</option></select></label>
-          <div id="target-wireguard" hidden><label>本次使用的隧道<select name="wireguard_service"><option value="">仅有一个隧道时自动识别</option></select></label><button id="target-wireguard-read" class="link" type="button">重新读取隧道</button><p id="target-wireguard-note" class="note" role="status">只读服务状态，不读取 VPN 配置与私钥；多个隧道时需要选择。</p></div>
-          <label>实际使用地区<input name="usage_country" list="region-codes" maxlength="2" pattern="[A-Za-z]{2}" required placeholder="选择或填写地区代码" title="填写实际所在地的两个字母代码，例如 CN、RU、US"></label>
-          <label>期望配置地区与城市<select name="region_profile" id="target-region-profile"><option value="">先选择实际地区</option></select></label>
+        <div class="form-grid target-primary-fields">
+          <label>实际使用地区<input name="usage_country" list="region-codes" maxlength="2" pattern="[A-Za-z]{2}" required placeholder="选择所在地，例如 US" title="填写实际所在地的两个字母代码"></label>
+          <label>节点 / 期望配置地区<select name="country" id="target-country"><option value="">读取 IP 后自动选择，也可手动指定</option></select></label>
+          <label>城市 / 时区所在地<select name="region_profile" id="target-region-profile"><option value="">先选择地区</option></select></label>
           <label>目标时区<input name="timezone" maxlength="100" placeholder="选择城市后自动填写"></label>
-          <label>目标地区格式<input name="locale" maxlength="100" placeholder="选择城市后自动填写"></label>
         </div>
-        <div class="target-ip"><p id="target-ip-status" class="note" role="status">填写实际地区后，按所选连接读取出口 IP 并筛选城市。</p><button id="target-read-ip" class="link" type="button">重新读取 IP</button></div>
-        <datalist id="region-codes"><option value="CN" label="中国大陆 · 官方不支持"></option><option value="RU" label="俄罗斯 · 官方不支持"></option><option value="HK" label="中国香港 · 未列入支持名单"></option><option value="MO" label="中国澳门 · 未列入支持名单"></option><option value="US" label="美国"></option><option value="JP" label="日本"></option><option value="SG" label="新加坡"></option><option value="TW" label="中国台湾 · 官方名单单列"></option><option value="GB" label="英国"></option><option value="DE" label="德国"></option><option value="FR" label="法国"></option><option value="KR" label="韩国"></option><option value="CA" label="加拿大"></option><option value="AU" label="澳大利亚"></option></datalist>
-        <p class="note">填写实际所在地，不能用代理出口代替。中国大陆（CN）、俄罗斯（RU）不在官方支持名单中，地区条件将判为不合格。<a href="https://support.claude.com/en/articles/8461763-where-can-i-access-claude" target="_blank" rel="noopener noreferrer">Claude 地区名单</a> · <a href="https://platform.claude.com/docs/en/api/supported-regions" target="_blank" rel="noopener noreferrer">API 地区名单</a>（核对于 2026-10-30）。</p>
-        <p class="note">通过 Cloudflare 和 IPinfo 读取出口 IPv4，服务会看到请求来源。按 IP 国家筛选城市，选择后匹配时区、语言与地区格式；未能定位时可手动选择。IP 不会改写实际所在地，保存目标不会修改系统。</p>
-        <div id="target-code-fields" class="form-grid" hidden>
-          <label>Code 接口<select name="provider"><option value="anthropic">Anthropic 官方</option><option value="custom">自定义接口</option><option value="bedrock">Amazon Bedrock</option><option value="vertex">Google Vertex</option><option value="foundry">Microsoft Foundry</option></select></label>
-          <label>认证方式<select name="auth_mode"><option value="existing">保留现有登录</option><option value="subscription">Claude 订阅登录</option><option value="api_key">API Key</option><option value="managed">云平台 / 组织管理</option></select></label>
-        </div>
-        <label id="target-proxy-field" hidden>本机 HTTP / HTTPS 代理<input name="target_proxy" type="url" maxlength="2048" placeholder="留空则读取现有环境或系统代理"><span class="note">不填写密码。Code 修改前验证连接；桌面版和网页还会核对系统代理是否一致。</span></label>
-        <details><summary>其他目标与保护要求</summary><div class="form-grid">
-          <label>比较出口国家<input name="country" maxlength="2" placeholder="可选，例如 US"></label>
-          <label id="target-language-field">比较桌面应用语言<input name="language" maxlength="30" placeholder="可选，仅核对 Claude 桌面偏好"></label>
-          <label>IPv6 要求<select name="ipv6_mode"><option value="observe">仅观察，不限制</option><option value="disabled">要求已关闭</option><option value="allowlist">要求出口在指定网段内</option></select></label>
-          <label>IPv6 允许网段<textarea name="allowed_ipv6" rows="2" placeholder="选择指定网段时必填，每行一个"></textarea></label>
-          <label>检查要求<select name="protection"><option value="standard">标准使用条件</option><option value="guarded">严格 TUN 保护条件</option></select></label>
-        </div><p class="note">标准检查验证所选用途的连接与配置；严格模式还要求 TUN、UDP、IPv6 和已选守护 / 规则。两者都不等于完整隐私保证。应用语言与自定义云端权限可能需要在 Claude 中核对。</p></details>
-        <p class="note">确认只保存 EnvScope 的检测目标。系统、账号与 Code 配置修改会在检测后另列方案，由你确认后执行。</p>
-        <p id="target-output" role="status" class="note"></p><div class="actions"><button id="target-confirm" type="submit" class="primary">确认目标并检测</button><button id="target-cancel" type="button" class="link">取消调整</button></div>
+        <p id="target-matched" class="note">选择城市后自动匹配时区与地区格式。</p>
+        <div class="target-ip"><p id="target-ip-status" class="note" role="status">填写实际地区后，读取当前连接的出口 IP。</p><button id="target-read-ip" class="link" type="button">重新读取 IP</button></div>
+        <p id="target-country-policy" class="note"></p>
+        <datalist id="region-codes"><option value="CN" label="中国大陆"></option><option value="RU" label="俄罗斯"></option><option value="US" label="美国"></option><option value="JP" label="日本"></option><option value="SG" label="新加坡"></option></datalist>
+        <details id="target-connection-options"><summary id="target-connection-label">使用方式与连接选项</summary>
+          <div class="form-grid">
+            <label>使用方式<select name="usage" required><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版与 Code</option><option value="web">Claude 网页</option></select></label>
+            <label>连接方式<select name="connection_mode" required><option value="direct">直连</option><option value="http_proxy">HTTP / 系统代理</option><option value="tun">TUN / VPN</option></select></label>
+            <label>连接客户端<select name="client"><option value="auto">自动识别</option><option value="clash-verge">Clash Verge</option><option value="flclash">FlClash</option><option value="shadowrocket">Shadowrocket</option><option value="sing-box">sing-box</option><option value="clashx">ClashX</option><option value="surge">Surge</option><option value="wireguard">WireGuard（Windows）</option><option value="other">其他</option></select></label>
+            <div id="target-wireguard" hidden><label>本次使用的隧道<select name="wireguard_service"><option value="">仅有一个隧道时自动识别</option></select></label><button id="target-wireguard-read" class="link" type="button">重新读取隧道</button><p id="target-wireguard-note" class="note" role="status">只读服务状态，不读取 VPN 配置与私钥。</p></div>
+          </div>
+          <label id="target-proxy-field" hidden>本机 HTTP / HTTPS 代理<input name="target_proxy" type="url" maxlength="2048" placeholder="留空则读取现有环境或系统代理"><span class="note">不填写密码；检测时核对实际连接。</span></label>
+          <div id="target-code-fields" class="form-grid" hidden>
+            <label>Code 接口<select name="provider"><option value="anthropic">Anthropic 官方</option><option value="custom">自定义接口</option><option value="bedrock">Amazon Bedrock</option><option value="vertex">Google Vertex</option><option value="foundry">Microsoft Foundry</option></select></label>
+            <label>认证方式<select name="auth_mode"><option value="existing">保留现有登录</option><option value="subscription">Claude 订阅登录</option><option value="api_key">API Key</option><option value="managed">云平台 / 组织管理</option></select></label>
+          </div>
+        </details>
+        <details id="target-expert-options"><summary>语言、保护要求与检测说明</summary>
+          <div class="form-grid">
+            <label>目标地区格式<input name="locale" maxlength="100" placeholder="选择城市后自动填写"></label>
+            <label id="target-language-field">目标应用语言<input name="language" maxlength="30" placeholder="可选，核对 Claude 桌面偏好"></label>
+            <label>IPv6 要求<select name="ipv6_mode"><option value="observe">仅观察，不限制</option><option value="disabled">要求已关闭</option><option value="allowlist">要求出口在指定网段内</option></select></label>
+            <label>IPv6 允许网段<textarea name="allowed_ipv6" rows="2" placeholder="选择指定网段时必填，每行一个"></textarea></label>
+            <label>检查要求<select name="protection"><option value="standard">标准使用条件</option><option value="guarded">严格 TUN 保护条件</option></select></label>
+          </div>
+          <p id="target-observed" class="note" role="status">正在读取电脑当前设置…</p>
+          <p class="note">实际所在地和节点出口分开核对。中国大陆（CN）、俄罗斯（RU）不在官方支持名单中。<a href="https://support.claude.com/en/articles/8461763-where-can-i-access-claude" target="_blank" rel="noopener noreferrer">Claude 地区名单</a> · <a href="https://platform.claude.com/docs/en/api/supported-regions" target="_blank" rel="noopener noreferrer">API 地区名单</a>（核对于 2026-10-30）。</p>
+          <p class="note">Cloudflare 和 IPinfo 会看到 IP 查询来源。城市与语言是可修改的配置建议，不是实际位置证明；多时区国家请核对城市。确认只保存检测目标，系统修改在检测后另列方案。</p>
+        </details>
+        <p id="target-output" role="status" class="note"></p><div class="actions"><button id="target-confirm" type="submit" class="primary">确认并一键检测</button><button id="target-cancel" type="button" class="link">取消调整</button></div>
       </form>
-      <button id="target-configure" class="link" type="button">按目标调整时区、地区格式与节点</button>
     </section>
 
-    <section id="audit-results" aria-label="检测结果" aria-busy="false">
-      <div class="result-summary" aria-live="polite"><h2 id="verdict">先打开平时使用的连接工具，再检测</h2><span id="coverage-count">14 项基础 · 18 项扩展</span></div>
+    <section id="audit-results" aria-label="检测结果" aria-busy="false" hidden>
+      <div class="result-summary" aria-live="polite"><h2 id="verdict">先打开平时使用的连接工具，再检测</h2><span id="coverage-count" class="sr-only">14 项基础 · 18 项扩展</span><button id="show-all-checks" class="link">全部检查与证据</button></div>
       <p id="verdict-note" class="note">检测后自动合并处理方案。你确认一次，再写入配置、修复并复检。</p>
-      <div id="qualification" hidden><p id="qualification-counts" class="note"></p><details><summary>哪些关键条件还需要处理</summary><div id="qualification-pending"></div></details><p id="qualification-boundary" class="note"></p></div>
-      <button id="show-all-checks" class="link">查看全部检查与证据</button>
       <details id="connection-options" class="connection-options"><summary>环境设置：自动识别，检测后确认</summary>
         <label class="usage-selector">我使用<select id="usage"><option value="auto">自动识别</option><option value="desktop">Claude 桌面版</option><option value="cli">Claude Code</option><option value="both">桌面版和 Code</option><option value="web">Claude 网页</option></select></label>
         <label class="checkbox"><input id="enhance-cli" type="checkbox" checked>识别到 Code 时，同时完善连接设置</label>
@@ -84,20 +93,23 @@
       </details>
       <ol id="flow-progress" class="flow-progress" aria-label="一条龙处理进度"><li data-flow-step="check">1 检测</li><li data-flow-step="review">2 核对方案</li><li data-flow-step="repair">3 修复复检</li><li data-flow-step="keep">4 日常保持</li></ol><p id="flow-state" class="note" role="status">先检测，所有配置修改都会列入待确认的方案。</p>
       <p id="resolution" class="resolution" aria-live="polite" hidden></p>
+      <section id="issue-section"><h2 class="sr-only">发现的问题</h2><p id="issue-summary" class="sr-only"></p><div id="problems"></div></section>
       <section id="solution-tools" class="solution-tools" hidden>
-        <div class="actions"><button id="prepare-solution" class="link" hidden>重新生成处理方案</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy" class="link">单独测试已有代理</button></div>
+        <h2>修复方案</h2><div class="actions"><button id="prepare-solution" class="link" hidden>重新生成处理方案</button><select id="quick-proxy-select" aria-label="用于测试的已发现代理" hidden></select><button id="quick-proxy" class="link">单独测试已有代理</button></div>
         <div id="solution-plan"></div><div id="solution-output" class="solution-output" aria-live="polite"></div><div id="solution-backups" class="actions"></div>
       </section>
-      <div id="problems"></div><div id="normal-observations" class="normal-observations"></div>
+      <section id="flow-upkeep" class="flow-upkeep" hidden aria-labelledby="flow-upkeep-title"><h2 id="flow-upkeep-title">持久化守护</h2><p class="note">定期复检，按你批准的基线恢复配置。关闭界面后继续运行，每次处理都有记录。</p><p id="flow-upkeep-status" class="note" aria-live="polite">尚未启用。</p>
+        <div class="inline-upkeep-options"><label>复检间隔<select id="flow-upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label><label class="checkbox"><input id="flow-upkeep-guard-timezone" type="checkbox">时区异常恢复</label><label class="checkbox"><input id="flow-upkeep-guard-locale" type="checkbox">地区格式恢复</label><label class="checkbox"><input id="flow-upkeep-guard-proxy" type="checkbox">代理离线恢复</label></div>
+        <details id="flow-watchdog-options"><summary>更多守护选项</summary><label class="checkbox"><input id="flow-upkeep-restore" type="checkbox">同时保持已经验证的 Code 配置</label><button id="flow-upkeep-guard-load" class="link" type="button">读取可重开的客户端</button><label>代理离线时<select id="flow-upkeep-guard-client"><option value="">不重开客户端，仅恢复可读取节点</option></select></label><p id="flow-upkeep-guard-note" class="note">只恢复明确批准的基线；后台权限不足时转为手动处理。启用前请先验证代理、时区和地区格式。</p><p class="note">配置保持仅恢复已审核字段，恢复前先备份；反复变化会暂停。更换代理前先停用，再生成新方案。</p></details>
+        <div class="actions"><button id="flow-upkeep-prepare">预览守护方案</button><button id="flow-upkeep-stop" class="link" hidden>停用守护</button></div><div id="flow-upkeep-plan"></div><p id="flow-upkeep-output" class="solution-output" role="status"></p>
+      </section>
+      <details id="more-results" class="help-section"><summary>详细记录与使用帮助</summary>
+      <div id="qualification" hidden><p id="qualification-counts" class="note"></p><details><summary>哪些关键条件还需要处理</summary><div id="qualification-pending"></div></details><p id="qualification-boundary" class="note"></p></div>
+      <div id="normal-observations" class="normal-observations"></div>
       <section id="try-claude" class="try-claude" hidden aria-labelledby="try-title">
         <h2 id="try-title">接下来，到自己的 Claude 试一条消息</h2><p class="note">本工具只测试连接，不会替你登录或发送消息。收到实际回复后，才能确认这次使用成功。</p>
         <div id="desktop-handoff" hidden><p id="desktop-readiness" class="note"></p><div class="actions"><button id="desktop-launch">复检后打开桌面版</button><button id="desktop-restart" class="link">保存后复检并重开</button></div><details id="desktop-conditions"><summary>查看启动条件与处理办法</summary><ul id="desktop-condition-list"></ul></details><p id="desktop-output" class="note" role="status"></p></div>
         <div id="try-instructions"></div><div class="actions"><button id="try-success">我已收到 Claude 的回复</button><button id="try-help" class="link">还是不能用</button><button id="try-upkeep" class="link">设置日常保持</button></div><p id="try-feedback" class="note" aria-live="polite"></p>
-      </section>
-      <section id="flow-upkeep" class="flow-upkeep" hidden aria-labelledby="flow-upkeep-title"><h2 id="flow-upkeep-title">保持本次设置</h2><p class="note">确认 Claude 能实际回复后，可在这里启用定时复检。关闭界面后继续运行，随时可停用。</p><p id="flow-upkeep-status" class="note" aria-live="polite">尚未启用。</p>
-        <div class="inline-upkeep-options"><label>复检间隔<select id="flow-upkeep-interval"><option value="5">5 分钟</option><option value="15" selected>15 分钟</option><option value="60">60 分钟</option></select></label><label class="checkbox"><input id="flow-upkeep-restore" type="checkbox">同时保持已经验证的 Code 配置</label></div>
-        <details><summary>系统与代理 Watchdog</summary><label class="checkbox"><input id="flow-upkeep-guard-timezone" type="checkbox">时区漂移时恢复批准值</label><label class="checkbox"><input id="flow-upkeep-guard-locale" type="checkbox">地区格式漂移时恢复批准值</label><label class="checkbox"><input id="flow-upkeep-guard-proxy" type="checkbox">守护已验证的本机代理与节点</label><button id="flow-upkeep-guard-load" class="link" type="button">读取可重开的客户端</button><label>代理离线时<select id="flow-upkeep-guard-client"><option value="">不重开客户端，仅恢复可读取节点</option></select></label><p id="flow-upkeep-guard-note" class="note">只恢复明确批准的基线；后台权限不足时转为手动处理。启用前请先验证代理、时区和地区格式。</p></details>
-        <p class="note">配置保持仅恢复已审核字段，恢复前先备份；反复变化会暂停。更换代理前先停用，再生成新方案。</p><div class="actions"><button id="flow-upkeep-prepare">预览长期保持方案</button><button id="flow-upkeep-stop" class="link" hidden>停用定时复检与配置保持</button></div><div id="flow-upkeep-plan"></div><p id="flow-upkeep-output" class="solution-output" role="status"></p>
       </section>
       <details id="symptom-help" class="help-section"><summary>Claude 仍不能用？按现象排查</summary><label>我遇到的情况<select id="symptom"><option value="connect">一直转圈，或提示无法连接</option><option value="login">打不开登录，或反复要求登录</option><option value="interrupt">原来能用，后来经常中断</option><option value="certificate">提示证书或安全连接错误</option><option value="code">Claude Code 命令找不到或设置不生效</option><option value="mcp">Claude 能回复，但某个 MCP 工具不能用</option></select></label><div id="symptom-advice"></div></details>
       <details id="beginner-checks" class="help-section" hidden><summary>看懂 14 项检查：查什么、怎样处理、怎样保持</summary>
@@ -113,6 +125,7 @@
     <section class="environment"><h2>环境</h2><dl id="environment"><div><dt>时区</dt><dd>—</dd></div><div><dt>语言</dt><dd>—</dd></div><div><dt>运行环境</dt><dd>—</dd></div></dl></section>
     <section class="limits"><h2>检测范围</h2><p id="coverage-note">本次会检查网络、代理、客户端与账号资料。系统 UDP 和浏览器 WebRTC 分开测量，不申请麦克风权限。</p></section>
     </details>
+    </details>
     </section>
     </div>
     </div>
@@ -121,7 +134,7 @@
       <h1>全部检查</h1><p class="subtle">勾选要检查的项目，检测后预览并一键修改。红色项目需要手动处理，展开即可看到步骤。</p>
       <p id="all-checks-context" class="note" role="status">尚未检测，下面是完整检查目录。</p>
       <div class="inspection-toolbar"><div class="actions"><button id="checks-run">检测所选</button><button id="checks-repair">预览所选修改</button><button id="checks-preferences" class="link">检测偏好</button><button id="checks-select-all" class="link">全选</button><button id="checks-clear" class="link">取消全选</button><button id="checks-select-problems" class="link">只选需处理项</button><button id="checks-select-visible" class="link">勾选筛选结果</button></div><p id="checks-selected-count" class="note" aria-live="polite"></p></div>
-      <details id="checks-region-options"><summary>节点地区与恢复记录</summary><p class="note">先在目标设置选择城市。只切换你已有的节点；组内其他应用的新连接也可能受影响。节点名称与真实出口分开核对。</p><button id="checks-load-nodes" class="link">读取可控制的代理组</button><div class="form-grid"><label>代理组<select id="checks-node-group"><option value="">保持不变</option></select></label><label>目标地区的已有节点<select id="checks-node"><option value="">保持不变</option></select></label></div><p id="checks-node-note" class="note" role="status">未读取控制接口；没有兼容接口时，请在代理客户端手动选择节点。</p><button id="checks-region-undo" class="link" hidden>预览恢复上次地区配置</button><div id="checks-region-recovery"></div></details>
+      <button id="target-configure" class="link" type="button">按目标调整时区、地区格式与节点</button><details id="checks-region-options"><summary>节点地区与恢复记录</summary><p class="note">先在目标设置选择城市。只切换你已有的节点；组内其他应用的新连接也可能受影响。节点名称与真实出口分开核对。</p><button id="checks-load-nodes" class="link">读取可控制的代理组</button><div class="form-grid"><label>代理组<select id="checks-node-group"><option value="">保持不变</option></select></label><label>目标地区的已有节点<select id="checks-node"><option value="">保持不变</option></select></label></div><p id="checks-node-note" class="note" role="status">未读取控制接口；没有兼容接口时，请在代理客户端手动选择节点。</p><button id="checks-region-undo" class="link" hidden>预览恢复上次地区配置</button><div id="checks-region-recovery"></div></details>
       <section id="checks-plan" aria-live="polite"></section><p id="checks-output" role="status"></p>
       <div class="check-filters"><label>查找项目<input id="check-search" type="search" placeholder="例如：DNS、登录、证书"></label><label>分类<select id="check-group"><option value="all">全部分类</option><option value="target">目标验收</option><option value="baseline">14 项基础</option><option value="extra">18 项扩展</option><option value="measurement">补充测量</option></select></label><label>状态<select id="check-status"><option value="all">全部状态</option><option value="required">本次必需</option><option value="attention">需要处理或复核</option><option value="unknown">需要补全</option><option value="excluded">不适用、参考或版本未支持</option><option value="pass">范围内通过</option><option value="not_run">尚未检测</option></select></label></div>
       <p id="check-count" class="note" role="status"></p><div id="all-checks-list"></div>
@@ -253,7 +266,7 @@
         <p class="note">仅经指定代理检测 Claude 网页与 API，区分连接失败、需认证、拒绝访问、限流及服务错误。代理失败不回退直连。</p>
       </section>
       <section class="tool-section" id="environment-tools"><h2>环境信息</h2><div class="actions"><button id="cli-info">CLI 安装信息</button><button id="device-info">设备信息</button><button id="browser-info">浏览器信息</button><button id="support-bundle">导出诊断包</button></div><p class="note">点击后在下方显示，不会打开额外窗口。设备和浏览器信息用于排障，不推断账号风险。</p><div id="environment-output" class="information-output" role="status" tabindex="-1"><p class="note">选择一项查看；无需先安装维护核心。</p></div></section>
-      <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生提供逐项检查、配置预览与恢复、独立账号资料、加密存档、临时浏览器、托盘和完整软件更新。持续维护提供基线恢复、单独批准的 10 秒进程守护，以及可授权的 Mac 60 秒系统时区守护。</p><p class="note">Clash Verge 置顶路由、Mac 系统时区服务和原版加密 DMG 兼容已原生实现。系统网络深度修复、其他客户端适配和旧组件迁移仍需维护核心或手动处理；具体能力与验收范围见环境全览。</p><p class="note">上游核对至 223a5cc，已核对其新增 Windows 地区设置；随附源码仍固定在 870c4ca。完整升级尚未完成，当前缺口和验证要求持续记录。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FULL_PARITY_AUDIT.md" target="_blank" rel="noopener noreferrer">完整功能升级核对表</a></details>
+      <details id="project-comparison" class="help-section"><summary>与 claude-switcher 有什么区别</summary><p class="note">EnvScope 原生提供逐项检查、配置预览与恢复、独立账号资料、加密存档、临时浏览器、托盘和完整软件更新。持续维护提供基线恢复、单独批准的 10 秒进程守护，以及可授权的 Mac 60 秒系统时区守护。</p><p class="note">Clash Verge 置顶路由、Mac 系统时区服务和原版加密 DMG 兼容已原生实现。系统网络修复、客户端适配和旧组件迁移提供原生方案；不支持的操作会保留具体手动指引。</p><p class="note">上游功能核对至 92cd62f；随附源码固定在 870c4ca。各平台实现方式、需手动处理的项目和验收范围见完整核对表。</p><a class="link" href="https://github.com/qudadd/envscope/blob/main/docs/FULL_PARITY_AUDIT.md" target="_blank" rel="noopener noreferrer">完整功能升级核对表</a></details>
       <section class="tool-section"><h2>配置备份</h2><p class="note">最近 20 份可识别恢复记录，关闭后仍保留。撤销会先停用持续维护，并校验备份和当前文件；后续已有修改时拒绝覆盖。原文位于 ~/.envscope/config-backups，可能含密钥，不可分享。</p><div id="config-backups"></div></section>
       <section class="tool-section"><h2>临时浏览器</h2><p class="note">独立资料，不带入日常 Cookie 或扩展。关闭后清理，应用退出后由独立进程继续检查。</p>
         <div id="param-url" class="parameter"><label>网页地址<input id="safe-url" type="url" value="https://claude.ai/"></label></div>

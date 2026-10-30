@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import expect,sync_playwright
 
 from envscope.operations import Operations
@@ -42,7 +43,7 @@ def main():
                     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
                     if page.locator('#learning-skip').is_visible():page.locator('#learning-skip').click()
                     page.locator('#start').click();expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#timezone-service-state')).to_have_text('尚未授权')
                     page.locator('#timezone-service-prepare').click()
                     expect(page.locator('#timezone-service-plan')).to_contain_text('Asia/Shanghai 配置为 America/New_York')
@@ -50,20 +51,20 @@ def main():
                     page.locator('#timezone-service-panel').screenshot(path=str(output/f'{width}-preview.png'))
                     page.locator('#timezone-service-plan button').click()
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#timezone-service-state')).to_have_text('系统时区守护正常',timeout=10000)
                     assert len(io.scripts)==1
                     page.locator('#timezone-service-undo').click()
                     expect(page.locator('#timezone-service-plan')).to_contain_text('Asia/Shanghai')
                     page.locator('#timezone-service-plan button').click()
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#timezone-service-state')).to_have_text('尚未授权')
                     assert world['timezone_iana']=='Asia/Shanghai'
                     page.locator('#timezone-service-prepare').click()
                     page.locator('#timezone-service-plan button').click()
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#timezone-service-state')).to_have_text('系统时区守护正常')
                     io.interrupt=True
                     page.locator('#timezone-service-prepare').click()
@@ -77,17 +78,17 @@ def main():
                     expect(page.locator('#timezone-service-plan')).to_contain_text('恢复上次保存的服务文件')
                     page.locator('#timezone-service-plan button').click()
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#timezone-service-state')).to_have_text('系统时区守护正常')
                     page.locator('#timezone-service-restore').check()
                     page.locator('#timezone-service-stop').click()
                     expect(page.locator('#timezone-service-plan')).to_contain_text('恢复安装前的系统时区：Asia/Shanghai')
                     page.locator('#timezone-service-plan button').click()
                     expect(page.locator('#start')).to_be_enabled(timeout=30000)
-                    page.locator('.tab[data-page=upkeep]').click()
+                    open_page(page, 'upkeep')
                     expect(page.locator('#timezone-service-state')).to_have_text('尚未授权')
                     ops.timezone_service.system='Windows'
-                    page.reload(wait_until='networkidle');page.locator('.tab[data-page=upkeep]').click()
+                    page.reload(wait_until='networkidle');open_page(page, 'upkeep')
                     expect(page.locator('#timezone-service-panel')).to_be_hidden()
                     assert not errors,errors
                     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')

@@ -6,6 +6,7 @@ import threading
 import time
 from unittest.mock import patch
 
+from scripts.ui_navigation import open_page, open_details
 from playwright.sync_api import sync_playwright, expect
 from envscope.accounts import AccountManager
 from envscope.check_catalog import check_catalog
@@ -71,7 +72,7 @@ def main():
                 if page.locator('#learning-panel').is_visible():
                     page.locator('#learning-skip').click()
                 expect(page.locator('#connection-status')).to_contain_text('已连接')
-                page.get_by_role('button', name='全部检查', exact=True).click()
+                open_page(page, 'checks')
                 expect(page.locator('[data-inspection]')).to_have_count(57)
                 expect(page.locator('#all-checks-context')).to_contain_text('尚未检测')
                 page.locator('#check-group').select_option('baseline')
@@ -95,7 +96,7 @@ def main():
                 page.screenshot(path=str(OUT / f'{width}-checks.png'))
                 page.locator('#check-group').select_option('all')
 
-                page.get_by_role('button', name='工具', exact=True).click()
+                open_page(page, 'tools')
                 with patch('envscope.operations.cli_information', side_effect=lambda path: cli_information(path, which=lambda n: None)):
                     page.locator('#cli-info').click()
                     expect(page.locator('#environment-output')).to_contain_text('当前进程 PATH 中未找到')
@@ -115,7 +116,7 @@ def main():
                 payload = json.loads(Path(downloaded.value.path()).read_text(encoding='utf-8'))
                 assert payload['contains_sensitive'] is False
 
-                page.get_by_role('button', name='账号', exact=True).click()
+                open_page(page, 'accounts')
                 expect(page.locator('.account-guide')).to_contain_text('不是邮箱或已注册账号')
                 expect(page.locator('#account-force-close')).not_to_be_checked()
                 page.locator('#new-slot').fill('错误代号')
@@ -156,21 +157,21 @@ def main():
                     assert (manager.data_dir / 'fixture.txt').read_text() == 'ACCOUNT_A_FIXTURE'
                     assert (manager.accounts_dir / 'B/fixture.txt').read_text() == 'ACCOUNT_B_FIXTURE'
                 page.screenshot(path=str(OUT / f'{width}-accounts.png'), full_page=True)
-                page.get_by_role('button', name='全部检查', exact=True).click()
+                open_page(page, 'checks')
                 page.locator('#check-status').select_option('pass')
                 assert page.locator('[data-inspection]').count() > 0
                 page.locator('#check-status').select_option('all')
                 expect(page.locator('#all-checks-context')).to_contain_text('本次检测')
 
-                page.get_by_role('button', name='历史', exact=True).click()
+                open_page(page, 'history')
                 page.locator('#history-list').get_by_role('button', name='查看', exact=True).first.click()
-                page.get_by_role('button', name='全部检查', exact=True).click()
+                open_page(page, 'checks')
                 expect(page.locator('#all-checks-context')).to_contain_text('历史报告')
-                page.get_by_role('button', name='检测', exact=True).click()
+                open_page(page, 'audit')
                 page.route('**/api/audit', lambda route: route.fulfill(status=503, content_type='application/json', body='{"error":"fixture_failure"}'))
                 page.locator('#start').click()
                 expect(page.locator('#verdict')).to_contain_text('系统检测没有完成')
-                page.get_by_role('button', name='全部检查', exact=True).click()
+                open_page(page, 'checks')
                 expect(page.locator('#all-checks-context')).to_contain_text('本轮检测没有完成')
                 page.locator('#check-status').select_option('pass')
                 expect(page.locator('[data-inspection]')).to_have_count(0)
@@ -178,7 +179,7 @@ def main():
                 expect(page.locator('[data-inspection]')).to_have_count(57)
                 page.unroute('**/api/audit')
 
-                page.get_by_role('button', name='工具', exact=True).click()
+                open_page(page, 'tools')
                 page.route('**/api/action', lambda route: route.fulfill(status=500, content_type='application/json', body='{"error":"operation_unavailable_or_deadline"}'))
                 page.locator('#device-info').click()
                 expect(page.locator('#environment-output')).to_contain_text('本次读取未能完成')
@@ -197,12 +198,12 @@ def main():
                 expect(page.locator('#connection-banner')).to_be_hidden()
                 page.locator('#browser-info').click()
                 expect(page.locator('#environment-output')).to_contain_text('浏览器信息')
-                for name in ('检测', '全部检查', '账号', '工具', '持续维护', '历史', '设置'):
-                    page.get_by_role('button', name=name, exact=True).click()
+                for name in ('audit', 'checks', 'accounts', 'tools', 'upkeep', 'history', 'settings'):
+                    open_page(page, name)
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), name
-                page.get_by_role('button', name='工具', exact=True).click()
+                open_page(page, 'tools')
                 page.locator('#project-comparison>summary').click()
-                expect(page.locator('#project-comparison')).to_contain_text('仍需维护核心或手动处理')
+                expect(page.locator('#project-comparison')).to_contain_text('完整功能升级核对表')
                 # A visible, idle page renews activity without running diagnostics.
                 page.clock.install()
                 server.last_activity = time.monotonic() - 901
@@ -214,7 +215,7 @@ def main():
                     page.route('**/api/catalog', lambda route: route.fulfill(status=500, content_type='application/json', body='{"error":"catalog_unavailable"}'))
                     page.reload(wait_until='networkidle')
                     expect(page.locator('#catalog-error')).to_be_visible()
-                    page.get_by_role('button', name='工具', exact=True).click()
+                    open_page(page, 'tools')
                     with patch('envscope.operations.cli_information', side_effect=lambda path: cli_information(path, which=lambda n: None)):
                         page.locator('#cli-info').click()
                         expect(page.locator('#environment-output')).to_contain_text('当前进程 PATH 中未找到')
