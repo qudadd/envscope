@@ -3,7 +3,7 @@
 ## Reviewed configuration remedies
 
 Diagnostics do not change system or client settings. A separate reviewed plan
-requires explicit boolean confirmation. Native edits target only the fixed
+requires explicit boolean confirmation. JSON remedies target the fixed
 desktop JSON and Code user-settings JSON. Deterministic trailing commas are
 removed outside strings; ambiguous syntax, duplicate keys and nonstandard
 numbers are not guessed. Code proxy edits require a successful anonymous API
@@ -41,18 +41,33 @@ stale, failed and completed heartbeats are distinct states.
 
 The worker may perform disclosed public probes and optionally restore five
 approved Code env keys. It preserves unrelated current settings and never runs
-upstream installers/repairs, switches accounts, stops Claude or changes OS
-networking/locale. Restoration verifies the credential-free loopback proxy,
+upstream installers/repairs, switches accounts or stops Claude. Code restoration
+verifies the credential-free loopback proxy,
 makes private backups, refuses malformed/deleted configs and concurrent edits,
 and pauses after three recoveries in 24 hours or changed/unverifiable settings.
 Browser ICE and login are not measured in this context. Shell, project and
 organization settings are outside the user-file restoration scope.
 
+Separately selected Watchdog baselines can restore approved timezone / locale
+settings, the chosen local controller selection and an approved proxy client's
+availability. They use bounded retries, readback and event records. The user
+worker never opens elevation dialogs. A separately reviewed, protected Windows
+SYSTEM task or macOS root service can maintain the approved timezone every 60
+seconds after foreground OS authorization. Unknown, stale or conflicting service
+state is not protection. See [timezone service](docs/TIMEZONE_SERVICE.md).
+
+The optional process guard is a separate approval: it may stop identified Claude
+processes and interrupt unsaved work. It is polling, not firewall enforcement.
+
 Closing the UI does not stop an approved task. Disable saves the worker's off
 flag before attempting to remove its owned schedule. Failure to remove the OS
 entry does not re-enable repairs. Records remain under `~/.envscope/maintenance`;
 raw config backups remain private. Do not move the executable while scheduled.
-Tests use fake schedulers; real OS lifecycle acceptance is still pending.
+Tests include fake schedulers and isolated real OS lifecycle acceptance. The
+published version's evidence and pending human authorization / sleep / restart
+cases are listed in [permission acceptance](docs/PERMISSION_ACCEPTANCE.md).
+Disabling user maintenance does not remove a separately approved timezone service;
+that service has its own reviewed removal and recovery flow.
 
 ## Measurement limits
 
@@ -118,15 +133,22 @@ and is not signed attestation.
 
 Native account copying uses verified staging, per-state OS locks and rollback.
 Symlinks/reparse points, traversal, overlaps and pending transactions are refused.
-Failures preserve copies; power-loss recovery is manual. A separate legacy
+Failures preserve copies; incomplete transactions block further exchanges and
+offer a reviewed recovery flow. This is not silent recovery or proof of all
+physical power-loss scenarios. A separate legacy
 account manager does not honor this lock: do not run both concurrently.
 Local snapshot copies do not include every OS credential-store item or guarantee
 server-session continuity. Native directory export is **unencrypted**. Optional
-retention deliberately copies listed paths across identities; do not list cookies
-or credentials unless that sharing is intended.
+retention is restricted to explicitly selected skills files; identity, cookies,
+credentials and settings cannot be shared through that list. Older out-of-scope
+lists block switching rather than silently copying sensitive files.
 
-macOS encrypted DMGs use the original password-stdin path; passwords never enter
-argv or returned plans. Original installers/repair scripts retain their own
+Native encrypted `.envsnap` archives use Scrypt and AES-256-GCM; CSNAP001 and macOS
+DMG compatibility have separate format and platform limits. Export targets an
+inactive slot and import requires an empty slot. Passwords are not stored or put
+in process arguments; temporary plaintext is access-restricted and removed, not
+claimed to be securely erased. Local copies cannot guarantee cross-device login.
+Original installers/repair scripts retain their own
 privilege, backup and rollback behavior. Their bundled hashes verify provenance,
 not native-device acceptance. Installers can register background services and
 the macOS original updater. Original output is marked unverified by EnvScope.
@@ -142,7 +164,13 @@ Use GitHub's private vulnerability reporting when enabled. Do not publish proxy
 credentials, browser profiles, account snapshots, access tokens or real network
 addresses in an issue. Include a minimal synthetic reproduction and version.
 
-Supported development line: current `main`. EnvScope has no whole-product updater.
+Supported development line: current `main`. EnvScope checks GitHub for updates by
+default; downloading, installing and restarting require confirmation. Updates
+validate the repository, architecture, hashes, archive paths and application
+identity, install alongside the current version and preserve a prior version for
+rollback. These checks do not establish a trusted publisher signature: current
+Windows builds are unsigned and macOS builds use ad-hoc signing without
+notarization. See [build identity](docs/OPEN_SOURCE_BUILDS.md).
 Explicit original-core installation/update is separate and can install the
-upstream macOS scheduled updater. Windows/macOS native action acceptance,
-administrator cancellation and real-session round trips remain release gates.
+upstream macOS scheduled updater. Human administrator prompts and real-session
+round trips remain outside automated fixture evidence.
