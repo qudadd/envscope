@@ -28,7 +28,7 @@ def windows(home, result):
     from envscope.system_network_windows import powershell, quote
     marker = 'EnvScopeLegacyFixture'+uuid.uuid4().hex
     source = home/'.claude-switcher/claude-bodyguard.ps1'; source.parent.mkdir(parents=True)
-    source.write_text('while ($true) { Start-Sleep -Milliseconds 200 }\n', encoding='utf-8')
+    source.write_text('# Claude PROXY_MODE SELF AUTHORED INERT FIXTURE\nwhile ($true) { Start-Sleep -Milliseconds 200 }\n', encoding='utf-8')
     preserve = home/'.claude-switcher/accounts/A/fixture.private.bin'; preserve.parent.mkdir(parents=True); preserve.write_bytes(b'ACCOUNT_FIXTURE_ONLY')
     layout = Layout(home, 'Windows', fixture={'root': home/'privileged/receipt', 'task': marker,
         'labels': {}, 'daemons': home/'not-used', 'scripts': home/'not-used'})
@@ -113,6 +113,27 @@ def windows(home, result):
                 restored_instances=instances()
                 assert restored_instances==prior_instances, (sorted(prior_instances),sorted(restored_instances))
             if not running: command([shell, '-NoProfile', '-NonInteractive', '-Command', 'Enable-ScheduledTask -TaskName '+quote(marker)+'|Out-Null'])
+        from envscope.legacy_software import SoftwareCleanup
+        software=SoftwareCleanup(home,subject,system='Windows',processes=lambda paths:False)
+        core=software.paths['core'];core.write_text('# claude-switch checkdetail SELF AUTHORED INERT FIXTURE\n')
+        ui=software.paths['ui'];ui.write_text('# claude-switcher Window SELF AUTHORED INERT FIXTURE\n')
+        shortcut=software.paths['shortcut'];shortcut.parent.mkdir()
+        args='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+str(ui)+'"'
+        create_link="$l=(New-Object -ComObject WScript.Shell).CreateShortcut("+quote(str(shortcut))+");$l.TargetPath="+quote(shell)+";$l.Arguments="+quote(args)+";$l.Save()"
+        command([shell,'-NoProfile','-NonInteractive','-Command',create_link])
+        plan=software.prepare();assert plan['state']=='planned',plan
+        value=software.apply(plan['plan_id'],True);assert value['state']=='completed',value
+        assert not core.exists() and not ui.exists() and not source.exists() and not shortcut.exists()
+        assert preserve.read_bytes()==b'ACCOUNT_FIXTURE_ONLY' and io.snapshot()['rows'][0]['present'] is False
+        software=SoftwareCleanup(home,subject,system='Windows',processes=lambda paths:False)
+        plan=software.prepare(restore=True);assert plan['state']=='planned',plan
+        value=software.apply(plan['plan_id'],True);assert value['state']=='restored',value
+        assert core.exists() and ui.exists() and source.exists() and shortcut.exists()
+        assert io.snapshot()['rows'][0]['present'] is False
+        plan=subject.prepare(restore=True);assert plan['state']=='planned',plan
+        value=subject.apply(plan['plan_id'],True);assert value['state']=='restored',value
+        result['software_files']={'passed':True,'actual_shell_link':True,'native_file_quarantine_restore':True,
+            'restart_recovery':True,'account_preserved':True,'restore_did_not_restart_jobs':True,'real_application_files_changed':False}
         result['checks'] = ['actual COM read/stop/delete/create/readback', 'actor SID and DACL verified',
                             'strict boolean consent', 'disabled and stopped stay disabled', 'original running task resumes',
                             'recovery after new process object', 'interrupted restoration does not duplicate a parallel-capable task', 'account marker unchanged', 'no vendor script execution']
@@ -136,7 +157,7 @@ def mac(home, result):
         'labels': labels, 'daemons': system_root/'daemons', 'scripts': system_root/'scripts'})
     home.mkdir(parents=True, exist_ok=True)
     (home/'Library/LaunchAgents').mkdir(parents=True); (home/'.local/bin').mkdir(parents=True)
-    user_source = home/'.local/bin/claude-switch.sh'; user_source.write_text('#!/bin/bash\nexit 0\n'); user_source.chmod(0o700)
+    user_source = home/'.local/bin/claude-switch.sh'; user_source.write_text('#!/bin/bash\n# claude-switch checkdetail SELF AUTHORED INERT FIXTURE\nexit 0\n'); user_source.chmod(0o700)
     header = home/'fixture.h'
     values = {'ENVSCOPE_COMPONENT_ROOT': str(layout.root), 'ENVSCOPE_COMPONENT_SOURCE': str(layout.scripts),
         'ENVSCOPE_COMPONENT_DAEMONS': str(layout.daemons), 'ENVSCOPE_COMPONENT_HOME': str(home),
@@ -147,7 +168,7 @@ def mac(home, result):
     binary = compiled/'components-helper'; metadata = json.loads((compiled/'components-helper.json').read_text())
     worker = {'path': str(binary), 'sha256': metadata['sha256']}
     import shlex
-    source = home/'root-fixture.sh'; source.write_text('#!/bin/bash\nwhile true; do /bin/sleep 1; done\n'); source.chmod(0o700)
+    source = home/'root-fixture.sh'; source.write_text('#!/bin/bash\n# Claude claude-bodyguard.log tz-watchdog.log settimezone claude-switch checkdetail\n# SELF AUTHORED INERT FIXTURE\nwhile true; do /bin/sleep 1; done\n'); source.chmod(0o700)
     setup = 'if [ ! -d /Library/PrivilegedHelperTools ]; then /bin/mkdir /Library/PrivilegedHelperTools; /bin/chmod 755 /Library/PrivilegedHelperTools; fi; '
     setup += '/bin/mkdir '+shlex.quote(str(system_root))+'; /bin/chmod 755 '+shlex.quote(str(system_root))+'; '
     setup += '/bin/mkdir '+shlex.quote(str(layout.daemons))+' '+shlex.quote(str(layout.scripts))+'; '
@@ -187,8 +208,42 @@ def mac(home, result):
         assert rows['guard']['registered'] and rows['update.user']['registered']
         assert not rows['timezone']['registered'] and not rows['update.system']['registered'] and not rows['update.system']['enabled']
         for role in labels: assert layout.definition(role).read_bytes() == definitions[role]
+        # Repeat retirement through the production software coordinator, then
+        # quarantine actual owned root files through the fixed native helper.
+        # The program bodies above are inert fixtures; never vendor programs.
+        from envscope.legacy_software import SoftwareCleanup, MacSystemFiles
+        account=home/'.claude-switcher/accounts/A/opaque.private.bin';account.parent.mkdir(parents=True);account.write_bytes(b'ACCOUNT_FIXTURE_ONLY')
+        native_files=MacSystemFiles(io)
+        software=SoftwareCleanup(home,subject,system='Darwin',system_files=native_files,processes=lambda paths:False)
+        selected=['core','system.guard','system.timezone','system.core']
+        plan=software.prepare(selected);assert plan['state']=='planned',plan
+        value=software.apply(plan['plan_id'],True);assert value['state']=='completed',value
+        assert not user_source.exists() and all(r['present'] is False for r in native_files.snapshot())
+        assert all(r['present'] is False and r['registered'] is False for r in io.snapshot()['rows'])
+        assert native_files.status()['state']=='committed' and account.read_bytes()==b'ACCOUNT_FIXTURE_ONLY'
+        # A new file at a retired path must survive a restore attempt.
+        replacement=home/'replacement.sh';replacement.write_text('# Claude claude-bodyguard.log\n# NEW OWNED FIXTURE DO NOT OVERWRITE\n')
+        conflict=layout.scripts/'claude-bodyguard.sh'
+        command(['/usr/bin/sudo','-n','/bin/cp',str(replacement),str(conflict)])
+        command(['/usr/bin/sudo','-n','/bin/chmod','755',str(conflict)])
+        plan=software.prepare(restore=True);assert plan['state']=='planned',plan
+        value=software.apply(plan['plan_id'],True);assert value['state']=='partial',value
+        assert conflict.read_bytes()==replacement.read_bytes()
+        command(['/usr/bin/sudo','-n','/bin/rm',str(conflict)])
+        # A new controller proves persistent recovery rather than relying on an
+        # in-memory move list; restoring files never bootstraps old launchd jobs.
+        software=SoftwareCleanup(home,subject,system='Darwin',system_files=MacSystemFiles(io),processes=lambda paths:False)
+        plan=software.prepare(restore=True);assert plan['state']=='planned',plan
+        value=software.apply(plan['plan_id'],True);assert value['state']=='restored',value
+        assert user_source.exists() and all(r['present'] for r in native_files.snapshot())
+        assert all(r['registered'] is False for r in io.snapshot()['rows'])
+        assert account.read_bytes()==b'ACCOUNT_FIXTURE_ONLY'
+        plan=subject.prepare(restore=True);assert plan['state']=='planned',plan
+        value=subject.apply(plan['plan_id'],True);assert value['state']=='restored',value
+        result['software_files']={'passed':True,'native_root_quarantine_restore':True,'new_file_conflict_preserved':True,
+            'restart_recovery':True,'account_preserved':True,'restore_did_not_restart_jobs':True,'real_application_files_changed':False}
         result['checks'] = ['actual structured launchd identity', 'root guard bootout/bootstrap', 'user agent with privilege drop',
-            'paused/unloaded and disabled remain paused', 'exact definition bytes and mode restored', 'protected native journal', 'restart recovery', 'no scripts or profiles removed']
+            'paused/unloaded and disabled remain paused', 'exact definition bytes and mode restored', 'protected native journal', 'restart recovery', 'owned program quarantine and restore', 'account fixture preserved']
         result['passed'] = True
     finally:
         if user_loaded: subprocess.run(['/bin/launchctl', 'bootout', 'gui/'+str(os.getuid())+'/'+labels['update.user']], capture_output=True, timeout=15)

@@ -70,6 +70,7 @@ jobs:
       - run: python -m scripts.watchdog_smoke
       - run: python -m scripts.process_guard_smoke
       - run: python -m scripts.components_smoke
+      - run: python -m scripts.software_smoke
       - run: python -m scripts.account_recovery_smoke
       - run: python -m scripts.routing_smoke
       - run: python -m scripts.timezone_service_smoke

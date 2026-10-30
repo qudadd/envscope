@@ -283,11 +283,13 @@ static int execute(int root,CFDictionaryRef plan,int restoring){
 rollback:{int ok=restore_rows(actual);publish(root,record,ok?"rolled_back":"partial");CFRelease(actual);CFRelease(record);return 74;}
 invalid:CFRelease(actual);return 79;
 }
+#include "components_software.h"
 int main(int argc,char **argv){
  if(argc==2&&!strcmp(argv[1],"--version")){printf("{\"format\":1,\"release\":\"%s\",\"fixture\":%s}\n",ENVSCOPE_RELEASE,ENVSCOPE_COMPONENT_FIXTURE?"true":"false");return 0;}
  if(!realpath(argv[0],self_path))return 65;
  if(argc==3&&!strcmp(argv[1],"--user-job")){if(geteuid()!=0||!set_actor(argv[2])||!drop_actor())return 77;CFMutableDictionaryRef v=job(3);if(!v)return 74;int ok=emit(v);CFRelease(v);return ok?0:74;}
- if(argc!=5||(strcmp(argv[1],"--retire")&&strcmp(argv[1],"--restore"))||geteuid()!=0||!hex(argv[3],64))return 65;
+ int software=argc>1&&(!strcmp(argv[1],"--retire-files")||!strcmp(argv[1],"--restore-files"));
+ if(argc!=5||(!software&&strcmp(argv[1],"--retire")&&strcmp(argv[1],"--restore"))||geteuid()!=0||!hex(argv[3],64))return 65;
  actor=0;int root=directory(ENVSCOPE_COMPONENT_ROOT,0);if(root<0||!safe_fd(root,0,1))return 77;
  int lock=openat(root,".transaction.lock",O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC,0600);if(lock<0||!safe_fd(lock,0,0)||flock(lock,LOCK_EX|LOCK_NB)){if(lock>=0)close(lock);close(root);return 75;}
  int input=open(argv[2],O_RDONLY|O_CLOEXEC|O_NOFOLLOW);struct stat info;if(input<0||fstat(input,&info)||!S_ISREG(info.st_mode)||info.st_nlink!=1||info.st_size>LIMIT){if(input>=0)close(input);close(lock);close(root);return 65;}
@@ -296,5 +298,5 @@ int main(int argc,char **argv){
  CFMutableDictionaryRef plan=parse(raw);CFRelease(raw);if(!plan)return 65;
  /* argv[4] binds the reviewed ordinary user's identity, independently of data. */
  char owner[32];if(!get_text(plan,CFSTR("actor"),owner,sizeof(owner))||strcmp(owner,argv[4])){CFRelease(plan);return 79;}
- int result=execute(root,plan,!strcmp(argv[1],"--restore"));CFRelease(plan);close(lock);close(root);return result;
+ int result=software?software_execute(root,plan,!strcmp(argv[1],"--restore-files")):execute(root,plan,!strcmp(argv[1],"--restore"));CFRelease(plan);close(lock);close(root);return result;
 }

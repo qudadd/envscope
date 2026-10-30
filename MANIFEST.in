@@ -3,7 +3,7 @@ include start-windows.cmd start-macos.command .gitattributes .gitignore
 recursive-include docs *.md *.json *.png
 recursive-include licenses *.txt
 recursive-include scripts *.py *.ps1
-recursive-include native *.c
+recursive-include native *.c *.h
 recursive-include tests *.py *.mjs *.json
 recursive-include .github *.md *.yml
 global-exclude __pycache__ *.py[cod] *.private.json *.private.jsonl *.private.bin *.private.plist

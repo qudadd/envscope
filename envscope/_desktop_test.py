@@ -39,6 +39,29 @@ def main(output=None):
         sessions.launched('a'*32,Mock(pid=123456))
         assert sessions.cleanup()['removed']==1
         result.update(browser_session_fixture=True,native_browser_registry=True)
+        from .legacy_components import ComponentMigration
+        from .legacy_software import SoftwareCleanup
+        class NoLegacyJobs:
+            fixture=True
+            def snapshot(self):
+                return {'format':1,'system':platform.system(),'actor':'frozen-fixture',
+                        'rows':[{'id':'guard','owned':True,'present':False,'registered':False,'running':False,'enabled':False}]}
+            def status(self):return {'id':'','state':'not_configured'}
+            def execute(self,*args):raise AssertionError('Frozen software fixture must not modify OS jobs')
+        software=SoftwareCleanup(directory,ComponentMigration(store,directory,io=NoLegacyJobs()),
+                                 processes=lambda paths:False,transaction_lock=lambda:operations.accounts._lock())
+        old_program=software.paths['core'];old_program.parent.mkdir(parents=True,exist_ok=True)
+        body=b'# claude-switch checkdetail FROZEN SELF AUTHORED FIXTURE\n'
+        old_program.write_bytes(body)
+        plan=software.prepare(['core']);assert plan['state']=='planned',plan
+        value=software.apply(plan['plan_id'],True);assert value['state']=='completed',value
+        assert not old_program.exists()
+        software=SoftwareCleanup(directory,software.components,processes=lambda paths:False)
+        plan=software.prepare(restore=True);assert plan['state']=='planned',plan
+        value=software.apply(plan['plan_id'],True);assert value['state']=='restored',value
+        assert old_program.read_bytes()==body
+        old_program.unlink()  # Only the file created immediately above.
+        result['native_software_file_roundtrip']=True
         # Frozen imports, persisted consent and ZIP privacy on disposable data.
         import base64
         from io import BytesIO

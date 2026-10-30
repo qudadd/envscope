@@ -34,7 +34,7 @@ COMMANDS = frozenset(('audit', 'maintenance-audit', 'check-config-save', 'settin
                       'solution-apply', 'solution-undo', 'inspection-apply', 'region-apply', 'region-undo',
                       'client-apply', 'client-restore', 'routing-apply', 'routing-undo',
                       'system-network-apply', 'system-network-restore', 'language-apply', 'language-restore',
-                      'components-apply', 'guard-enable', 'guard-disable', 'maintenance-enable', 'maintenance-disable',
+                      'components-apply', 'software-apply', 'guard-enable', 'guard-disable', 'maintenance-enable', 'maintenance-disable',
                       'maintenance-run', 'timezone-service-apply', 'proxy-diagnose', 'cli-info', 'fingerprint', 'other'))
 COUNTS = ('pass', 'fail', 'warn', 'unknown', 'skipped')
 _mutex = threading.RLock()

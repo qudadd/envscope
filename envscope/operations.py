@@ -124,7 +124,7 @@ def launch_gate(report, preferences):
 
 
 class Operations:
-    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None, language_repair=None, components=None):
+    def __init__(self, store, home=None, legacy=None, account_manager=None, discoverer=None, launcher=None, remedy_opener=None, maintenance=None, restart_stopper=None, environment_reader=None, region_lookup=None, process_guard=None, routing=None, network=None, client_repair=None, language_repair=None, components=None, software=None):
         self.store = store
         from .diagnostics import DiagnosticLog
         self.diagnostics = DiagnosticLog(store)
@@ -179,6 +179,10 @@ class Operations:
         self.components = components or ComponentMigration(store, self.home,
             io=UnavailableComponents() if isolated else None, transaction_lock=lambda: self.accounts._lock(),
             replacements=self._component_replacements)
+        from .legacy_software import SoftwareCleanup, MacSystemFiles
+        self.software = software or SoftwareCleanup(self.home,self.components,
+            system_files=MacSystemFiles(self.components.io) if not isolated and platform.system()=='Darwin' else None,
+            pending=self.accounts._pending,transaction_lock=lambda:self.accounts._lock())
         self.solutions = SolutionPlans(self.config_remedies, self.legacy, self.discoverer,
                                       lambda proxy: self.run("proxy-diagnose", {"proxy": proxy}), self.routing,self.network,
                                       self.client_repair,self.process_guard,self.language_repair,self.components)
@@ -235,7 +239,8 @@ class Operations:
                 'browser_sessions':self.isolated_browser.session_status(),
                 'process_guard':self.process_guard.status(),'timezone_service':self.timezone_service.status(),
                 'system_network':self.network.status(),'client_repair':self.client_repair.status(),
-                'client_language':self.language_repair.status(), 'legacy_components': self.components.peek()}
+                'client_language':self.language_repair.status(), 'legacy_components': self.components.peek(),
+                'software_cleanup':self.software.peek()}
 
     def catalog(self):
         try:
@@ -271,7 +276,7 @@ class Operations:
                 'system_network': self.network.status(),
                 'client_repair': self.client_repair.status(),
                 'client_language': self.language_repair.status(),
-                'legacy_components': self.components.peek(),
+                'legacy_components': self.components.peek(), 'software_cleanup':self.software.peek(),
                 'check_config': check_preferences_catalog(self.store.settings()),
                 'diagnostics': self.diagnostics.status(),
                 "added_features": ["事务式账号切换", "切换前重检", "历史对比", "出口变化提示", "代理自动发现", "代理连接诊断", "脱敏诊断包", "设置恢复"]}
@@ -322,6 +327,12 @@ class Operations:
                 return {'state': 'completed', 'checks': selection(self.store.settings(), params.get('checks'))}
             if params: raise ValueError('检测偏好读取不接受参数')
             return {'state': 'completed', 'check_config': catalog(self.store.settings())}
+        if action.startswith('software-'):
+            allowed={'software-status':set(),'software-plan':{'roles','restore'},'software-apply':{'plan_id'}}
+            if action not in allowed or set(params)-allowed[action]:raise ValueError('旧程序清理参数无效')
+            if action=='software-status':return self.software.status()
+            if action=='software-plan':return self.software.prepare(params.get('roles'),restore=params.get('restore',False))
+            return self.software.apply(params.get('plan_id'),confirmed)
         if action.startswith('components-'):
             allowed = {'components-status': set(), 'components-plan': {'roles', 'restore'}, 'components-apply': {'plan_id'}}
             if action not in allowed or set(params)-allowed[action]: raise ValueError('旧组件参数无效')

@@ -49,7 +49,7 @@ class MacComponents:
         return value
 
     def execute(self, action, payload):
-        if action not in ('retire', 'restore') or payload.get('actor') != str(self.uid): raise ValueError('组件操作用户不一致')
+        if action not in ('retire', 'restore', 'retire-files', 'restore-files') or payload.get('actor') != str(self.uid): raise ValueError('组件操作用户不一致')
         worker = self.helper()
         if not re.fullmatch('[a-f0-9]{64}', str(worker.get('sha256', ''))): raise ValueError('组件辅助程序摘要未核实')
         raw = plistlib.dumps(clean(payload), sort_keys=True)
